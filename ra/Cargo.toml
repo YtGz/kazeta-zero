@@ -1,0 +1,43 @@
+[package]
+name = "kazeta-ra"
+version = "0.1.0"
+edition = "2021"
+description = "RetroAchievements integration for Kazeta+"
+
+[[bin]]
+name = "kazeta-ra"
+path = "src/main.rs"
+
+[lib]
+name = "kazeta_ra"
+path = "src/lib.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Async HTTP
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Hashing (for ROM identification)
+md-5 = "0.10"
+sha1 = "0.10"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Database for caching
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Directories
+dirs = "5.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+

@@ -1,0 +1,31 @@
+[Unit]
+Description=Kazeta+ Input Daemon
+Documentation=https://github.com/ziggy/kazeta-plus
+After=graphical.target
+Wants=kazeta-overlay.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/kazeta-input
+Restart=always
+RestartSec=3
+User=gamer
+Group=gamer
+# Give access to input devices
+SupplementaryGroups=input
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+# Allow access to /dev/input
+DeviceAllow=/dev/input/* rw
+
+# Environment
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=graphical.target
+
