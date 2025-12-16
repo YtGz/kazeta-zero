@@ -42,6 +42,24 @@ impl ConsoleId {
     pub fn as_u32(&self) -> u32 {
         *self as u32
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::GameBoyAdvance => "gba".to_string(),
+            Self::GameBoy => "gb".to_string(),
+            Self::GameBoyColor => "gbc".to_string(),
+            Self::NES => "nes".to_string(),
+            Self::SNES => "snes".to_string(),
+            Self::Nintendo64 => "n64".to_string(),
+            Self::PlayStation => "psx".to_string(),
+            Self::PlayStation2 => "ps2".to_string(),
+            Self::MegaDrive => "genesis".to_string(),
+            Self::MasterSystem => "sms".to_string(),
+            Self::NintendoDS => "nds".to_string(),
+            Self::Atari2600 => "atari2600".to_string(),
+            Self::VirtualBoy => "vb".to_string(),
+        }
+    }
 }
 
 /// User summary from RetroAchievements API

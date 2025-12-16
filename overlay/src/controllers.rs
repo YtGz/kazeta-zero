@@ -87,6 +87,7 @@ pub struct ControllerState {
     pub bluetooth_devices: Vec<BluetoothDevice>,
     pub bluetooth_state: BluetoothScanState,
     pub bt_selected_index: usize,
+    pub bt_scroll_offset: usize,
     
     // Controller assignment state
     pub assign_selected_player: usize, // 0-3 for player 1-4
@@ -111,6 +112,7 @@ impl ControllerState {
             bluetooth_devices: Vec::new(),
             bluetooth_state: BluetoothScanState::Idle,
             bt_selected_index: 0,
+            bt_scroll_offset: 0,
             assign_selected_player: 0,
             assign_selected_controller: 0,
             tester_selected_controller: 0,
@@ -365,6 +367,7 @@ pub const CONTROLLER_MENU_OPTIONS: &[&str] = &[
     "BLUETOOTH CONTROLLERS",
     "ASSIGN CONTROLLERS",
     "GAMEPAD TESTER",
+    "HOTKEY SETTINGS",
     "AUTO-ASSIGN ALL",
     "BACK",
 ];

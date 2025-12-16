@@ -560,8 +560,14 @@ async fn main() {
     //let mut wifi_state = WifiState::new().expect("Wi-Fi initialization failed. Ensure wlan0 is available.");
     let mut wifi_state = WifiState::new();
 
+    // load config file
+    let mut config = Config::load();
+
+    // load config file (needed early for RA settings initialization)
+    let mut config = Config::load();
+
     // RETROACHIEVEMENTS
-    let mut ra_settings_state = RASettingsState::new();
+    let mut ra_settings_state = RASettingsState::load_from_config(&config);
 
     // THEME DOWNLOADER
     let mut theme_downloader_state = ThemeDownloaderState::new();
@@ -603,9 +609,6 @@ async fn main() {
     let mut battery_info: Option<BatteryInfo> = get_battery_info();
     let mut last_battery_check = get_time();
     const BATTERY_CHECK_INTERVAL: f64 = 5.0; // only check every 5 seconds to improve performance
-
-    // load config file
-    let mut config = Config::load();
 
     // AUDIO SINKS
     // Load the list of sinks so the Settings menu can use it.
@@ -1264,14 +1267,10 @@ async fn main() {
                         sound_effects.play_select(&config);
 
                         println!("[Debug] Game selected - runtime: {:?}", cart_info.runtime);
-                        println!("[Debug] Runtime check: {:?} == Some(\"mgba\") = {}",
-                            cart_info.runtime.as_deref(),
-                            cart_info.runtime.as_deref() == Some("mgba")
-                        );
-
-                        // Check if this is an mGBA game - show launch options dialog
-                        if cart_info.runtime.as_deref() == Some("mgba") {
-                            println!("[Debug] mGBA game detected!");
+                        // Check if this is a VBA-M game - show launch options dialog
+                        if cart_info.runtime.as_deref() == Some("vba-m") {
+                            let runtime_name = cart_info.runtime.as_deref().unwrap_or("unknown");
+                            println!("[Debug] {} game detected!", runtime_name);
                             println!("[Debug] multiplayer_support: {:?}", cart_info.multiplayer_support);
                             println!("[Debug] max_players: {:?}", cart_info.max_players);
 

@@ -48,12 +48,25 @@ impl CredentialManager {
     }
 
     /// Check if credentials are stored
+    /// Checks BIOS config first, then JSON file
     pub fn has_credentials(&self) -> bool {
+        // Check BIOS config first
+        if Self::load_from_bios_config().ok().flatten().is_some() {
+            return true;
+        }
+        // Fall back to JSON file
         self.credentials_path.exists()
     }
 
     /// Load stored credentials
+    /// Checks BIOS config.toml first, then falls back to ra_credentials.json
     pub fn load(&self) -> Result<Option<Credentials>> {
+        // First, try to load from BIOS config.toml
+        if let Some(creds) = Self::load_from_bios_config()? {
+            return Ok(Some(creds));
+        }
+
+        // Fall back to JSON file
         if !self.credentials_path.exists() {
             return Ok(None);
         }
@@ -65,6 +78,41 @@ impl CredentialManager {
             .context("Failed to parse credentials")?;
 
         Ok(Some(creds))
+    }
+
+    /// Load credentials from BIOS config.toml
+    fn load_from_bios_config() -> Result<Option<Credentials>> {
+        let config_path = dirs::home_dir()
+            .context("Could not find home directory")?
+            .join(".local/share/kazeta-plus/config.toml");
+
+        if !config_path.exists() {
+            return Ok(None);
+        }
+
+        let content = fs::read_to_string(&config_path)
+            .context("Failed to read BIOS config file")?;
+
+        // Parse TOML manually to extract retroachievements section
+        let config: toml::Value = toml::from_str(&content)
+            .context("Failed to parse BIOS config TOML")?;
+
+        if let Some(ra_section) = config.get("retroachievements") {
+            let username = ra_section.get("username")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let api_key = ra_section.get("api_key")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            if let (Some(username), Some(api_key)) = (username, api_key) {
+                if !username.is_empty() && !api_key.is_empty() {
+                    return Ok(Some(Credentials::new(username, api_key)));
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// Save credentials to storage

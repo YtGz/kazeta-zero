@@ -4,7 +4,8 @@ use kazeta_ra::{
     api::RAClient,
     auth::{CredentialManager, Credentials},
     cache::RACache,
-    hash::hash_rom,
+    game_names::GameNameMapping,
+    hash::{hash_rom, detect_console},
     types::ConsoleId,
 };
 use std::path::PathBuf;
@@ -54,9 +55,9 @@ enum Commands {
         /// Path to ROM file
         #[arg(short, long)]
         path: PathBuf,
-        /// Console type (gba, nes, snes, etc.)
+        /// Console type (gba, nes, snes, etc.) - auto-detected if not specified
         #[arg(short, long)]
-        console: String,
+        console: Option<String>,
     },
 
     /// Get game info and achievements for a ROM
@@ -67,19 +68,22 @@ enum Commands {
         /// Path to ROM file (alternative to hash)
         #[arg(short, long)]
         path: Option<PathBuf>,
-        /// Console type (required with --path)
+        /// Console type (auto-detected from path if not specified)
         #[arg(short, long)]
         console: Option<String>,
     },
 
     /// Notify that a game has started (sends to overlay)
     GameStart {
-        /// ROM hash
+        /// ROM hash (alternative to --path)
         #[arg(short = 'H', long)]
-        hash: String,
-        /// Console type
+        hash: Option<String>,
+        /// Console type (required when using --hash, auto-detected with --path)
         #[arg(short, long)]
-        console: String,
+        console: Option<String>,
+        /// Path to ROM file (alternative to --hash, auto-detects console)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
         /// Also notify the overlay daemon
         #[arg(long)]
         notify_overlay: bool,
@@ -105,11 +109,46 @@ enum Commands {
     SendAchievementsToOverlay {
         /// ROM hash
         #[arg(short = 'H', long)]
-        hash: String,
-        /// Console type
+        hash: Option<String>,
+        /// Path to ROM file (alternative to hash, auto-detects console)
         #[arg(short, long)]
-        console: String,
+        path: Option<PathBuf>,
+        /// Console type (required with --hash, auto-detected with --path)
+        #[arg(short, long)]
+        console: Option<String>,
     },
+
+    /// Set a custom game name for a ROM (when auto-detection fails)
+    SetGameName {
+        /// ROM hash
+        #[arg(short = 'H', long)]
+        hash: Option<String>,
+        /// Path to ROM file (alternative to hash, auto-detects console)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+        /// Console type (required with --hash, auto-detected with --path)
+        #[arg(short, long)]
+        console: Option<String>,
+        /// Custom game name to use
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Remove a custom game name mapping
+    RemoveGameName {
+        /// ROM hash
+        #[arg(short = 'H', long)]
+        hash: Option<String>,
+        /// Path to ROM file (alternative to hash, auto-detects console)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+        /// Console type (required with --hash, auto-detected with --path)
+        #[arg(short, long)]
+        console: Option<String>,
+    },
+
+    /// List all custom game name mappings
+    ListGameNames,
 }
 
 fn main() -> Result<()> {
@@ -121,17 +160,24 @@ fn main() -> Result<()> {
         Commands::GetCredentials { format } => cmd_get_credentials(&format),
         Commands::SetHardcore { enabled } => cmd_set_hardcore(enabled),
         Commands::Profile => cmd_profile(),
-        Commands::HashRom { path, console } => cmd_hash_rom(&path, &console),
-        Commands::GameInfo { hash, path, console } => cmd_game_info(hash, path, console),
-        Commands::GameStart { hash, console, notify_overlay } => {
-            cmd_game_start(&hash, &console, notify_overlay)
+        Commands::HashRom { path, console } => cmd_hash_rom(&path, console.as_deref()),
+        Commands::GameInfo { hash, path, console } => cmd_game_info(hash, path, console.as_deref()),
+        Commands::GameStart { hash, console, path, notify_overlay } => {
+            cmd_game_start(hash.as_deref(), console.as_deref(), path.as_ref(), notify_overlay)
         }
         Commands::NotifyAchievement { id, title } => cmd_notify_achievement(id, title),
         Commands::Status => cmd_status(),
         Commands::ClearCache => cmd_clear_cache(),
-        Commands::SendAchievementsToOverlay { hash, console } => {
-            cmd_send_achievements_to_overlay(&hash, &console)
+        Commands::SendAchievementsToOverlay { hash, path, console } => {
+            cmd_send_achievements_to_overlay(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref())
         }
+        Commands::SetGameName { hash, path, console, name } => {
+            cmd_set_game_name(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref(), &name)
+        }
+        Commands::RemoveGameName { hash, path, console } => {
+            cmd_remove_game_name(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref())
+        }
+        Commands::ListGameNames => cmd_list_game_names(),
     }
 }
 
@@ -224,41 +270,75 @@ fn cmd_profile() -> Result<()> {
     Ok(())
 }
 
-fn cmd_hash_rom(path: &PathBuf, console: &str) -> Result<()> {
-    let console_id = ConsoleId::from_str(console)
-        .context(format!("Unknown console: {}", console))?;
+fn cmd_hash_rom(path: &PathBuf, console: Option<&str>) -> Result<()> {
+    let console_id = if let Some(c) = console {
+        ConsoleId::from_str(c)
+            .context(format!("Unknown console: {}", c))?
+    } else {
+        // Auto-detect console from file
+        detect_console(path)?
+    };
 
     let hash = hash_rom(path, console_id)?;
     println!("{}", hash);
     Ok(())
 }
 
-fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<String>) -> Result<()> {
+fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&str>) -> Result<()> {
     let cred_manager = CredentialManager::new()?;
     let credentials = cred_manager.load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
+    // Save path for cartridge lookup before it's moved
+    let path_for_cart = path.as_ref().cloned();
+
     // Get hash either directly or by hashing the ROM
-    let rom_hash = if let Some(h) = hash {
-        h
-    } else if let (Some(p), Some(c)) = (path, console) {
-        let console_id = ConsoleId::from_str(&c)
-            .context(format!("Unknown console: {}", c))?;
-        hash_rom(&p, console_id)?
+    let (rom_hash, console_id) = if let Some(h) = hash {
+        // If hash is provided, we need console for API lookup
+        // For now, default to GBA (this should be improved to store console with hash)
+        (h, ConsoleId::GameBoyAdvance)
+    } else if let Some(p) = path {
+        // Auto-detect console if not provided
+        let detected_console = if let Some(c) = console {
+            ConsoleId::from_str(c)
+                .context(format!("Unknown console: {}", c))?
+        } else {
+            detect_console(&p)?
+        };
+        let hash = hash_rom(&p, detected_console)?;
+        (hash, detected_console)
     } else {
-        bail!("Either --hash or both --path and --console are required");
+        bail!("Either --hash or --path is required");
     };
 
     let client = RAClient::new(credentials);
     let cache = RACache::new()?;
 
+    // Check for custom game name
+    let game_name_mapping = GameNameMapping::load().ok();
+    // Try to find cartridge path from ROM path if provided
+    let cart_path = path_for_cart.as_ref().and_then(|p| find_cartridge_for_rom(p).ok());
+    let custom_name = game_name_mapping.as_ref()
+        .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
+
     // Try to get game ID from hash
-    let game_id = match client.get_game_id(&rom_hash, ConsoleId::GameBoyAdvance)? {
+    let game_id = match client.get_game_id(&rom_hash, console_id)? {
         Some(id) => id,
         None => {
-            println!("No RetroAchievements found for this ROM.");
-            println!("Hash: {}", rom_hash);
-            return Ok(());
+            // Game not found - show custom name if available
+            if let Some(name) = custom_name {
+                println!("╔════════════════════════════════════════════════════════╗");
+                println!("║  {} (Custom Name)", name);
+                println!("╠════════════════════════════════════════════════════════╣");
+                println!("║  Hash: {}", rom_hash);
+                println!("║  No RetroAchievements found for this ROM.");
+                println!("╚════════════════════════════════════════════════════════╝");
+                return Ok(());
+            } else {
+                println!("No RetroAchievements found for this ROM.");
+                println!("Hash: {}", rom_hash);
+                return Ok(());
+            }
         }
     };
 
@@ -268,9 +348,12 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<St
     // Cache it
     cache.cache_game(&rom_hash, &info)?;
 
+    // Use custom name if available, otherwise use API title
+    let display_title = custom_name.as_deref().unwrap_or(&info.title);
+
     // Display
     println!("╔════════════════════════════════════════════════════════╗");
-    println!("║  {} ", info.title);
+    println!("║  {} ", display_title);
     println!("╠════════════════════════════════════════════════════════╣");
     println!("║  Console: {}", info.console_name);
     println!("║  Game ID: {}", info.id);
@@ -309,37 +392,79 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<St
     Ok(())
 }
 
-fn cmd_game_start(hash: &str, console: &str, notify_overlay: bool) -> Result<()> {
+fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathBuf>, notify_overlay: bool) -> Result<()> {
     let cred_manager = CredentialManager::new()?;
     let credentials = cred_manager.load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
-    let console_id = ConsoleId::from_str(console)
-        .context(format!("Unknown console: {}", console))?;
+    // Determine hash and console
+    let (rom_hash, console_id) = if let Some(h) = hash {
+        // Hash provided, console is required
+        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c)
+            .context(format!("Unknown console: {}", c))?;
+        (h.to_string(), console_id)
+    } else if let Some(p) = path {
+        // Path provided, auto-detect console if not specified
+        let detected_console = if let Some(c) = console {
+            ConsoleId::from_str(c)
+                .context(format!("Unknown console: {}", c))?
+        } else {
+            detect_console(p)?
+        };
+        let hash = hash_rom(p, detected_console)?;
+        (hash, detected_console)
+    } else {
+        bail!("Either --hash or --path is required");
+    };
 
     let client = RAClient::new(credentials);
     let cache = RACache::new()?;
 
+    // Check for custom game name first
+    let game_name_mapping = GameNameMapping::load().ok();
+    // Try to find cartridge path from ROM path if provided
+    let cart_path = path.and_then(|p| find_cartridge_for_rom(p).ok());
+    let custom_name = game_name_mapping.as_ref()
+        .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
+
     // Get game info
-    let game_id = match client.get_game_id(hash, console_id)? {
+    let game_id = match client.get_game_id(&rom_hash, console_id)? {
         Some(id) => id,
         None => {
-            println!("{{\"success\": false, \"error\": \"Game not found in RetroAchievements\"}}");
-            return Ok(());
+            // Game not found - use custom name if available
+            if let Some(name) = custom_name {
+                let output = serde_json::json!({
+                    "success": true,
+                    "game_id": 0,
+                    "title": name,
+                    "custom_name": true,
+                    "total_achievements": 0,
+                    "earned_achievements": 0,
+                });
+                println!("{}", serde_json::to_string(&output)?);
+                return Ok(());
+            } else {
+                println!("{{\"success\": false, \"error\": \"Game not found in RetroAchievements\"}}");
+                return Ok(());
+            }
         }
     };
 
     let info = client.get_game_info_and_progress(game_id)?;
-    cache.cache_game(hash, &info)?;
+    cache.cache_game(&rom_hash, &info)?;
 
     let earned = info.num_awarded_to_user.unwrap_or(0);
     let total = info.num_achievements;
+
+    // Use custom name if available, otherwise use API title
+    let game_title = custom_name.unwrap_or_else(|| info.title.clone());
 
     // Output game info as JSON for runtime wrapper
     let output = serde_json::json!({
         "success": true,
         "game_id": info.id,
-        "title": info.title,
+        "title": game_title,
         "console": info.console_name,
         "achievements_total": total,
         "achievements_earned": earned,
@@ -349,7 +474,7 @@ fn cmd_game_start(hash: &str, console: &str, notify_overlay: bool) -> Result<()>
 
     // Notify overlay if requested
     if notify_overlay {
-        notify_overlay_game_start(&info.title, earned, total)?;
+        notify_overlay_game_start(&game_title, earned, total)?;
     }
 
     Ok(())
@@ -413,7 +538,7 @@ fn notify_overlay_game_start(title: &str, earned: u32, total: u32) -> Result<()>
     if !std::path::Path::new(socket_path).exists() {
         return Ok(()); // Overlay not running, skip
     }
-
+    
     let message = serde_json::json!({
         "type": "ra_game_start",
         "game_title": title,
@@ -451,7 +576,7 @@ fn notify_overlay_achievement(title: &str) -> Result<()> {
     Ok(())
 }
 
-fn cmd_send_achievements_to_overlay(hash: &str, console: &str) -> Result<()> {
+fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
 
@@ -459,14 +584,42 @@ fn cmd_send_achievements_to_overlay(hash: &str, console: &str) -> Result<()> {
     let credentials = cred_manager.load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
-    let console_id = ConsoleId::from_str(console)
-        .context(format!("Unknown console: {}", console))?;
+    // Save path for cartridge lookup
+    let path_for_cart = path.cloned();
+
+    // Determine hash and console
+    let (rom_hash, console_id) = if let Some(h) = hash {
+        // Hash provided, console is required
+        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c)
+            .context(format!("Unknown console: {}", c))?;
+        (h.to_string(), console_id)
+    } else if let Some(p) = path {
+        // Path provided, auto-detect console if not specified
+        let detected_console = if let Some(c) = console {
+            ConsoleId::from_str(c)
+                .context(format!("Unknown console: {}", c))?
+        } else {
+            detect_console(p)?
+        };
+        let hash = hash_rom(p, detected_console)?;
+        (hash, detected_console)
+    } else {
+        bail!("Either --hash or --path is required");
+    };
 
     let client = RAClient::new(credentials);
     let cache = RACache::new()?;
 
+    // Check for custom game name
+    let game_name_mapping = GameNameMapping::load().ok();
+    // Try to find cartridge path from ROM path if provided
+    let cart_path = path_for_cart.as_ref().and_then(|p| find_cartridge_for_rom(p).ok());
+    let custom_name = game_name_mapping.as_ref()
+        .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
+
     // Get game ID from hash
-    let game_id = match client.get_game_id(hash, console_id)? {
+    let game_id = match client.get_game_id(&rom_hash, console_id)? {
         Some(id) => id,
         None => {
             println!("{{\"success\": false, \"error\": \"Game not found\"}}");
@@ -478,7 +631,10 @@ fn cmd_send_achievements_to_overlay(hash: &str, console: &str) -> Result<()> {
     let info = client.get_game_info_and_progress(game_id)?;
     
     // Cache it
-    cache.cache_game(hash, &info)?;
+    cache.cache_game(&rom_hash, &info)?;
+
+    // Use custom name if available, otherwise use API title
+    let game_title = custom_name.unwrap_or_else(|| info.title.clone());
 
     // Build achievement list for overlay
     let achievements: Vec<serde_json::Value> = info.achievements
@@ -513,8 +669,8 @@ fn cmd_send_achievements_to_overlay(hash: &str, console: &str) -> Result<()> {
 
     let message = serde_json::json!({
         "type": "ra_achievement_list",
-        "game_title": info.title,
-        "game_hash": hash,
+        "game_title": game_title,
+        "game_hash": rom_hash,
         "achievements": achievements,
     });
 
@@ -523,6 +679,112 @@ fn cmd_send_achievements_to_overlay(hash: &str, console: &str) -> Result<()> {
         println!("{{\"success\": true, \"achievements_sent\": {}}}", achievements.len());
     } else {
         println!("{{\"success\": false, \"error\": \"Failed to connect to overlay\"}}");
+    }
+
+    Ok(())
+}
+
+/// Try to find a cartridge (.kzi) file that contains the given ROM path
+/// This is a best-effort search - may not always find the cartridge
+fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
+    // Check if ROM path is inside a cartridge directory structure
+    // Cartridges are typically in ~/.local/share/kazeta-plus/cartridges/ or similar
+    let rom_path = rom_path.canonicalize()
+        .context("Failed to canonicalize ROM path")?;
+
+    // Walk up the directory tree looking for a .kzi file
+    let mut current = rom_path.parent();
+    while let Some(dir) = current {
+        // Look for .kzi files in this directory
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("kzi") {
+                    return Ok(path);
+                }
+            }
+        }
+        current = dir.parent();
+    }
+
+    bail!("Could not find cartridge file for ROM")
+}
+
+fn cmd_set_game_name(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>, name: &str) -> Result<()> {
+    // Determine hash and console
+    let (rom_hash, console_id) = if let Some(h) = hash {
+        // Hash provided, console is required
+        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c)
+            .context(format!("Unknown console: {}", c))?;
+        (h.to_string(), console_id)
+    } else if let Some(p) = path {
+        // Path provided, auto-detect console if not specified
+        let detected_console = if let Some(c) = console {
+            ConsoleId::from_str(c)
+                .context(format!("Unknown console: {}", c))?
+        } else {
+            detect_console(p)?
+        };
+        let hash = hash_rom(p, detected_console)?;
+        (hash, detected_console)
+    } else {
+        bail!("Either --hash or --path is required");
+    };
+
+    let mut mapping = GameNameMapping::load()?;
+    let console_str = console_id.to_string();
+    mapping.set_name(rom_hash.clone(), name.to_string(), Some(console_str))?;
+
+    println!("✓ Set custom name for hash {}: {}", rom_hash, name);
+    Ok(())
+}
+
+fn cmd_remove_game_name(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>) -> Result<()> {
+    // Determine hash and console
+    let (rom_hash, _console_id) = if let Some(h) = hash {
+        // Hash provided, console is required
+        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c)
+            .context(format!("Unknown console: {}", c))?;
+        (h.to_string(), console_id)
+    } else if let Some(p) = path {
+        // Path provided, auto-detect console if not specified
+        let detected_console = if let Some(c) = console {
+            ConsoleId::from_str(c)
+                .context(format!("Unknown console: {}", c))?
+        } else {
+            detect_console(p)?
+        };
+        let hash = hash_rom(p, detected_console)?;
+        (hash, detected_console)
+    } else {
+        bail!("Either --hash or --path is required");
+    };
+
+    let mut mapping = GameNameMapping::load()?;
+    mapping.remove_name(&rom_hash)?;
+
+    println!("✓ Removed custom name for hash {}", rom_hash);
+    Ok(())
+}
+
+fn cmd_list_game_names() -> Result<()> {
+    let mapping = GameNameMapping::load()?;
+
+    if mapping.games.is_empty() {
+        println!("No custom game names configured.");
+        return Ok(());
+    }
+
+    println!("Custom Game Names:");
+    println!("{:-<80}", "");
+    for (hash, entry) in &mapping.games {
+        if let Some(ref console) = entry.console {
+            println!("  {} [{}] -> {}", hash, console, entry.name);
+        } else {
+            println!("  {} -> {}", hash, entry.name);
+        }
     }
 
     Ok(())

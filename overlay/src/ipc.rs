@@ -88,6 +88,23 @@ pub struct AchievementInfo {
     pub earned: bool,
     #[serde(default)]
     pub earned_hardcore: bool,
+
+    // Optional fields for enhanced features
+    #[serde(default)]
+    pub rarity_percent: Option<f32>,  // 0-100, percentage of players who earned it
+
+    #[serde(default)]
+    pub earned_at: Option<u64>,  // Unix timestamp when earned
+
+    #[serde(default)]
+    pub progress: Option<AchievementProgress>,  // For multi-step achievements
+}
+
+/// Progress tracking for multi-step achievements
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AchievementProgress {
+    pub current: u32,
+    pub target: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -105,11 +122,17 @@ pub enum OverlayScreen {
     Main,
     Settings,
     Achievements,
+    Performance,        // Performance monitoring
+    Playtime,           // Playtime tracking
     // Controller menu screens
     Controllers,        // Main controller menu
     BluetoothPairing,   // Find and pair Bluetooth controllers
     ControllerAssign,   // Assign controllers to players
     GamepadTester,      // Test gamepad inputs
+    HotkeySettings,     // Configure hotkey bindings
+    // Menu customization
+    MenuCustomization,  // Customize main menu items
+    ThemeSelection,     // Select overlay theme
     // Quit confirmation
     QuitConfirm,        // Confirm quit to BIOS
 }

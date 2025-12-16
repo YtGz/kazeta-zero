@@ -41,6 +41,20 @@ impl RASettingsState {
         state
     }
 
+    /// Initialize from config (loads username/api_key if present)
+    pub fn load_from_config(config: &Config) -> Self {
+        let mut state = Self::default();
+        
+        // Load credentials from config if present
+        if let Some(ref username) = config.retroachievements.username {
+            state.username_input = username.clone();
+        }
+        // Don't load API key into input field for security, but it will be available via config
+        
+        state.refresh_status();
+        state
+    }
+
     /// Check if kazeta-ra is logged in
     pub fn refresh_status(&mut self) {
         // Check login status via kazeta-ra CLI
@@ -74,28 +88,54 @@ impl RASettingsState {
     }
 
     /// Attempt to login with the entered credentials
-    pub fn attempt_login(&mut self) {
-        if self.username_input.is_empty() || self.api_key_input.is_empty() {
+    /// Saves credentials to config on successful login
+    /// Uses credentials from config if input fields are empty
+    pub fn attempt_login(&mut self, config: &mut Config) {
+        // Use credentials from input fields, or fall back to config
+        let username = if !self.username_input.is_empty() {
+            self.username_input.clone()
+        } else if let Some(ref config_username) = config.retroachievements.username {
+            config_username.clone()
+        } else {
             self.status_message = Some("Please enter username and API key".to_string());
             return;
-        }
+        };
+
+        let api_key = if !self.api_key_input.is_empty() {
+            self.api_key_input.clone()
+        } else if let Some(ref config_api_key) = config.retroachievements.api_key {
+            config_api_key.clone()
+        } else {
+            self.status_message = Some("Please enter username and API key".to_string());
+            return;
+        };
 
         self.status_message = Some("Logging in...".to_string());
 
         let result = Command::new("kazeta-ra")
             .arg("login")
             .arg("--username")
-            .arg(&self.username_input)
+            .arg(&username)
             .arg("--api-key")
-            .arg(&self.api_key_input)
+            .arg(&api_key)
             .output();
 
         match result {
             Ok(output) => {
                 if output.status.success() {
+                    // Save credentials to config (use the ones we actually used for login)
+                    config.retroachievements.username = Some(username.clone());
+                    config.retroachievements.api_key = Some(api_key.clone());
+                    config.save();
+                    
+                    // Also update input fields for display
+                    if self.username_input.is_empty() {
+                        self.username_input = username.clone();
+                    }
+                    
                     self.status_message = Some("Login successful!".to_string());
                     self.is_logged_in = true;
-                    self.logged_in_user = Some(self.username_input.clone());
+                    self.logged_in_user = Some(username.clone());
                     // Clear sensitive input
                     self.api_key_input.clear();
                 } else {
@@ -110,10 +150,17 @@ impl RASettingsState {
     }
 
     /// Logout from RetroAchievements
-    pub fn logout(&mut self) {
+    /// Optionally clears credentials from config
+    pub fn logout(&mut self, config: &mut Config) {
         let _ = Command::new("kazeta-ra")
             .arg("logout")
             .output();
+
+        // Optionally clear credentials from config (user can keep them for next login)
+        // Uncomment the following lines if you want to clear on logout:
+        // config.retroachievements.username = None;
+        // config.retroachievements.api_key = None;
+        // config.save();
 
         self.is_logged_in = false;
         self.logged_in_user = None;
@@ -219,13 +266,13 @@ pub fn update(
             5 => { // LOGIN / TEST
                 if input_state.select {
                     sound_effects.play_select(config);
-                    ra_state.attempt_login();
+                    ra_state.attempt_login(config);
                 }
             }
             6 => { // LOGOUT
                 if input_state.select {
                     sound_effects.play_select(config);
-                    ra_state.logout();
+                    ra_state.logout(config);
                 }
             }
             _ => {}
@@ -387,6 +434,8 @@ fn get_option_value(index: usize, ra_state: &RASettingsState, config: &Config) -
                 ra_state.logged_in_user.clone().unwrap_or_default()
             } else if !ra_state.username_input.is_empty() {
                 ra_state.username_input.clone()
+            } else if let Some(ref username) = config.retroachievements.username {
+                username.clone()
             } else {
                 "[ENTER]".to_string()
             }
@@ -398,6 +447,8 @@ fn get_option_value(index: usize, ra_state: &RASettingsState, config: &Config) -
                 "********".to_string()
             } else if !ra_state.api_key_input.is_empty() {
                 "*".repeat(ra_state.api_key_input.len())
+            } else if config.retroachievements.api_key.is_some() {
+                "********".to_string()
             } else {
                 "[ENTER]".to_string()
             }

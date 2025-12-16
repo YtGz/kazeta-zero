@@ -24,6 +24,7 @@ anyhow = "1.0"
 
 # File watching for device hotplug
 notify = "6.1"
+inotify = "0.10"
 
 # Logging
 log = "0.4"

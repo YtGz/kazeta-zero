@@ -53,6 +53,12 @@ pub struct RetroAchievementsConfig {
     /// Whether RetroAchievements integration is enabled
     #[serde(default = "default_ra_enabled")]
     pub enabled: bool,
+    /// RetroAchievements username
+    #[serde(default)]
+    pub username: Option<String>,
+    /// RetroAchievements API key
+    #[serde(default)]
+    pub api_key: Option<String>,
     /// Whether to use hardcore mode (disables save states, cheats, etc.)
     #[serde(default)]
     pub hardcore_mode: bool,

@@ -1,9 +1,14 @@
 mod controllers;
+mod hotkeys;
 mod ipc;
 mod input;
+mod menu_config;
 mod performance;
+mod playtime;
 mod rendering;
 mod state;
+mod theme_config;
+mod themes;
 mod utils;
 
 use anyhow::Result;
@@ -131,6 +136,14 @@ async fn main() -> Result<()> {
 
         // Record frame for performance tracking
         overlay_state.performance.record_frame();
+
+        // If overlay is completely hidden (not rendering anything), reduce CPU usage
+        if !overlay_state.should_render() && !overlay_state.performance.is_visible() {
+            // Run at 20 FPS when idle to save CPU
+            std::thread::sleep(Duration::from_millis(50));
+            macroquad::prelude::next_frame().await;
+            continue;
+        }
 
         // Render (only if visible or toasts active)
         if overlay_state.should_render() {

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::collections::HashMap;
 use chrono::Local;
-use crate::{save, Child, Arc, Mutex, thread, BufReader};
+use crate::{save, Child, Arc, Mutex, thread, BufReader, config};
 use crate::audio::play_new_bgm;
 use crate::types::Screen;
 use kazeta_overlay::{OverlayClient, OverlayScreen, ToastStyle};
@@ -118,7 +118,7 @@ pub fn trigger_session_restart(
 }
 
 pub fn trigger_game_launch(
-    _cart_info: &save::CartInfo,
+    cart_info: &save::CartInfo,
     kzi_path: &Path,
     //current_bgm: &mut Option<Sound>,
     //music_cache: &HashMap<String, Sound>,
@@ -130,6 +130,16 @@ pub fn trigger_game_launch(
         eprintln!("[WARNING] Failed to start overlay daemon: {}", e);
         // Don't fail the launch if overlay fails to start
     }
+
+    // Notify overlay that the game is starting
+    notify_game_started(
+        &cart_info.id,
+        cart_info.name.as_deref().unwrap_or(&cart_info.id),
+        cart_info.runtime.as_deref().unwrap_or("unknown")
+    );
+
+    // Setup RetroAchievements if enabled
+    setup_retroachievements(cart_info, kzi_path);
 
     // Write the specific launch command for the selected game
     if let Err(e) = save::write_launch_command(kzi_path) {
@@ -510,4 +520,110 @@ pub fn notify_game_stopped(cart_id: &str) {
         let _ = writeln!(stream, "{}", message);
         println!("[Overlay] Notified game stopped: {}", cart_id);
     }
+}
+
+/// Setup RetroAchievements for a game launch
+/// This is called by the BIOS when launching a game
+fn setup_retroachievements(cart_info: &save::CartInfo, kzi_path: &Path) {
+    // Check if kazeta-ra is available
+    if Command::new("kazeta-ra").arg("status").output().is_err() {
+        println!("[RA] kazeta-ra not found, skipping RetroAchievements");
+        return;
+    }
+
+    // Check if RA is configured and enabled
+    let status_output = match Command::new("kazeta-ra").arg("status").output() {
+        Ok(output) => output,
+        Err(_) => return,
+    };
+
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+    if !status_str.contains("\"enabled\":true") && !status_str.contains("\"enabled\": true") {
+        println!("[RA] RetroAchievements not enabled");
+        return;
+    }
+
+    // Get ROM path from cartridge
+    let rom_path = match get_rom_path_from_cartridge(cart_info, kzi_path) {
+        Some(path) => path,
+        None => {
+            println!("[RA] Could not determine ROM path from cartridge");
+            return;
+        }
+    };
+
+    if !rom_path.exists() {
+        println!("[RA] ROM file not found: {}", rom_path.display());
+        return;
+    }
+
+    println!("[RA] Setting up RetroAchievements for: {}", rom_path.display());
+
+    // Call kazeta-ra game-start (this will hash the ROM, fetch game info, and notify overlay)
+    // Run in background so it doesn't block game launch
+    let rom_path_str = rom_path.to_string_lossy().to_string();
+    thread::spawn(move || {
+        let _ = Command::new("kazeta-ra")
+            .arg("game-start")
+            .arg("--path")
+            .arg(&rom_path_str)
+            .arg("")
+            .output();
+    });
+
+    // Also send achievement list to overlay (run in background)
+    let rom_path_str2 = rom_path.to_string_lossy().to_string();
+    thread::spawn(move || {
+        // Small delay to let game-start complete first
+        thread::sleep(std::time::Duration::from_millis(500));
+        let _ = Command::new("kazeta-ra")
+            .arg("send-achievements-to-overlay")
+            .arg("--path")
+            .arg(&rom_path_str2)
+            .output();
+    });
+}
+
+/// Get the ROM path from a cartridge
+/// For .kzi files, extracts to get the ROM path
+/// For .kzp files, returns None (will be handled by wrapper)
+fn get_rom_path_from_cartridge(cart_info: &save::CartInfo, kzi_path: &Path) -> Option<PathBuf> {
+    // For .kzp files, we can't easily get the ROM path without mounting
+    // Return None and let the wrapper handle it
+    if kzi_path.extension().and_then(|e| e.to_str()) == Some("kzp") {
+        return None;
+    }
+
+    // For .kzi files, extract to get ROM path
+    let extract_dir = if crate::DEV_MODE {
+        config::get_user_data_dir().unwrap().join("kzi-cache").join(&cart_info.id)
+    } else {
+        PathBuf::from("/tmp").join("kazeta-kzi").join(&cart_info.id)
+    };
+
+    // Check if already extracted
+    let rom_path = extract_dir.join(&cart_info.exec);
+    if rom_path.exists() {
+        return Some(rom_path);
+    }
+
+    // Try to extract (best effort - don't fail if it doesn't work)
+    if let Ok(file) = fs::File::open(kzi_path) {
+        use flate2::read::GzDecoder;
+        use tar::Archive;
+        
+        let decoder = GzDecoder::new(file);
+        let mut archive = Archive::new(decoder);
+        
+        if fs::create_dir_all(&extract_dir).is_ok() {
+            if archive.unpack(&extract_dir).is_ok() {
+                let rom_path = extract_dir.join(&cart_info.exec);
+                if rom_path.exists() {
+                    return Some(rom_path);
+                }
+            }
+        }
+    }
+
+    None
 }

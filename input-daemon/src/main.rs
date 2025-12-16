@@ -14,6 +14,7 @@
 
 use anyhow::{Context, Result};
 use evdev::{Device, InputEventKind, Key};
+use inotify::{Inotify, WatchMask};
 use log::{debug, error, info, warn};
 use std::collections::HashSet;
 use std::fs;
@@ -30,9 +31,6 @@ const INPUT_DIR: &str = "/dev/input";
 
 // Global debounce time to prevent multiple triggers from different controllers
 const HOTKEY_DEBOUNCE_MS: u64 = 300;
-
-// How often to scan for new devices (hotplug support)
-const DEVICE_SCAN_INTERVAL_MS: u64 = 2000;
 
 /// Global state shared across all device monitors
 struct GlobalState {
@@ -272,33 +270,109 @@ fn monitor_device(
     info!("Stopped monitoring: {} ({})", path, device_name);
 }
 
-/// Periodically scan for new devices (hotplug support)
+/// Event-driven device scanner using inotify (hotplug support)
 fn device_scanner(
     running: Arc<AtomicBool>,
     state: Arc<Mutex<GlobalState>>,
 ) -> Vec<thread::JoinHandle<()>> {
     let mut handles = Vec::new();
 
-    while running.load(Ordering::Relaxed) {
-        // Find new devices
-        let new_devices = find_input_devices(&state);
-        
-        // Spawn monitor threads for new devices
-        for (path, device) in new_devices {
-            let running = running.clone();
-            let state = state.clone();
-            let handle = thread::spawn(move || {
-                monitor_device(path, device, running, state);
-            });
-            handles.push(handle);
+    // Initialize inotify
+    let mut inotify = match Inotify::init() {
+        Ok(i) => i,
+        Err(e) => {
+            error!("Failed to initialize inotify: {}", e);
+            error!("Falling back to initial device scan only (no hotplug)");
+            return handles;
+        }
+    };
+
+    // Watch /dev/input for new devices
+    if let Err(e) = inotify.watches().add(INPUT_DIR, WatchMask::CREATE | WatchMask::ATTRIB) {
+        error!("Failed to watch {}: {}", INPUT_DIR, e);
+        error!("Falling back to initial device scan only (no hotplug)");
+        return handles;
+    }
+
+    info!("Using inotify for event-driven device detection");
+
+    // Buffer for inotify events
+    let mut buffer = [0u8; 4096];
+
+    // Run in a loop, blocking on inotify events
+    // Note: This will block indefinitely until an event occurs or the process is terminated
+    loop {
+        if !running.load(Ordering::Relaxed) {
+            break;
         }
 
-        // Sleep before next scan
-        for _ in 0..(DEVICE_SCAN_INTERVAL_MS / 100) {
-            if !running.load(Ordering::Relaxed) {
-                break;
+        match inotify.read_events_blocking(&mut buffer) {
+            Ok(events) => {
+                for event in events {
+                    if !running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    // Check if this is an event device
+                    if let Some(name) = event.name {
+                        let name_str = name.to_string_lossy();
+                        if !name_str.starts_with("event") {
+                            continue;
+                        }
+
+                        let device_path = format!("{}/{}", INPUT_DIR, name_str);
+                        debug!("inotify detected new device: {}", device_path);
+
+                        // Give the device a moment to be ready
+                        thread::sleep(Duration::from_millis(100));
+
+                        // Check if it's already being monitored
+                        let already_monitored = {
+                            let state = state.lock().unwrap();
+                            state.monitored_devices.contains(&device_path)
+                        };
+
+                        if already_monitored {
+                            continue;
+                        }
+
+                        // Try to open the device
+                        match Device::open(&device_path) {
+                            Ok(device) => {
+                                let device_name = device.name().unwrap_or("Unknown");
+                                let (is_gamepad, is_keyboard) = is_relevant_device(&device);
+
+                                if is_gamepad || is_keyboard {
+                                    info!("New input device detected: {} ({}) - gamepad={}, keyboard={}",
+                                          device_path, device_name, is_gamepad, is_keyboard);
+
+                                    // Add to monitored set
+                                    {
+                                        let mut state = state.lock().unwrap();
+                                        state.monitored_devices.insert(device_path.clone());
+                                    }
+
+                                    // Spawn monitor thread
+                                    let running = running.clone();
+                                    let state = state.clone();
+                                    let handle = thread::spawn(move || {
+                                        monitor_device(device_path, device, running, state);
+                                    });
+                                    handles.push(handle);
+                                }
+                            }
+                            Err(e) => {
+                                debug!("Failed to open device {}: {}", device_path, e);
+                            }
+                        }
+                    }
+                }
             }
-            thread::sleep(Duration::from_millis(100));
+            Err(e) => {
+                error!("inotify read error: {}", e);
+                // On error, sleep briefly before retrying
+                thread::sleep(Duration::from_millis(1000));
+            }
         }
     }
 
@@ -362,7 +436,7 @@ fn main() -> Result<()> {
 
     info!("kazeta-input daemon ready");
     info!("Hotkeys: Guide button (any controller), F12, Ctrl+O");
-    info!("Scanning for new devices every {}ms", DEVICE_SCAN_INTERVAL_MS);
+    info!("Using inotify for event-driven hotplug detection");
 
     // Run device scanner in main thread, collecting new monitor handles
     let scanner_handles = device_scanner(running.clone(), state.clone());

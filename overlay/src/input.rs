@@ -1,6 +1,8 @@
 use anyhow::Result;
 use macroquad::prelude::*;
 use gilrs::{Gilrs, Button, Axis};
+use crate::hotkeys::{HotkeyManager, HotkeyAction, InputComponent, GamepadButtonType, ModifierKey};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ControllerInput {
@@ -12,68 +14,95 @@ pub enum ControllerInput {
     Back,       // B button
     Secondary,  // X button
     Guide,      // Guide/Home button
+    LB,         // Left bumper
+    RB,         // Right bumper
+    LT,         // Left trigger
+    RT,         // Right trigger
 }
 
 pub struct HotkeyMonitor {
     gilrs: Gilrs,
     analog_was_neutral: bool,
-    // Track hotkey state to detect rising edge
-    guide_button_last_state: bool,
-    f12_last_state: bool,
-    ctrl_o_last_o_state: bool,
-    f3_last_state: bool,
+    hotkey_manager: HotkeyManager,
 }
 
 impl HotkeyMonitor {
     pub fn new() -> Result<Self> {
         println!("[Input] Initializing input monitor (gilrs + macroquad)...");
-        
+
         let gilrs = Gilrs::new()
             .map_err(|e| anyhow::anyhow!("Failed to initialize gilrs: {}", e))?;
-        
+
+        let hotkey_manager = HotkeyManager::new()?;
+
         println!("[Input] Input monitor initialized");
-        
+        println!("[Input] Hotkey manager loaded");
+
         Ok(Self {
             gilrs,
             analog_was_neutral: true,
-            guide_button_last_state: false,
-            f12_last_state: false,
-            ctrl_o_last_o_state: false,
-            f3_last_state: false,
+            hotkey_manager,
         })
     }
 
+    /// Check if the overlay toggle hotkey was pressed
     pub fn check_hotkey_pressed(&mut self) -> bool {
-        // Check for Guide button via gamepad
-        let mut guide_pressed = false;
-        while let Some(ev) = self.gilrs.next_event() {
-            if let gilrs::EventType::ButtonPressed(Button::Mode, _) = ev.event {
-                guide_pressed = true;
-            }
-        }
-        
-        // Check for F12 key
-        let f12_currently_down = is_key_down(KeyCode::F12);
-        let f12_just_pressed = f12_currently_down && !self.f12_last_state;
-        self.f12_last_state = f12_currently_down;
-        
-        // Check for Ctrl+O
-        let ctrl_held = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        let o_currently_down = is_key_down(KeyCode::O);
-        let o_just_pressed = o_currently_down && !self.ctrl_o_last_o_state;
-        self.ctrl_o_last_o_state = o_currently_down;
-        let ctrl_o_detected = ctrl_held && o_just_pressed;
-        
-        guide_pressed || f12_just_pressed || ctrl_o_detected
+        let current_inputs = self.get_current_inputs();
+        self.hotkey_manager.check_action_pressed(HotkeyAction::ToggleOverlay, &current_inputs)
     }
 
+    /// Check if the performance HUD toggle hotkey was pressed
     pub fn check_performance_hotkey_pressed(&mut self) -> bool {
-        // Check for F3 key
-        let f3_currently_down = is_key_down(KeyCode::F3);
-        let f3_just_pressed = f3_currently_down && !self.f3_last_state;
-        self.f3_last_state = f3_currently_down;
+        let current_inputs = self.get_current_inputs();
+        self.hotkey_manager.check_action_pressed(HotkeyAction::TogglePerformance, &current_inputs)
+    }
 
-        f3_just_pressed
+    /// Get current input states for all supported inputs
+    fn get_current_inputs(&mut self) -> HashMap<InputComponent, bool> {
+        let mut inputs = HashMap::new();
+
+        // Process gamepad events (must call next_event to drain queue)
+        while let Some(ev) = self.gilrs.next_event() {
+            match ev.event {
+                gilrs::EventType::ButtonPressed(Button::Mode, _) => {
+                    inputs.insert(InputComponent::GamepadButton(GamepadButtonType::Mode), true);
+                }
+                _ => {}
+            }
+        }
+
+        // Check keyboard keys
+        inputs.insert(InputComponent::Key("F12".to_string()), is_key_down(KeyCode::F12));
+        inputs.insert(InputComponent::Key("F3".to_string()), is_key_down(KeyCode::F3));
+        inputs.insert(InputComponent::Key("F5".to_string()), is_key_down(KeyCode::F5));
+        inputs.insert(InputComponent::Key("F9".to_string()), is_key_down(KeyCode::F9));
+        inputs.insert(InputComponent::Key("O".to_string()), is_key_down(KeyCode::O));
+
+        // Check modifiers
+        inputs.insert(
+            InputComponent::Modifier(ModifierKey::Ctrl),
+            is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl),
+        );
+        inputs.insert(
+            InputComponent::Modifier(ModifierKey::Alt),
+            is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt),
+        );
+        inputs.insert(
+            InputComponent::Modifier(ModifierKey::Shift),
+            is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
+        );
+
+        inputs
+    }
+
+    /// Get reference to hotkey manager (for settings screen)
+    pub fn hotkey_manager(&self) -> &HotkeyManager {
+        &self.hotkey_manager
+    }
+
+    /// Get mutable reference to hotkey manager (for settings screen)
+    pub fn hotkey_manager_mut(&mut self) -> &mut HotkeyManager {
+        &mut self.hotkey_manager
     }
 
     pub fn poll_inputs(&mut self) -> Vec<ControllerInput> {
@@ -131,6 +160,18 @@ impl HotkeyMonitor {
                 }
                 gilrs::EventType::ButtonPressed(Button::Mode, _) => {
                     inputs.push(ControllerInput::Guide);  // Guide button
+                }
+                gilrs::EventType::ButtonPressed(Button::LeftTrigger, _) => {
+                    inputs.push(ControllerInput::LB);  // Left bumper
+                }
+                gilrs::EventType::ButtonPressed(Button::RightTrigger, _) => {
+                    inputs.push(ControllerInput::RB);  // Right bumper
+                }
+                gilrs::EventType::ButtonPressed(Button::LeftTrigger2, _) => {
+                    inputs.push(ControllerInput::LT);  // Left trigger
+                }
+                gilrs::EventType::ButtonPressed(Button::RightTrigger2, _) => {
+                    inputs.push(ControllerInput::RT);  // Right trigger
                 }
                 _ => {}
             }
