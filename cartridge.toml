@@ -1,0 +1,33 @@
+# Multi-Player GBA Test Cart
+# For testing Kazeta+ multi-cart functionality
+
+name = "GBA Multiplayer Test"
+id = "gba-multiplayer-test"
+version = "1.0"
+
+# Main executable (player 1's ROM)
+exec = "dad.gba"
+
+# Runtime for GBA games
+runtime = "mgba"
+
+# Multi-cart configuration
+# This tells Kazeta+ that multiple ROMs should be launched together
+[[carts]]
+name = "Player 1 (Dad)"
+rom = "dad.gba"
+player = 1
+
+[[carts]]
+name = "Player 2 (Max)"
+rom = "max.gba"
+player = 2
+
+# Optional: Icon for the cart selection menu
+# icon = "icon.png"
+
+# Optional: Description shown in the BIOS
+description = "Multi-player GBA game test. Launches two GBA instances with link cable emulation."
+
+# Optional: Categories/tags
+categories = ["multiplayer", "gba", "test"]

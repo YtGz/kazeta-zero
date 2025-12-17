@@ -6,6 +6,16 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct BladesThemeConfig {
+    pub enabled: Option<bool>,
+    pub games_color: Option<String>,
+    pub settings_color: Option<String>,
+    pub saves_color: Option<String>,
+    pub transparency: Option<f32>,
+    pub blur_enabled: Option<bool>,
+}
+
 // This needs to be public so main.rs can see it
 #[derive(Deserialize, Debug, Clone)]
 pub struct ThemeConfigFile {
@@ -22,6 +32,12 @@ pub struct ThemeConfigFile {
     pub logo_selection: Option<String>,
     pub background_selection: Option<String>,
     pub font_selection: Option<String>,
+    pub splash_video: Option<String>,
+    pub splash_audio: Option<String>,
+    #[serde(default)]
+    pub loading_messages: Option<Vec<String>>,
+    #[serde(default)]
+    pub blades: Option<BladesThemeConfig>,
 }
 
 // This also needs to be public
@@ -58,6 +74,10 @@ pub async fn load_all_themes() -> HashMap<String, Theme> {
             logo_selection: None,
             background_selection: None,
             font_selection: None,
+            splash_video: None,
+            splash_audio: None,
+            loading_messages: None,
+            blades: None,
         },
     };
     // Insert our virtual theme into the map before scanning for others.

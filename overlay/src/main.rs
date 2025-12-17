@@ -56,6 +56,7 @@ fn window_conf() -> Conf {
         window_resizable: false,
         fullscreen: false,
         platform: miniquad::conf::Platform {
+            apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
             linux_backend: miniquad::conf::LinuxBackend::X11Only,
             swap_interval: None,
             framebuffer_alpha: true,  // Enable transparency

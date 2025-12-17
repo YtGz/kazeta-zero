@@ -161,7 +161,8 @@ pub fn create_player_count_dialog(max_players: u8) -> Dialog {
 /// `existing_saves` is a list of existing save slot identifiers (e.g., ["p1", "p2"])
 /// `player_num` is the player number (1-4) selecting their save
 /// `rom_name` is used to display which game's saves we're looking at
-pub fn create_save_slot_dialog(existing_saves: &[String], player_num: u8, rom_name: &str) -> Dialog {
+/// `can_import` adds an option to pull in an embedded save for this player
+pub fn create_save_slot_dialog(existing_saves: &[String], player_num: u8, rom_name: &str, can_import: bool) -> Dialog {
     let mut options = Vec::new();
 
     // Option to create a new save for this player
@@ -192,6 +193,14 @@ pub fn create_save_slot_dialog(existing_saves: &[String], player_num: u8, rom_na
         options.push(DialogOption {
             text: format!("USE {} SAVE", save_id.to_uppercase()),
             value: save_id.clone(),
+            disabled: false,
+        });
+    }
+
+    if can_import {
+        options.push(DialogOption {
+            text: "IMPORT PROVIDED SAVE".to_string(),
+            value: "IMPORT".to_string(),
             disabled: false,
         });
     }

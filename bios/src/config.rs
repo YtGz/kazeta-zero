@@ -42,9 +42,26 @@ pub struct Config {
     pub logo_selection: String,
     pub background_selection: String,
     pub font_selection: String,
+    pub splash_video: String,
+    pub splash_audio: String,
+    #[serde(default)]
+    pub loading_messages: Vec<String>,
     // RetroAchievements settings
     #[serde(default)]
     pub retroachievements: RetroAchievementsConfig,
+    // Blades Dashboard settings
+    #[serde(default)]
+    pub blades_enabled: bool,
+    #[serde(default = "default_blade_games_color")]
+    pub blade_games_color: String,
+    #[serde(default = "default_blade_settings_color")]
+    pub blade_settings_color: String,
+    #[serde(default = "default_blade_saves_color")]
+    pub blade_saves_color: String,
+    #[serde(default = "default_blade_transparency")]
+    pub blade_transparency: f32,
+    #[serde(default)]
+    pub blade_blur_enabled: bool,
 }
 
 /// RetroAchievements configuration
@@ -74,6 +91,11 @@ fn default_ra_enabled() -> bool { true }
 fn default_ra_notifications() -> bool { true }
 fn default_ra_notification_duration() -> u32 { 5000 }
 
+fn default_blade_games_color() -> String { "#00CC44".to_string() }
+fn default_blade_settings_color() -> String { "#CC6600".to_string() }
+fn default_blade_saves_color() -> String { "#6600CC".to_string() }
+fn default_blade_transparency() -> f32 { 0.95 }
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -101,7 +123,16 @@ impl Default for Config {
             logo_selection: "Kazeta+ (Default)".to_string(),
             background_selection: "Default".to_string(),
             font_selection: "Default".to_string(),
+            splash_video: "Default".to_string(),
+            splash_audio: "Default".to_string(),
+            loading_messages: Vec::new(), // Empty means use default messages
             retroachievements: RetroAchievementsConfig::default(),
+            blades_enabled: false,
+            blade_games_color: default_blade_games_color(),
+            blade_settings_color: default_blade_settings_color(),
+            blade_saves_color: default_blade_saves_color(),
+            blade_transparency: default_blade_transparency(),
+            blade_blur_enabled: false,
         }
     }
 }

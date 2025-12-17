@@ -2277,3 +2277,7 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "miniquad"
+version = "0.4.8"

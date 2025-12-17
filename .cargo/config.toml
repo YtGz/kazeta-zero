@@ -1,0 +1,4 @@
+[patch.crates-io]
+# Patch miniquad to include null checks around Objective-C strings on macOS,
+# preventing startup crashes when Cocoa returns nil (e.g., in non-bundle runs).
+miniquad = { path = "vendor/miniquad" }

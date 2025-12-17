@@ -72,6 +72,9 @@ struct ThemeToml {
     logo_selection: Option<String>,
     background_selection: Option<String>,
     font_selection: Option<String>,
+    splash_video: Option<String>,
+    splash_audio: Option<String>,
+    loading_messages: Option<Vec<String>>,
     sfx_pack: Option<String>,
 }
 

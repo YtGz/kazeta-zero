@@ -37,6 +37,7 @@ fn render_overlay_menu(state: &OverlayState) {
         screen_height(),
         t.background_overlay,
     );
+    draw_vignette();
 
     match state.current_screen {
         OverlayScreen::Main => render_main_menu(state),
@@ -62,9 +63,7 @@ fn render_main_menu(state: &OverlayState) {
     let menu_x = (screen_width() - menu_width) / 2.0;
     let menu_y = (screen_height() - menu_height) / 2.0;
 
-    // Menu background
-    draw_rectangle(menu_x, menu_y, menu_width, menu_height, t.panel_background);
-    draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 3.0, t.panel_border);
+    draw_panel(menu_x, menu_y, menu_width, menu_height, &t);
 
     // Title
     let title = "KAZETA OVERLAY";
@@ -243,9 +242,7 @@ fn render_achievements_screen(state: &OverlayState) {
     let menu_x = (screen_width() - menu_width) / 2.0;
     let menu_y = (screen_height() - menu_height) / 2.0;
 
-    // Background panel
-    draw_rectangle(menu_x, menu_y, menu_width, menu_height, t.panel_background);
-    draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
+    draw_panel(menu_x, menu_y, menu_width, menu_height, &t);
 
     let tracker = &state.achievements;
 
@@ -257,32 +254,15 @@ fn render_achievements_screen(state: &OverlayState) {
     };
     draw_text(&title, menu_x + 15.0, menu_y + 28.0, 24.0, t.cursor);
 
-    // Filter and sort indicators
-    if !tracker.achievements.is_empty() {
-        let filter_text = format!("Filter: {}", tracker.filter.name());
-        let sort_text = format!("Sort: {}", tracker.sort_mode.name());
-        draw_text(&filter_text, menu_x + menu_width - 280.0, menu_y + 28.0, 14.0, t.text_secondary);
-        draw_text(&sort_text, menu_x + menu_width - 140.0, menu_y + 28.0, 14.0, t.text_secondary);
-    }
-
     // Progress bar and stats
     if !tracker.achievements.is_empty() {
-        let earned = tracker.earned_count();
-        let total = tracker.total_count();
-        let filtered_count = tracker.filtered_count();
-        let progress = if total > 0 { earned as f32 / total as f32 } else { 0.0 };
+        let earned = tracker.progress.earned;
+        let total = tracker.progress.total;
+        let progress_pct = tracker.get_progress_percent();
 
-        // Progress text (show filtered count if filtering)
-        let progress_text = if filtered_count < total {
-            format!("{}/{} ({:.0}%) • {} / {} pts • Showing: {}",
-                earned, total, progress * 100.0,
-                tracker.earned_points(), tracker.total_points(),
-                filtered_count)
-        } else {
-            format!("{}/{} ({:.0}%) • {} / {} pts",
-                earned, total, progress * 100.0,
-                tracker.earned_points(), tracker.total_points())
-        };
+        // Progress text
+        let progress_text = format!("{}/{} ({:.0}%)",
+            earned, total, progress_pct);
         draw_text(&progress_text, menu_x + 15.0, menu_y + 50.0, 16.0, t.text_secondary);
 
         // Progress bar
@@ -294,37 +274,36 @@ fn render_achievements_screen(state: &OverlayState) {
         // Bar background
         draw_rectangle(bar_x, bar_y, bar_width, bar_height, Color::new(0.2, 0.2, 0.2, 1.0));
         // Bar fill
+        let progress = progress_pct / 100.0;
         let fill_color = if progress >= 1.0 { GOLD } else { GREEN };
         draw_rectangle(bar_x, bar_y, bar_width * progress, bar_height, fill_color);
 
-        // Achievement list (use filtered achievements)
+        // Achievement list
         let list_y = menu_y + 75.0;
         let item_height = 40.0;
         let max_visible = 6;
 
+        // Clamp scroll offset
+        let total_items = tracker.achievements.len();
+        let max_scroll = total_items.saturating_sub(max_visible);
+        let scroll = state.achievements_scroll_offset.min(max_scroll);
+
+        // Scroll indicators
+        if scroll > 0 {
+            draw_text("▲", menu_x + menu_width - 25.0, list_y - 10.0, 14.0, t.text_secondary);
+        }
+        if scroll < max_scroll {
+            draw_text("▼", menu_x + menu_width - 25.0, list_y + (max_visible as f32 * item_height) + 5.0, 14.0, t.text_secondary);
+        }
+
         for i in 0..max_visible {
-            let filtered_idx = tracker.scroll_offset + i;
-            if filtered_idx >= filtered_count {
+            let item_idx = scroll + i;
+            if item_idx >= total_items {
                 break;  // No more achievements to display
             }
 
-            // Get achievement from filtered list
-            let achievement = match tracker.get_filtered_achievement(filtered_idx) {
-                Some(ach) => ach,
-                None => continue,
-            };
-
+            let achievement = &tracker.achievements[item_idx];
             let y = list_y + (i as f32 * item_height);
-            let is_selected = filtered_idx == tracker.selected_index;
-
-            // Selection background
-            if is_selected {
-                draw_rectangle(
-                    menu_x + 10.0, y,
-                    menu_width - 20.0, item_height - 2.0,
-                    Color::new(0.3, 0.3, 0.4, 0.8),
-                );
-            }
 
             // Earned indicator
             let status_icon = if achievement.earned_hardcore {
@@ -380,24 +359,11 @@ fn render_achievements_screen(state: &OverlayState) {
                 draw_text(&prog_text, prog_bar_x + prog_bar_width + 5.0, y + 32.0, 11.0, LIGHTGRAY);
             }
 
-            // Description (smaller, only for selected if no progress bar)
-            if is_selected && !achievement.description.is_empty() && achievement.progress.is_none() {
-                let desc = if achievement.description.len() > 60 {
-                    format!("{}...", &achievement.description[..57])
-                } else {
-                    achievement.description.clone()
-                };
-                draw_text(&desc, menu_x + 45.0, y + 36.0, 12.0, Color::new(0.6, 0.6, 0.6, 1.0));
-            }
+            // Description removed for simplicity
+            // TODO: Add selection support for showing descriptions
         }
 
-        // Scroll indicators (use filtered count)
-        if tracker.scroll_offset > 0 {
-            draw_text("▲", menu_x + menu_width - 25.0, list_y + 10.0, 16.0, LIGHTGRAY);
-        }
-        if tracker.scroll_offset + max_visible < filtered_count {
-            draw_text("▼", menu_x + menu_width - 25.0, list_y + (max_visible as f32 * item_height) - 15.0, 16.0, LIGHTGRAY);
-        }
+        // Scroll indicators removed - TODO: Add scrolling support
     } else {
         // No achievements loaded
         draw_text(
@@ -1163,9 +1129,7 @@ fn render_performance(state: &OverlayState) {
     let panel_x = (screen_width() - panel_width) / 2.0;
     let panel_y = (screen_height() - panel_height) / 2.0;
 
-    // Panel background
-    draw_rectangle(panel_x, panel_y, panel_width, panel_height, t.panel_background);
-    draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, 3.0, t.panel_border);
+    draw_panel(panel_x, panel_y, panel_width, panel_height, &t);
 
     // Title
     draw_text("PERFORMANCE", panel_x + 20.0, panel_y + 40.0, 32.0, t.cursor);
@@ -1253,6 +1217,38 @@ fn render_playtime(state: &OverlayState) {
         16.0,
         t.text_secondary,
     );
+}
+
+fn draw_vignette() {
+    let w = screen_width();
+    let h = screen_height();
+    let fade = |alpha: f32| Color::new(0.0, 0.0, 0.0, alpha);
+
+    let bands = [
+        (0.04, fade(0.20)),
+        (0.07, fade(0.12)),
+        (0.10, fade(0.08)),
+    ];
+
+    for (thickness_ratio, color) in bands {
+        let t = h * thickness_ratio;
+        let l = w * thickness_ratio;
+        // top
+        draw_rectangle(0.0, 0.0, w, t, color);
+        // bottom
+        draw_rectangle(0.0, h - t, w, t, color);
+        // left
+        draw_rectangle(0.0, 0.0, l, h, color);
+        // right
+        draw_rectangle(w - l, 0.0, l, h, color);
+    }
+}
+
+fn draw_panel(x: f32, y: f32, w: f32, h: f32, t: &crate::themes::Theme) {
+    let shadow = Color::new(0.0, 0.0, 0.0, 0.18);
+    draw_rectangle(x - 8.0, y - 8.0, w + 16.0, h + 16.0, shadow);
+    draw_rectangle(x, y, w, h, t.panel_background);
+    draw_rectangle_lines(x, y, w, h, 2.0, t.panel_border);
 }
 
 fn render_quit_confirm(state: &OverlayState) {

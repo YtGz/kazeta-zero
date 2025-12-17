@@ -66,20 +66,20 @@ impl Theme {
     pub fn dark() -> Self {
         Self::new(
             "Dark".to_string(),
-            Color::new(0.1, 0.1, 0.1, 1.0),
-            Color::new(0.0, 0.0, 0.0, 0.75),
-            Color::new(0.2, 0.2, 0.2, 1.0),
-            WHITE,
-            WHITE,
-            LIGHTGRAY,
-            GRAY,
-            YELLOW,
-            Color::new(0.2, 0.6, 1.0, 1.0),  // Blue accent
-            Color::new(0.4, 0.7, 1.0, 1.0),  // Light blue
-            GREEN,
-            ORANGE,
-            RED,
-            Color::new(0.2, 0.4, 0.8, 1.0),  // Blue info
+            Color::new(0.05, 0.05, 0.07, 1.0),
+            Color::new(0.0, 0.0, 0.0, 0.65),   // Background dim
+            Color::new(0.12, 0.12, 0.14, 0.92), // Glassy panel
+            Color::new(0.16, 0.16, 0.2, 1.0),  // Soft border
+            Color::new(0.93, 0.95, 0.98, 1.0), // Primary text
+            Color::new(0.72, 0.76, 0.82, 1.0), // Secondary text
+            Color::new(0.45, 0.48, 0.52, 1.0), // Disabled text
+            Color::new(0.25, 0.82, 0.69, 1.0), // Cursor/primary accent
+            Color::new(0.23, 0.7, 0.94, 1.0),  // Accent
+            Color::new(0.28, 0.82, 0.75, 1.0), // Accent secondary
+            Color::new(0.16, 0.75, 0.38, 1.0), // Success
+            Color::new(0.98, 0.75, 0.22, 1.0), // Warning
+            Color::new(0.94, 0.31, 0.31, 1.0), // Error
+            Color::new(0.34, 0.55, 0.94, 1.0), // Info
         )
     }
 
@@ -214,4 +214,3 @@ mod tests {
         assert!(Theme::by_name("Invalid").is_none());
     }
 }
-

@@ -76,6 +76,17 @@ impl PlaytimeTracker {
         self.database.entries.get(cart_id)
     }
 
+    /// Get the duration of the current session
+    pub fn get_current_session_duration(&self) -> Option<Duration> {
+        self.current_session.as_ref().map(|s| s.start_time.elapsed())
+    }
+
+    /// Update current session (called from main loop)
+    pub fn update_current_session(&mut self) {
+        // Nothing to do here - session time is calculated on-demand via elapsed()
+        // This method exists for API compatibility
+    }
+
     /// Add playtime to a game
     fn add_playtime(&mut self, cart_id: &str, seconds: u64) {
         let entry = self.database.entries

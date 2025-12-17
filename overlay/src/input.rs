@@ -130,6 +130,12 @@ impl HotkeyMonitor {
         if is_key_pressed(KeyCode::F12) {
             inputs.push(ControllerInput::Guide);
         }
+        if is_key_pressed(KeyCode::Q) {
+            inputs.push(ControllerInput::LB);
+        }
+        if is_key_pressed(KeyCode::E) {
+            inputs.push(ControllerInput::RB);
+        }
         
         // Process gamepad input (same as BIOS)
         let was_neutral = self.analog_was_neutral;

@@ -151,7 +151,7 @@ impl RASettingsState {
 
     /// Logout from RetroAchievements
     /// Optionally clears credentials from config
-    pub fn logout(&mut self, config: &mut Config) {
+    pub fn logout(&mut self, _config: &mut Config) {
         let _ = Command::new("kazeta-ra")
             .arg("logout")
             .output();
@@ -281,7 +281,7 @@ pub fn update(
 }
 
 /// Handle text input for username/api key fields
-fn handle_text_input(text: &mut String, input_state: &InputState) {
+fn handle_text_input(text: &mut String, _input_state: &InputState) {
     // Get typed characters from macroquad
     while let Some(c) = get_char_pressed() {
         if c.is_alphanumeric() || c == '_' || c == '-' {

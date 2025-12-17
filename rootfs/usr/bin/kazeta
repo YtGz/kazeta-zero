@@ -5,6 +5,8 @@
 
 set -x
 
+ORIGINAL_HOME="$HOME"
+
 # Check for the --bios flag
 if [ "$1" == "--bios" ]; then
 	# If the flag is present, launch the BIOS immediately and exit,
@@ -226,6 +228,10 @@ trap "\
 	sudo rm -rf "${work}"; \
 	sudo rm -rf "${upper}/.kazeta/share"; \
 	rmdir --ignore-fail-on-non-empty "${upper}/.kazeta"; \
+	if [ -n \"\$LAUNCH_BIOS_AFTER_EXIT\" ]; then \
+		echo 'DEBUG: Relaunching BIOS after crash...'; \
+		HOME=\"${ORIGINAL_HOME}\" gamescope --filter pixel -- kazeta-bios; \
+	fi; \
 " EXIT
 
 export HOME="${BASE_DIR}/run/cart"
@@ -338,6 +344,9 @@ if [ $EXIT_CODE -ne 0 ] && [ $DURATION -lt $CRASH_THRESHOLD ]; then
 
 	# Call the helper script as root
 	sudo /usr/bin/kazeta-show-error
+
+	# Flag to relaunch BIOS after cleanup
+	LAUNCH_BIOS_AFTER_EXIT=1
 fi
 
 # If the game ran successfully (or ran longer than 10s), we just fall through

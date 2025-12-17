@@ -351,6 +351,7 @@ pub fn update(
     background_choices: &Vec<String>,
     font_choices: &Vec<String>,
     animation_state: &mut AnimationState,
+    back_to_blades: &mut bool,
 ) {
     // --- Determine current page info ---
     let (page_number, options): (usize, &[&str]) = match *current_screen {
@@ -371,7 +372,12 @@ pub fn update(
         sound_effects.play_cursor_move(&config);
     }
     if input_state.back {
-        *current_screen = Screen::MainMenu;
+        if *back_to_blades {
+            *current_screen = Screen::BladesDashboard;
+            *back_to_blades = false;
+        } else {
+            *current_screen = Screen::MainMenu;
+        }
         sound_effects.play_back(&config);
     }
     if input_state.next {
@@ -753,6 +759,9 @@ pub fn update(
                             config.logo_selection = defaults.logo_selection;
                             config.background_selection = defaults.background_selection;
                             config.font_selection = defaults.font_selection;
+                            config.splash_video = defaults.splash_video;
+                            config.splash_audio = defaults.splash_audio;
+                            config.loading_messages = defaults.loading_messages;
                             config.menu_position = defaults.menu_position;
                             config.font_color = defaults.font_color;
                             config.cursor_color = defaults.cursor_color;
@@ -761,6 +770,12 @@ pub fn update(
                             config.cursor_transition_speed = defaults.cursor_transition_speed;
                             config.background_scroll_speed = defaults.background_scroll_speed;
                             config.color_shift_speed = defaults.color_shift_speed;
+                            config.blades_enabled = defaults.blades_enabled;
+                            config.blade_games_color = defaults.blade_games_color;
+                            config.blade_settings_color = defaults.blade_settings_color;
+                            config.blade_saves_color = defaults.blade_saves_color;
+                            config.blade_transparency = defaults.blade_transparency;
+                            config.blade_blur_enabled = defaults.blade_blur_enabled;
 
                             if let Some(default_theme) = loaded_themes.get("Default") {
                                 *sound_effects = default_theme.sounds.clone();
@@ -774,6 +789,15 @@ pub fn update(
                                 config.logo_selection = theme.config.logo_selection.clone().unwrap_or_else(|| "Kazeta+ (Default)".to_string());
                                 config.background_selection = theme.config.background_selection.clone().unwrap_or_else(|| "Default".to_string());
                                 config.font_selection = theme.config.font_selection.clone().unwrap_or_else(|| "Default".to_string());
+                                config.splash_video = theme.config.splash_video.clone().unwrap_or_else(|| "Default".to_string());
+                                config.splash_audio = theme.config.splash_audio.clone().unwrap_or_else(|| "Default".to_string());
+
+                                // Apply custom loading messages if theme provides them
+                                if let Some(messages) = &theme.config.loading_messages {
+                                    config.loading_messages = messages.clone();
+                                } else {
+                                    config.loading_messages = Vec::new(); // Empty means use defaults
+                                }
 
                                 if let Some(val) = &theme.config.menu_position { config.menu_position = val.parse().unwrap_or_default(); }
                                 if let Some(val) = &theme.config.font_color { config.font_color = val.clone(); }
@@ -783,6 +807,15 @@ pub fn update(
                                 if let Some(val) = &theme.config.cursor_transition_speed { config.cursor_transition_speed = val.clone(); }
                                 if let Some(val) = &theme.config.background_scroll_speed { config.background_scroll_speed = val.clone(); }
                                 if let Some(val) = &theme.config.color_shift_speed { config.color_shift_speed = val.clone(); }
+
+                                if let Some(blades_config) = &theme.config.blades {
+                                    if let Some(val) = blades_config.enabled { config.blades_enabled = val; }
+                                    if let Some(val) = &blades_config.games_color { config.blade_games_color = val.clone(); }
+                                    if let Some(val) = &blades_config.settings_color { config.blade_settings_color = val.clone(); }
+                                    if let Some(val) = &blades_config.saves_color { config.blade_saves_color = val.clone(); }
+                                    if let Some(val) = blades_config.transparency { config.blade_transparency = val; }
+                                    if let Some(val) = blades_config.blur_enabled { config.blade_blur_enabled = val; }
+                                }
                             }
                         }
 

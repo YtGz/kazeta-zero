@@ -474,7 +474,7 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
 
     // Notify overlay if requested
     if notify_overlay {
-        notify_overlay_game_start(&game_title, earned, total)?;
+        notify_overlay_game_start(info.id, &game_title, earned, total)?;
     }
 
     Ok(())
@@ -530,7 +530,7 @@ fn cmd_clear_cache() -> Result<()> {
 
 // Overlay notification helpers
 
-fn notify_overlay_game_start(title: &str, earned: u32, total: u32) -> Result<()> {
+fn notify_overlay_game_start(game_id: u32, title: &str, earned: u32, total: u32) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
 
@@ -542,6 +542,7 @@ fn notify_overlay_game_start(title: &str, earned: u32, total: u32) -> Result<()>
     let message = serde_json::json!({
         "type": "ra_game_start",
         "game_title": title,
+        "game_id": game_id,
         "total_achievements": total,
         "earned_achievements": earned,
     });
@@ -789,4 +790,3 @@ fn cmd_list_game_names() -> Result<()> {
 
     Ok(())
 }
-

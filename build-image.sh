@@ -305,6 +305,25 @@ chmod +x ${BUILD_PATH}/usr/bin/kazeta-overlay
 chmod +x ${BUILD_PATH}/usr/bin/kazeta-ra
 chmod +x ${BUILD_PATH}/usr/bin/kazeta-input
 
+# Copy bundled runtimes (.kzr) into the image if present
+echo "Installing bundled runtimes..."
+RUNTIME_SRC="$(pwd)/runtimes"
+RUNTIME_DST="${BUILD_PATH}/usr/share/kazeta/runtimes"
+if [ -d "${RUNTIME_SRC}" ]; then
+    mapfile -t runtime_files < <(find "${RUNTIME_SRC}" -maxdepth 2 -type f -name "*.kzr")
+    if [ "${#runtime_files[@]}" -gt 0 ]; then
+        mkdir -p "${RUNTIME_DST}"
+        for rf in "${runtime_files[@]}"; do
+            cp "${rf}" "${RUNTIME_DST}/$(basename "${rf}")"
+        done
+        echo "Copied ${#runtime_files[@]} runtime(s) to ${RUNTIME_DST}"
+    else
+        echo "No .kzr runtimes found in ${RUNTIME_SRC}, skipping copy."
+    fi
+else
+    echo "Runtime source directory not found: ${RUNTIME_SRC}"
+fi
+
 echo "${SYSTEM_NAME}-${VERSION}" > ${BUILD_PATH}/build_info
 echo "" >> ${BUILD_PATH}/build_info
 cat ${BUILD_PATH}/manifest >> ${BUILD_PATH}/build_info

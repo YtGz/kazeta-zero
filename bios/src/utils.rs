@@ -525,6 +525,12 @@ pub fn notify_game_stopped(cart_id: &str) {
 /// Setup RetroAchievements for a game launch
 /// This is called by the BIOS when launching a game
 fn setup_retroachievements(cart_info: &save::CartInfo, kzi_path: &Path) {
+    // If overlay isn't up, warn but continue (kazeta-ra will still run and may connect later)
+    if !is_overlay_available() {
+        println!("[RA] Overlay socket not available; RA notifications may not be shown");
+        show_warning_toast("Overlay not running – achievements may not display");
+    }
+
     // Check if kazeta-ra is available
     if Command::new("kazeta-ra").arg("status").output().is_err() {
         println!("[RA] kazeta-ra not found, skipping RetroAchievements");
@@ -547,7 +553,8 @@ fn setup_retroachievements(cart_info: &save::CartInfo, kzi_path: &Path) {
     let rom_path = match get_rom_path_from_cartridge(cart_info, kzi_path) {
         Some(path) => path,
         None => {
-            println!("[RA] Could not determine ROM path from cartridge");
+            println!("[RA] Could not determine ROM path from cartridge (possibly a compressed .kzp package) - skipping RetroAchievements setup");
+            show_warning_toast("RetroAchievements unavailable for this game (no ROM path)");
             return;
         }
     };
@@ -585,7 +592,6 @@ fn setup_retroachievements(cart_info: &save::CartInfo, kzi_path: &Path) {
 }
 
 /// Get the ROM path from a cartridge
-/// For .kzi files, extracts to get the ROM path
 /// For .kzp files, returns None (will be handled by wrapper)
 fn get_rom_path_from_cartridge(cart_info: &save::CartInfo, kzi_path: &Path) -> Option<PathBuf> {
     // For .kzp files, we can't easily get the ROM path without mounting
@@ -594,36 +600,9 @@ fn get_rom_path_from_cartridge(cart_info: &save::CartInfo, kzi_path: &Path) -> O
         return None;
     }
 
-    // For .kzi files, extract to get ROM path
-    let extract_dir = if crate::DEV_MODE {
-        config::get_user_data_dir().unwrap().join("kzi-cache").join(&cart_info.id)
-    } else {
-        PathBuf::from("/tmp").join("kazeta-kzi").join(&cart_info.id)
-    };
-
-    // Check if already extracted
-    let rom_path = extract_dir.join(&cart_info.exec);
-    if rom_path.exists() {
-        return Some(rom_path);
-    }
-
-    // Try to extract (best effort - don't fail if it doesn't work)
-    if let Ok(file) = fs::File::open(kzi_path) {
-        use flate2::read::GzDecoder;
-        use tar::Archive;
-        
-        let decoder = GzDecoder::new(file);
-        let mut archive = Archive::new(decoder);
-        
-        if fs::create_dir_all(&extract_dir).is_ok() {
-            if archive.unpack(&extract_dir).is_ok() {
-                let rom_path = extract_dir.join(&cart_info.exec);
-                if rom_path.exists() {
-                    return Some(rom_path);
-                }
-            }
-        }
-    }
-
-    None
+    // For .kzi metadata files, assume the ROM lives next to the metadata
+    kzi_path
+        .parent()
+        .map(|p| p.join(&cart_info.exec))
+        .or_else(|| Some(PathBuf::from(&cart_info.exec)))
 }

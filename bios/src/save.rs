@@ -11,7 +11,6 @@ use std::{
 };
 use sysinfo::Disks;
 use tar::{Builder, Archive};
-use flate2::read::GzDecoder;
 
 use crate::{
     DEV_MODE,
@@ -51,6 +50,8 @@ pub struct CartInfo {
     pub multiplayer_type: Option<String>, // "link-cable", "wireless", "both"
     // RetroAchievements custom game name
     pub ra_game_name: Option<String>,
+    // Optional embedded saves by player (p1-p4)
+    pub player_saves: [Option<String>; 4],
 }
 
 #[derive(Clone, Debug)]
@@ -469,48 +470,62 @@ pub fn find_all_game_files() -> Result<(Vec<PathBuf>, Vec<String>), SaveError> {
 
 /// Parses a specific .kzi file and returns its metadata.
 pub fn parse_kzi_file(kzi_path: &Path) -> Result<CartInfo, SaveError> {
-    // Open the .kzi file (which is a gzip-compressed tar archive)
-    let file = fs::File::open(kzi_path)?;
-    let decoder = GzDecoder::new(file);
-    let mut archive = Archive::new(decoder);
+    let content = fs::read_to_string(kzi_path)?;
 
-    // Find and read the cartridge.toml file from the archive
-    let mut content = String::new();
-    let mut found_toml = false;
+    let mut name = None;
+    let mut id = None;
+    let mut exec = None;
+    let mut icon = None;
+    let mut runtime = None;
+    let mut multiplayer_support = None;
+    let mut max_players = None;
+    let mut multiplayer_type = None;
+    let mut ra_game_name = None;
+    let mut player_saves: [Option<String>; 4] = [None, None, None, None];
 
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?;
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
 
-        if path.file_name().and_then(|n| n.to_str()) == Some("cartridge.toml") {
-            entry.read_to_string(&mut content)?;
-            found_toml = true;
-            break;
+        if let Some((k, v)) = line.split_once('=') {
+            let key = k.trim().to_lowercase();
+            let mut value = v.trim();
+
+            // Strip surrounding quotes for convenience
+            if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+                value = &value[1..value.len() - 1];
+            }
+
+            match key.as_str() {
+                "name" => name = Some(value.to_string()),
+                "id" => id = Some(value.to_string()),
+                "exec" => exec = Some(value.to_string()),
+                "icon" => icon = Some(value.to_string()),
+                "runtime" => runtime = Some(value.to_string()),
+                "multiplayersupport" => {
+                    multiplayer_support = value.parse::<bool>().ok();
+                }
+                "maxplayers" => {
+                    if let Ok(n) = value.parse::<u8>() {
+                        max_players = Some(n);
+                    }
+                }
+                "multipliertype" => multiplayer_type = Some(value.to_string()),
+                "ra_game_name" | "ra-game-name" | "ra game name" => {
+                    ra_game_name = Some(value.to_string())
+                }
+                "savep1" => player_saves[0] = Some(value.to_string()),
+                "savep2" => player_saves[1] = Some(value.to_string()),
+                "savep3" => player_saves[2] = Some(value.to_string()),
+                "savep4" => player_saves[3] = Some(value.to_string()),
+                _ => {}
+            }
         }
     }
 
-    if !found_toml {
-        return Err(SaveError::Message(format!(
-            "No cartridge.toml found in .kzi file: '{}'",
-            kzi_path.display()
-        )));
-    }
-
-    // Parse the TOML content
-    let toml_value: toml::Value = toml::from_str(&content)
-        .map_err(|e| SaveError::Message(format!("Failed to parse cartridge.toml: {}", e)))?;
-
-    // Extract fields from TOML
-    let name = toml_value.get("name").and_then(|v| v.as_str()).map(String::from);
-    let id = toml_value.get("id").and_then(|v| v.as_str()).map(String::from);
-    let exec = toml_value.get("exec").and_then(|v| v.as_str()).map(String::from);
-    let icon = toml_value.get("icon").and_then(|v| v.as_str()).map(String::from)
-        .or_else(|| Some("default.png".to_string())); // Default icon if not specified
-    let runtime = toml_value.get("runtime").and_then(|v| v.as_str()).map(String::from);
-    let multiplayer_support = toml_value.get("multiplayer_support").and_then(|v| v.as_bool());
-    let max_players = toml_value.get("max_players").and_then(|v| v.as_integer()).map(|n| n as u8);
-    let multiplayer_type = toml_value.get("multiplayer_type").and_then(|v| v.as_str()).map(String::from);
-    let ra_game_name = toml_value.get("ra_game_name").and_then(|v| v.as_str()).map(String::from);
+    let icon = icon.or_else(|| Some("default.png".to_string()));
 
     if let (Some(id), Some(exec), Some(icon)) = (id, exec, icon) {
         Ok(CartInfo {
@@ -523,10 +538,11 @@ pub fn parse_kzi_file(kzi_path: &Path) -> Result<CartInfo, SaveError> {
             max_players,
             multiplayer_type,
             ra_game_name,
+            player_saves,
         })
     } else {
         Err(SaveError::Message(format!(
-            "Invalid cartridge.toml in '{}'. Missing required fields (id, exec, or icon).",
+            "Invalid .kzi file '{}': missing required fields (Id, Exec, or Icon).",
             kzi_path.display()
         )))
     }
@@ -604,131 +620,11 @@ pub fn launch_game_with_options(
         .spawn();
     }
 
-    // --- Standard Folder-Based Launch Logic (.kzi) ---
-    // For .kzi files, we need to extract them to a temporary location first
-    let extract_dir = if DEV_MODE {
-        // In dev mode, use a cache directory to avoid re-extracting every time
-        get_user_data_dir().unwrap().join("kzi-cache").join(&cart_info.id)
-    } else {
-        // In production, extract to /tmp
-        PathBuf::from("/tmp").join("kazeta-kzi").join(&cart_info.id)
-    };
-
-    // Extract the .kzi if it hasn't been extracted yet or if it's newer than the cache
-    let needs_extraction = !extract_dir.exists() ||
-        fs::metadata(kzi_path).and_then(|kzi_meta|
-            fs::metadata(&extract_dir).map(|cache_meta|
-                kzi_meta.modified().unwrap() > cache_meta.modified().unwrap()
-            )
-        ).unwrap_or(true);
-
-    if needs_extraction {
-        println!("[Debug] Extracting .kzi to: {}", extract_dir.display());
-        fs::create_dir_all(&extract_dir)?;
-
-        let file = fs::File::open(kzi_path)?;
-        let decoder = GzDecoder::new(file);
-        let mut archive = Archive::new(decoder);
-        archive.unpack(&extract_dir)?;
-
-        println!("[Debug] Extraction complete");
-    } else {
-        println!("[Debug] Using cached extraction at: {}", extract_dir.display());
-    }
-
-    let game_root = extract_dir;
-
-    // Check for embedded save files and copy them to the save directory
-    // Save files can be included in the .kzi archive for distribution
-    // Use "internal" as the drive name for dev mode, or get it from the KZI path
-    let drive_name = if DEV_MODE { "internal" } else { "internal" }; // TODO: detect actual drive
-    let save_dir = PathBuf::from(get_save_dir_from_drive_name(drive_name)).join(&cart_info.id);
-    fs::create_dir_all(&save_dir)?;
-
-    // Use a marker file to track if saves have been imported from this .kzi
-    // This prevents re-importing even if the user deletes their save file
-    let import_marker = save_dir.join(".saves-imported");
-    let should_import_saves = !import_marker.exists();
-
-    if should_import_saves {
-        // Look for .sav files in the extracted game root
-        if let Ok(entries) = fs::read_dir(&game_root) {
-            let mut copied_saves = Vec::new();
-            let rom_name = get_rom_name_from_exec(&cart_info.exec);
-
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("sav") {
-                    let save_filename = path.file_stem().unwrap().to_string_lossy().to_string();
-
-                    // Determine destination filename based on runtime and save file naming
-                    // For VBA-M multiplayer: Support both slotted saves and base saves
-                    let is_vbam = cart_info.runtime.as_deref() == Some("vba-m");
-
-                    // Check if save file already has a slot suffix (e.g., "pokemon_p1.sav")
-                    let has_slot_suffix = save_filename.ends_with("_p1")
-                                       || save_filename.ends_with("_p2")
-                                       || save_filename.ends_with("_p3")
-                                       || save_filename.ends_with("_p4");
-
-                    let dest_filename = if is_vbam && !has_slot_suffix {
-                        // Base save file (e.g., "pokemon.sav") - keep as is for discovery
-                        // Also create a _p1 version for initial Player 1 usage
-                        let base_dest = save_dir.join(path.file_name().unwrap());
-                        let p1_dest = save_dir.join(format!("{}_p1.sav", rom_name));
-
-                        // Copy to both locations
-                        if !base_dest.exists() {
-                            if let Ok(_) = fs::copy(&path, &base_dest) {
-                                println!("[Debug] Copied embedded save file: {}", path.file_name().unwrap().to_string_lossy());
-                                copied_saves.push(path.file_name().unwrap().to_string_lossy().to_string());
-                            }
-                        }
-
-                        // Also create p1 version if it doesn't exist
-                        if !p1_dest.exists() {
-                            if let Ok(_) = fs::copy(&path, &p1_dest) {
-                                println!("[Debug] Created p1 save from base: {}_p1.sav", rom_name);
-                            }
-                        }
-
-                        continue; // Already handled, skip to next file
-                    } else {
-                        // Either not a GBA game, or already has slot suffix - copy as-is
-                        path.file_name().unwrap().to_string_lossy().to_string()
-                    };
-
-                    let dest_path = save_dir.join(&dest_filename);
-
-                    // Only copy if the save doesn't already exist (don't overwrite user saves)
-                    if !dest_path.exists() {
-                        match fs::copy(&path, &dest_path) {
-                            Ok(_) => {
-                                println!("[Debug] Copied embedded save file: {}", dest_filename);
-                                copied_saves.push(dest_filename);
-                            }
-                            Err(e) => {
-                                eprintln!("[Warning] Failed to copy save file {}: {}", dest_filename, e);
-                            }
-                        }
-                    } else {
-                        println!("[Debug] Save file already exists, skipping: {}", dest_filename);
-                    }
-                }
-            }
-
-            if !copied_saves.is_empty() {
-                println!("[Info] Imported {} embedded save file(s): {}", copied_saves.len(), copied_saves.join(", "));
-            }
-
-            // Create the marker file to prevent future imports
-            if let Err(e) = fs::File::create(&import_marker) {
-                eprintln!("[Warning] Failed to create import marker: {}", e);
-            }
-        }
-    } else {
-        println!("[Debug] Save files already imported (marker exists), skipping");
-    }
+    // --- Standard Folder-Based Launch Logic (.kzi metadata) ---
+    let game_root = kzi_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
 
     println!("[Debug] Game Root: {}", game_root.display());
     println!("[Debug] Exec Command: {}", &cart_info.exec);
@@ -919,6 +815,48 @@ pub fn get_rom_name_from_exec(exec: &str) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or("game")
         .to_string()
+}
+
+/// Import an embedded save for a specific player (p1-p4) referenced by the .kzi metadata.
+/// Copies the provided save file into the per-game save directory if it does not already exist.
+pub fn import_embedded_save(cart_info: &CartInfo, kzi_path: &Path, player: u8) -> Result<String, SaveError> {
+    if player == 0 || player > 4 {
+        return Err(SaveError::Message(format!("Invalid player index: {}", player)));
+    }
+
+    let idx = (player - 1) as usize;
+    let save_key = cart_info.player_saves.get(idx).and_then(|s| s.as_ref()).ok_or_else(|| {
+        SaveError::Message(format!("No embedded save specified for player {}", player))
+    })?;
+
+    let source_path = kzi_path
+        .parent()
+        .map(|p| p.join(save_key))
+        .unwrap_or_else(|| PathBuf::from(save_key));
+
+    if !source_path.exists() {
+        return Err(SaveError::Message(format!(
+            "Embedded save not found: {}",
+            source_path.display()
+        )));
+    }
+
+    let save_dir = get_mgba_save_dir(&cart_info.id);
+    fs::create_dir_all(&save_dir)?;
+
+    let rom_name = get_rom_name_from_exec(&cart_info.exec);
+    let dest_path = save_dir.join(format!("{}_p{}.sav", rom_name, player));
+
+    if dest_path.exists() {
+        return Err(SaveError::Message(format!(
+            "Save for player {} already exists: {}",
+            player,
+            dest_path.display()
+        )));
+    }
+
+    fs::copy(&source_path, &dest_path)?;
+    Ok(format!("p{}", player))
 }
 
 /// Searches for files with a given extension within a directory up to a specified depth
@@ -1463,73 +1401,40 @@ fn setup_retroachievements_for_launch(cart_info: &CartInfo, kzi_path: &Path) {
         return;
     }
 
-    // Get ROM path - for .kzi files, we need to extract first
+    // Get ROM path - for .kzi metadata, the ROM sits next to the metadata file
     let rom_path = if kzi_path.extension().and_then(|e| e.to_str()) == Some("kzp") {
         // For .kzp, we can't easily get ROM path - skip RA setup
         return;
     } else {
-        // For .kzi, extract to get ROM path
-        let extract_dir = if DEV_MODE {
-            get_user_data_dir().unwrap().join("kzi-cache").join(&cart_info.id)
-        } else {
-            PathBuf::from("/tmp").join("kazeta-kzi").join(&cart_info.id)
-        };
-
-        // Check if already extracted
-        let rom_path = extract_dir.join(&cart_info.exec);
-        if rom_path.exists() {
-            Some(rom_path)
-        } else {
-            // Try to extract (best effort)
-            if let Ok(file) = fs::File::open(kzi_path) {
-                let decoder = GzDecoder::new(file);
-                let mut archive = Archive::new(decoder);
-                
-                if fs::create_dir_all(&extract_dir).is_ok() {
-                    if archive.unpack(&extract_dir).is_ok() {
-                        let rom_path = extract_dir.join(&cart_info.exec);
-                        if rom_path.exists() {
-                            Some(rom_path)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
+        kzi_path
+            .parent()
+            .map(|p| p.join(&cart_info.exec))
+            .unwrap_or_else(|| PathBuf::from(&cart_info.exec))
     };
 
-    if let Some(rom_path) = rom_path {
-        if rom_path.exists() {
-            println!("[RA] Setting up RetroAchievements for: {}", rom_path.display());
+    if rom_path.exists() {
+        println!("[RA] Setting up RetroAchievements for: {}", rom_path.display());
 
-            // Call kazeta-ra game-start (run in background)
-            let rom_path_str = rom_path.to_string_lossy().to_string();
-            std::thread::spawn(move || {
-                let _ = Command::new("kazeta-ra")
-                    .arg("game-start")
-                    .arg("--path")
-                    .arg(&rom_path_str)
-                    .arg("")
-                    .output();
-            });
+        // Call kazeta-ra game-start (run in background)
+        let rom_path_str = rom_path.to_string_lossy().to_string();
+        std::thread::spawn(move || {
+            let _ = Command::new("kazeta-ra")
+                .arg("game-start")
+                .arg("--path")
+                .arg(&rom_path_str)
+                .arg("")
+                .output();
+        });
 
-            // Also send achievement list to overlay (run in background)
-            let rom_path_str2 = rom_path.to_string_lossy().to_string();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                let _ = Command::new("kazeta-ra")
-                    .arg("send-achievements-to-overlay")
-                    .arg("--path")
-                    .arg(&rom_path_str2)
-                    .output();
-            });
-        }
+        // Also send achievement list to overlay (run in background)
+        let rom_path_str2 = rom_path.to_string_lossy().to_string();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let _ = Command::new("kazeta-ra")
+                .arg("send-achievements-to-overlay")
+                .arg("--path")
+                .arg(&rom_path_str2)
+                .output();
+        });
     }
 }

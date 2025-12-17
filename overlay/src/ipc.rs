@@ -34,6 +34,8 @@ pub enum OverlayMessage {
     RaGameStart {
         game_title: String,
         #[serde(skip_serializing_if = "Option::is_none")]
+        game_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         game_icon: Option<String>,
         total_achievements: u32,
         earned_achievements: u32,

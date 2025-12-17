@@ -11,7 +11,7 @@ use crate::{
     settings::render_settings_page,
     system::*, // Wildcard to get all system functions
     ui::*,
-    ui::main_menu::MAIN_MENU_OPTIONS,
+    ui::blades::BladesState,
     ui::runtime_downloader::RuntimeDownloaderState,
     ui::theme_downloader::ThemeDownloaderState,
     ui::update_checker::UpdateCheckerState,
@@ -272,6 +272,10 @@ fn window_conf() -> Conf {
         window_height: SCREEN_HEIGHT,
         high_dpi: false,
         fullscreen: false,
+        platform: miniquad::conf::Platform {
+            apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -563,9 +567,6 @@ async fn main() {
     // load config file
     let mut config = Config::load();
 
-    // load config file (needed early for RA settings initialization)
-    let mut config = Config::load();
-
     // RETROACHIEVEMENTS
     let mut ra_settings_state = RASettingsState::load_from_config(&config);
 
@@ -574,6 +575,9 @@ async fn main() {
 
     // RUNTIME DOWNLOADER
     let mut runtime_downloader_state = RuntimeDownloaderState::new();
+
+    // BLADES
+    let mut blades_state = BladesState::new();
 
     // BLUETOOTH CONTROLLER PAIRING
     #[cfg(target_os = "linux")]
@@ -627,8 +631,14 @@ async fn main() {
     let mut flash_message: Option<(String, f32)> = None; // (Message, time_remaining)
 
     // Generate a random message on startup
+    // Use custom loading messages if available, otherwise use defaults
     let mut rng = ::rand::rng();
-    let loading_text = KAZETA_LOADING_MESSAGES[rng.random_range(0..KAZETA_LOADING_MESSAGES.len())];
+    let loading_text = if !config.loading_messages.is_empty() {
+        let idx = rng.random_range(0..config.loading_messages.len());
+        config.loading_messages[idx].as_str()
+    } else {
+        KAZETA_LOADING_MESSAGES[rng.random_range(0..KAZETA_LOADING_MESSAGES.len())]
+    };
 
     // FONT
     // pre-load user's custom font if they have one so we can display it in the loading screen
@@ -672,14 +682,6 @@ async fn main() {
         &music_files,
         scale_factor
     ).await;
-
-    // --- SET THE ACTIVE THEME ---
-    let active_theme = loaded_themes.get(&config.theme).unwrap_or_else(|| {
-        println!("[WARN] Active theme '{}' not found. Falling back to 'Default'.", &config.theme);
-        loaded_themes.get("Default").expect("Default fallback theme is also missing!")
-    });
-
-    println!("[INFO] Using theme: {}", active_theme.name);
 
     // apply custom resolution if user specified it
     apply_resolution(&config.resolution);
@@ -776,24 +778,55 @@ async fn main() {
 
         let sink = Sink::connect_new(&AUDIO.stream.mixer());
 
-        // 1. Setup Audio (Keep this exactly as you have it!)
-        let splash_bytes = include_bytes!("../splash.wav");
-        let cursor = Cursor::new(splash_bytes);
-        let source = Decoder::new(cursor).unwrap();
-        sink.append(source);
+        // 1. Setup Audio
+        // Try to load custom splash audio from music cache, otherwise use default
+        if config.splash_audio != "Default" {
+            if let Some(audio_buffer) = music_cache.get(&config.splash_audio) {
+                sink.append(audio_buffer.clone());
+            } else {
+                // Fallback to default if custom audio not found
+                let splash_bytes = include_bytes!("../splash.wav");
+                let cursor = Cursor::new(splash_bytes);
+                let source = Decoder::new(cursor).unwrap();
+                sink.append(source);
+            }
+        } else {
+            // Use default embedded audio
+            let splash_bytes = include_bytes!("../splash.wav");
+            let cursor = Cursor::new(splash_bytes);
+            let source = Decoder::new(cursor).unwrap();
+            sink.append(source);
+        }
 
         // 2. Setup Video
-        // Embed the MP4
-        let video_bytes = include_bytes!("../splash.mp4");
+        // Try to use custom splash video, otherwise use default
+        let mut video_player: Option<VideoPlayer> = None;
 
-        // Write to temp file so FFmpeg can read it
-        let mut temp_video = NamedTempFile::new().unwrap();
-        temp_video.write_all(video_bytes).unwrap();
-        let temp_path = temp_video.path().to_path_buf();
+        if config.splash_video != "Default" {
+            // Try to find the custom splash video file
+            if let Some(user_dir) = get_user_data_dir() {
+                // Check in theme-specific directory first
+                let theme_splash_path = user_dir.join("themes").join(&config.theme).join(&config.splash_video);
+                if theme_splash_path.exists() {
+                    video_player = VideoPlayer::new(&theme_splash_path).ok();
+                } else {
+                    // Check in global backgrounds directory
+                    let global_splash_path = user_dir.join("backgrounds").join(&config.splash_video);
+                    if global_splash_path.exists() {
+                        video_player = VideoPlayer::new(&global_splash_path).ok();
+                    }
+                }
+            }
+        }
 
-        // Initialize Player
-        // Note: We use a Result here in case FFmpeg fails (missing libs, etc)
-        let mut video_player = VideoPlayer::new(&temp_path).ok();
+        // If no custom video found or config is "Default", load the embedded video
+        if video_player.is_none() {
+            let video_bytes = include_bytes!("../splash.mp4");
+            let mut temp_video = NamedTempFile::new().unwrap();
+            temp_video.write_all(video_bytes).unwrap();
+            let temp_path = temp_video.path().to_path_buf();
+            video_player = VideoPlayer::new(&temp_path).ok();
+        }
 
         // Fallback logo if video fails
         let fallback_logo = Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
@@ -874,8 +907,12 @@ async fn main() {
         next_frame().await;
     }
 
-    // Screen state
-    let mut current_screen = Screen::MainMenu;
+    // Screen state (allow config to pick default UI)
+    let mut current_screen = if config.blades_enabled {
+        Screen::BladesDashboard
+    } else {
+        Screen::MainMenu
+    };
     let mut main_menu_selection: usize = 0;
     let mut settings_menu_selection: usize = 0;
     let mut extras_menu_selection: usize = 0;
@@ -883,6 +920,8 @@ async fn main() {
     let mut available_games: Vec<(save::CartInfo, PathBuf)> = Vec::new(); // To hold the list of found games
     let mut play_option_enabled: bool = false;
     let mut copy_logs_option_enabled = false; // new button to copy session logs over to SD card
+    let mut back_to_blades = false;
+    let mut return_to_blades_after_game = false; // track if game flow was started from Blades
 
     // mGBA game launch options state
     let mut mgba_launch_step = GameLaunchStep::SelectPlayerCount;
@@ -954,6 +993,10 @@ async fn main() {
 
     // BEGINNING OF MAIN LOOP
     loop {
+        let _active_theme = loaded_themes.get(&config.theme).unwrap_or_else(|| {
+            println!("[WARN] Active theme '{}' not found. Falling back to 'Default'.", &config.theme);
+            loaded_themes.get("Default").expect("Default fallback theme is also missing!")
+        });
         let scale_factor = screen_height() / BASE_SCREEN_HEIGHT;
 
         // FLASH TIMER
@@ -1073,6 +1116,94 @@ async fn main() {
                     scale_factor,
                 );
             }
+            Screen::BladesDashboard => {
+                let action = ui::blades::update(
+                    &mut blades_state,
+                    &mut input_state,
+                    &sound_effects,
+                    &config,
+                );
+
+            match action {
+                ui::blades::BladeAction::None => {},
+                ui::blades::BladeAction::LaunchGame((cart_info, kzi_path)) => {
+                    // Mark that this game flow started from Blades so Back can return here.
+                    return_to_blades_after_game = true;
+
+                        if cart_info.runtime.as_deref() == Some("vba-m") {
+                            // mGBA multiplayer/save-slot flow (reuse existing dialog state)
+                            mgba_pending_game = Some((cart_info.clone(), kzi_path.clone()));
+                            mgba_launch_options = GameLaunchOptions::default();
+                            mgba_launch_options.player_count = 1;
+                            mgba_launch_options.save_slots.clear();
+
+                            let max_players = if cart_info.multiplayer_support == Some(true) {
+                                cart_info.max_players.unwrap_or(4)
+                            } else {
+                                1
+                            };
+
+                            if max_players > 1 {
+                                mgba_launch_step = GameLaunchStep::SelectPlayerCount;
+                                mgba_launch_dialog = Some(dialog::create_player_count_dialog(max_players));
+                            } else {
+                                mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: 1 };
+                                let save_dir = save::get_mgba_save_dir(&cart_info.id);
+                                let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
+                                let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
+                                mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
+                                    &existing_saves,
+                                    1,
+                                    cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                    can_import,
+                                ));
+                            }
+
+                            current_screen = Screen::GameLaunchOptions;
+                        } else {
+                            if DEV_MODE {
+                                log_messages.lock().unwrap().clear();
+                                {
+                                    let mut logs = log_messages.lock().unwrap();
+                                    logs.push("--- LAUNCH FROM BLADES ---".to_string());
+                                    logs.push(format!("Name: {}", cart_info.name.as_deref().unwrap_or("N/A")));
+                                }
+                                match save::launch_game(&cart_info, &kzi_path) {
+                                    Ok(mut child) => {
+                                        start_log_reader(&mut child, log_messages.clone());
+                                        game_process = Some(child);
+                                    }
+                                    Err(e) => {
+                                        log_messages.lock().unwrap().push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
+                                    }
+                                }
+                                current_screen = Screen::Debug;
+                            } else {
+                                (current_screen, fade_start_time) = trigger_game_launch(
+                                    &cart_info,
+                                    &kzi_path,
+                                    &mut current_bgm,
+                                    &music_cache
+                                );
+                            }
+                        }
+                    }
+                    ui::blades::BladeAction::GoToScreen(screen) => {
+                        if matches!(screen, Screen::GeneralSettings | Screen::AudioSettings | Screen::GuiSettings | Screen::AssetSettings | Screen::SaveData) {
+                            back_to_blades = true;
+                        }
+                        current_screen = screen;
+                    }
+                }
+
+                ui::blades::draw(
+                    &blades_state,
+                    &font_cache,
+                    &config,
+                    get_time(),
+                );
+            }
             Screen::FadingOut => {
                 // During fade, only render, don't process input
                 // Render the current background and UI elements first
@@ -1141,7 +1272,6 @@ async fn main() {
                 );
 
                 ui::main_menu::draw(
-                    &MAIN_MENU_OPTIONS,
                     main_menu_selection,
                     play_option_enabled,
                     copy_logs_option_enabled,
@@ -1175,7 +1305,7 @@ async fn main() {
                     &mut sound_effects, &mut confirm_selection,
                     &mut brightness, &mut system_volume, &available_sinks, &mut current_bgm,
                     &bgm_choices, &music_cache, &mut sfx_pack_to_reload, &logo_choices,
-                    &background_choices, &font_choices, &mut animation_state,
+                    &background_choices, &font_choices, &mut animation_state, &mut back_to_blades,
                 );
 
                 // --- Draw the UI ---
@@ -1259,7 +1389,12 @@ async fn main() {
                     }
                 }
                 if input_state.back {
-                    current_screen = Screen::MainMenu;
+                    if return_to_blades_after_game {
+                        current_screen = Screen::BladesDashboard;
+                        return_to_blades_after_game = false;
+                    } else {
+                        current_screen = Screen::MainMenu;
+                    }
                     sound_effects.play_back(&config);
                 }
                 if input_state.select {
@@ -1305,20 +1440,22 @@ async fn main() {
                                 let save_dir = save::get_mgba_save_dir(&cart_info.id);
                                 let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
                                 let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
 
                                 mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                     &existing_saves,
                                     1,
-                                    cart_info.name.as_deref().unwrap_or(&cart_info.id)
+                                    cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                    can_import,
                                 ));
                             }
 
                             current_screen = Screen::GameLaunchOptions;
-                        } else if DEV_MODE {
-                            // --- DEBUG MODE (non-mGBA) ---
-                            log_messages.lock().unwrap().clear();
-                            { // Scoped lock to add messages
-                                let mut logs = log_messages.lock().unwrap();
+                } else if DEV_MODE {
+                    // --- DEBUG MODE (non-mGBA) ---
+                    log_messages.lock().unwrap().clear();
+                    { // Scoped lock to add messages
+                        let mut logs = log_messages.lock().unwrap();
                                 logs.push("--- CARTRIDGE FOUND ---".to_string());
                                 logs.push(format!("Name: {}", cart_info.name.as_deref().unwrap_or("N/A")));
                                 logs.push(format!("ID: {}", cart_info.id));
@@ -1347,19 +1484,21 @@ async fn main() {
                                 Err(e) => {
                                     log_messages.lock().unwrap().push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
                                 }
-                            }
-                            current_screen = Screen::Debug;
-                        } else {
-                            // --- PRODUCTION MODE (non-mGBA) ---
-                            (current_screen, fade_start_time) = trigger_game_launch(
-                                cart_info,
-                                kzi_path,
-                                &mut current_bgm,
-                                &music_cache
-                            );
                         }
+                        current_screen = Screen::Debug;
+                    } else {
+                        // --- PRODUCTION MODE (non-mGBA) ---
+                        (current_screen, fade_start_time) = trigger_game_launch(
+                            cart_info,
+                            kzi_path,
+                            &mut current_bgm,
+                            &music_cache
+                        );
                     }
+                    // Reset the return flag once a launch path has been chosen/completed.
+                    return_to_blades_after_game = false;
                 }
+            }
 
                 // --- Render ---
                 render_game_selection_menu(
@@ -1378,6 +1517,7 @@ async fn main() {
                     GoBackToPlayerCount,
                     SelectPlayerCount { count: u8 },
                     SelectSaveSlot { slot: String, next_player: Option<u8> },
+                    ImportSave { player: u8 },
                     Launch,
                 }
 
@@ -1429,16 +1569,20 @@ async fn main() {
                                     }
                                 }
                                 GameLaunchStep::SelectSaveSlot { player } => {
-                                    if *player < mgba_launch_options.player_count {
-                                        action = DialogAction::SelectSaveSlot {
-                                            slot: selected_value,
-                                            next_player: Some(player + 1),
-                                        };
+                                    if selected_value == "IMPORT" {
+                                        action = DialogAction::ImportSave { player: *player };
                                     } else {
-                                        action = DialogAction::SelectSaveSlot {
-                                            slot: selected_value,
-                                            next_player: None,
-                                        };
+                                        if *player < mgba_launch_options.player_count {
+                                            action = DialogAction::SelectSaveSlot {
+                                                slot: selected_value,
+                                                next_player: Some(player + 1),
+                                            };
+                                        } else {
+                                            action = DialogAction::SelectSaveSlot {
+                                                slot: selected_value,
+                                                next_player: None,
+                                            };
+                                        }
                                     }
                                 }
                                 GameLaunchStep::Launching => {}
@@ -1465,6 +1609,7 @@ async fn main() {
                 }
 
                 // --- Apply action after render ---
+                let mut launch_now = false;
                 match action {
                     DialogAction::None => {}
                     DialogAction::Cancel => {
@@ -1479,10 +1624,15 @@ async fn main() {
                             let save_dir = save::get_mgba_save_dir(&cart_info.id);
                             let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
                             let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                            let can_import = cart_info.player_saves
+                                .get((prev_player.saturating_sub(1)) as usize)
+                                .and_then(|s| s.as_ref())
+                                .is_some();
                             mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                 &existing_saves,
                                 prev_player,
-                                cart_info.name.as_deref().unwrap_or(&cart_info.id)
+                                cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                can_import,
                             ));
                         }
                     }
@@ -1500,10 +1650,12 @@ async fn main() {
                             let save_dir = save::get_mgba_save_dir(&cart_info.id);
                             let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
                             let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                            let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
                             mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                 &existing_saves,
                                 1,
-                                cart_info.name.as_deref().unwrap_or(&cart_info.id)
+                                cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                can_import,
                             ));
                         }
                     }
@@ -1515,11 +1667,51 @@ async fn main() {
                                 let save_dir = save::get_mgba_save_dir(&cart_info.id);
                                 let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
                                 let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info.player_saves
+                                    .get((next_p.saturating_sub(1)) as usize)
+                                    .and_then(|s| s.as_ref())
+                                    .is_some();
                                 mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                     &existing_saves,
                                     next_p,
-                                    cart_info.name.as_deref().unwrap_or(&cart_info.id)
+                                    cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                    can_import,
                                 ));
+                            }
+                        } else {
+                            launch_now = true;
+                        }
+                    }
+                    DialogAction::ImportSave { player } => {
+                        if let Some((cart_info, kzi_path)) = &mgba_pending_game {
+                            match save::import_embedded_save(cart_info, kzi_path, player) {
+                                Ok(slot_id) => {
+                                    mgba_launch_options.save_slots.push(slot_id);
+                                    if player < mgba_launch_options.player_count {
+                                        let next_p = player + 1;
+                                        mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: next_p };
+                                        let save_dir = save::get_mgba_save_dir(&cart_info.id);
+                                        let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
+                                        let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                        let can_import = cart_info.player_saves
+                                            .get((next_p.saturating_sub(1)) as usize)
+                                            .and_then(|s| s.as_ref())
+                                            .is_some();
+                                        mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
+                                            &existing_saves,
+                                            next_p,
+                                            cart_info.name.as_deref().unwrap_or(&cart_info.id),
+                                            can_import,
+                                        ));
+                                        flash_message = Some((format!("IMPORTED SAVE FOR P{}", player), FLASH_MESSAGE_DURATION));
+                                    } else {
+                                        flash_message = Some((format!("IMPORTED SAVE FOR P{}", player), FLASH_MESSAGE_DURATION));
+                                        launch_now = true;
+                                    }
+                                }
+                                Err(e) => {
+                                    flash_message = Some((format!("IMPORT FAILED: {}", e), FLASH_MESSAGE_DURATION));
+                                }
                             }
                         }
                     }
@@ -1527,8 +1719,7 @@ async fn main() {
                 }
 
                 // Handle launch: check if we just selected the last save slot
-                let should_launch = matches!(&action, DialogAction::SelectSaveSlot { next_player: None, .. });
-                if should_launch {
+                if launch_now {
                     mgba_launch_step = GameLaunchStep::Launching;
                     if let Some((cart_info, kzi_path)) = mgba_pending_game.take() {
                         let launch_opts = save::MgbaLaunchOptions {
@@ -1727,7 +1918,7 @@ async fn main() {
                     &mut input_state, &mut current_screen, &sound_effects, &config,
                     &storage_state, &mut memories, &mut icon_cache, &mut icon_queue,
                     &mut selected_memory, &mut scroll_offset, &mut dialogs, &mut dialog_state, &mut animation_state,
-                    scale_factor, &copy_op_state
+                    scale_factor, &copy_op_state, &mut back_to_blades
                 ).await;
 
                 render_background(&background_cache, &mut video_cache, &config, &mut background_state);

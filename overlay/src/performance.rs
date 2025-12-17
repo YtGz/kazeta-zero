@@ -185,6 +185,27 @@ impl PerformanceStats {
     pub fn is_visible(&self) -> bool {
         self.visible
     }
+
+    /// Update performance stats (alias for record_frame + update_system_stats)
+    pub fn update(&mut self) {
+        // This is called from the main loop separately via record_frame
+        // This method exists for API compatibility
+    }
+
+    /// Get CPU usage (alias for cpu_usage)
+    pub fn get_cpu_usage(&self) -> f32 {
+        self.cpu_usage()
+    }
+
+    /// Get RAM usage percentage (alias for memory_usage_percent)
+    pub fn get_ram_usage(&self) -> f32 {
+        self.memory_usage_percent()
+    }
+
+    /// Get average FPS (alias for fps)
+    pub fn get_average_fps(&self) -> f32 {
+        self.fps()
+    }
 }
 
 impl Default for PerformanceStats {

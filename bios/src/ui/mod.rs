@@ -398,6 +398,21 @@ pub fn render_game_selection_menu(
     gcc_adapter_poll_rate: &Option<u32>,
     scale_factor: f32,
 ) {
+    // If no games are available, render background/overlay and a friendly message.
+    if games.is_empty() {
+        render_background(background_cache, video_cache, config, background_state);
+        render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+
+        let font = get_current_font(font_cache, config);
+        let font_size = (18.0 * scale_factor) as u16;
+        let msg = "No games detected. Connect a cart or add games.";
+        let dims = measure_text(msg, Some(font), font_size, 1.0);
+        let x = (screen_width() - dims.width) / 2.0;
+        let y = screen_height() / 2.0;
+        draw_text_ex(msg, x, y, TextParams { font: Some(font), font_size, color: GRAY, ..Default::default() });
+        return;
+    }
+
     render_background(background_cache, video_cache, config, background_state);
     render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
 

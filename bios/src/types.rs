@@ -81,6 +81,7 @@ pub enum Screen {
     CdPlayer,
     About,
     RetroAchievements,  // RetroAchievements login and settings
+    BladesDashboard,
 }
 
 /// State for mGBA game launch options dialog flow
@@ -203,21 +204,6 @@ pub struct Blade {
     pub selected_tab: usize,
     pub scroll_offset: usize,
     pub gradient_color: Color,
-}
-
-pub struct BladesAnimationState {
-    pub horizontal_scroll_time: f32,
-    pub target_blade: usize,
-    pub blade_transition_progress: f32,
-    pub tab_highlight_time: f32,
-    pub blade_fade_alpha: f32,
-}
-
-pub struct BladesState {
-    pub blades: Vec<Blade>,
-    pub current_blade: usize,
-    pub animation: BladesAnimationState,
-    pub enabled: bool,
 }
 
 // ===================================
@@ -414,109 +400,5 @@ impl AnimationState {
         // Use smooth easing function
         let t = t * t * (3.0 - 2.0 * t);
         self.dialog_transition_start_pos.lerp(self.dialog_transition_end_pos, t)
-    }
-}
-
-impl BladesAnimationState {
-    const BLADE_TRANSITION_DURATION: f32 = 0.3;
-    const TAB_GLOW_SPEED: f32 = 3.0;
-
-    pub fn new() -> Self {
-        BladesAnimationState {
-            horizontal_scroll_time: 0.0,
-            target_blade: 0,
-            blade_transition_progress: 1.0,
-            tab_highlight_time: 0.0,
-            blade_fade_alpha: 1.0,
-        }
-    }
-
-    pub fn trigger_blade_transition(&mut self, target: usize) {
-        self.target_blade = target;
-        self.horizontal_scroll_time = Self::BLADE_TRANSITION_DURATION;
-        self.blade_transition_progress = 0.0;
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        // Update horizontal blade scrolling
-        if self.horizontal_scroll_time > 0.0 {
-            self.horizontal_scroll_time = (self.horizontal_scroll_time - delta_time).max(0.0);
-            self.blade_transition_progress = 1.0 - (self.horizontal_scroll_time / Self::BLADE_TRANSITION_DURATION);
-        }
-
-        // Update tab glow animation
-        self.tab_highlight_time = (self.tab_highlight_time + delta_time * Self::TAB_GLOW_SPEED) % (2.0 * std::f32::consts::PI);
-    }
-
-    pub fn get_tab_glow_alpha(&self) -> f32 {
-        // Pulsing between 0.5 and 1.0
-        0.5 + (self.tab_highlight_time.sin() * 0.25) + 0.25
-    }
-
-    pub fn get_eased_progress(&self) -> f32 {
-        let t = self.blade_transition_progress;
-        // Cubic ease-in-out
-        if t < 0.5 {
-            4.0 * t * t * t
-        } else {
-            1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
-        }
-    }
-}
-
-impl BladesState {
-    pub fn new() -> Self {
-        let mut blades = Vec::new();
-
-        // 1. Games & Apps Blade
-        blades.push(Blade {
-            blade_type: BladeType::GamesAndApps,
-            name: "GAMES & APPS".to_string(),
-            tabs: vec![
-                BladeTab { name: "LIBRARY".to_string(), icon: None },
-                BladeTab { name: "RECENTLY PLAYED".to_string(), icon: None },
-                BladeTab { name: "INSTALLED APPS".to_string(), icon: None },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: Color::new(0.0, 0.8, 0.2, 1.0),  // Xbox green
-        });
-
-        // 2. System Settings Blade
-        blades.push(Blade {
-            blade_type: BladeType::SystemSettings,
-            name: "SYSTEM SETTINGS".to_string(),
-            tabs: vec![
-                BladeTab { name: "GENERAL".to_string(), icon: None },
-                BladeTab { name: "AUDIO".to_string(), icon: None },
-                BladeTab { name: "GUI".to_string(), icon: None },
-                BladeTab { name: "NETWORK".to_string(), icon: None },
-                BladeTab { name: "ASSETS".to_string(), icon: None },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: Color::new(0.8, 0.4, 0.0, 1.0),  // Orange
-        });
-
-        // 3. Save Data & Memory Blade
-        blades.push(Blade {
-            blade_type: BladeType::SaveDataAndMemory,
-            name: "SAVE DATA & MEMORY".to_string(),
-            tabs: vec![
-                BladeTab { name: "INTERNAL STORAGE".to_string(), icon: None },
-                BladeTab { name: "EXTERNAL STORAGE".to_string(), icon: None },
-                BladeTab { name: "MANAGE SAVES".to_string(), icon: None },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: Color::new(0.4, 0.0, 0.8, 1.0),  // Purple
-        });
-
-        BladesState {
-            blades,
-            current_blade: 0,
-            animation: BladesAnimationState::new(),
-            enabled: false,
-        }
     }
 }

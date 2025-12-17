@@ -14,7 +14,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-daemon = ["macroquad", "cocoa", "objc", "gilrs", "sysinfo", "dirs"]
+daemon = ["macroquad", "cocoa", "objc", "gilrs", "sysinfo", "dirs", "kazeta-ra"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -27,6 +27,7 @@ toml = { version = "0.8", optional = true }
 dirs = { version = "5.0", optional = true }
 gilrs = { version = "0.11.0", optional = true }  # Same gamepad library as BIOS
 sysinfo = { version = "0.32", optional = true }  # System performance monitoring
+kazeta-ra = { path = "../ra", optional = true }
 
 # Linux-specific dependencies for daemon
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -1,5 +1,5 @@
 use crate::{
-    Screen, UIFocus, InputState, copy_session_logs_to_sd, trigger_session_restart, start_log_reader, render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color, text_disabled, DEV_MODE, FLASH_MESSAGE_DURATION, FONT_SIZE, MENU_PADDING, MENU_OPTION_HEIGHT, ShakeTarget, save, StorageMediaState, VideoPlayer,
+    Screen, UIFocus, InputState, copy_session_logs_to_sd, render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color, text_disabled, FLASH_MESSAGE_DURATION, FONT_SIZE, MENU_PADDING, MENU_OPTION_HEIGHT, ShakeTarget, save, StorageMediaState, VideoPlayer,
     audio::SoundEffects,
     config::Config,
     types::{AnimationState, BackgroundState, BatteryInfo, MenuPosition},
@@ -14,7 +14,8 @@ use std::{
     sync::atomic::Ordering,
 };
 
-pub const MAIN_MENU_OPTIONS: &[&str] = &["DATA", "PLAY", "COPY SESSION LOGS", "SETTINGS", "EXTRAS", "ABOUT"];
+pub const MAIN_MENU_OPTIONS: &[&str] = &["DATA", "PLAY", "BLADES", "COPY SESSION LOGS", "SETTINGS", "EXTRAS", "ABOUT"];
+pub const MAIN_MENU_OPTIONS_NO_BLADES: &[&str] = &["DATA", "PLAY", "COPY SESSION LOGS", "SETTINGS", "EXTRAS", "ABOUT"];
 
 pub fn update(
     current_screen: &mut Screen,
@@ -28,15 +29,17 @@ pub fn update(
     config: &Config,
     log_messages: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     storage_state: &Arc<Mutex<StorageMediaState>>,
-    fade_start_time: &mut Option<f64>,
-    current_bgm: &mut Option<Sink>,
-    music_cache: &HashMap<String, SamplesBuffer>,
+    _fade_start_time: &mut Option<f64>,
+    _current_bgm: &mut Option<Sink>,
+    _music_cache: &HashMap<String, SamplesBuffer>,
     game_icon_queue: &mut Vec<(String, PathBuf)>,
     available_games: &mut Vec<(save::CartInfo, PathBuf)>,
     game_selection: &mut usize,
     flash_message: &mut Option<(String, f32)>,
-    game_process: &mut Option<std::process::Child>,
+    _game_process: &mut Option<std::process::Child>,
 ) {
+    let menu_options = if config.blades_enabled { MAIN_MENU_OPTIONS } else { MAIN_MENU_OPTIONS_NO_BLADES };
+
     // Update play option enabled status based on cart connection
     *play_option_enabled = cart_connected.load(Ordering::Relaxed);
 
@@ -46,21 +49,22 @@ pub fn update(
     // Handle main menu navigation
     if input_state.up {
         if *main_menu_selection == 0 {
-            *main_menu_selection = MAIN_MENU_OPTIONS.len() - 1;
+            *main_menu_selection = menu_options.len() - 1;
         } else {
-            *main_menu_selection = (*main_menu_selection - 1) % MAIN_MENU_OPTIONS.len();
+            *main_menu_selection = (*main_menu_selection - 1) % menu_options.len();
         }
         animation_state.trigger_transition(&config.cursor_transition_speed);
         sound_effects.play_cursor_move(&config);
     }
     if input_state.down {
-        *main_menu_selection = (*main_menu_selection + 1) % MAIN_MENU_OPTIONS.len();
+        *main_menu_selection = (*main_menu_selection + 1) % menu_options.len();
         animation_state.trigger_transition(&config.cursor_transition_speed);
         sound_effects.play_cursor_move(&config);
     }
     if input_state.select {
-        match *main_menu_selection {
-            0 => { // SAVE DATA
+        let selected_option = menu_options[*main_menu_selection];
+        match selected_option {
+            "DATA" => {
                 // Trigger a refresh the next time the data screen is entered.
                 if let Ok(mut state) = storage_state.lock() {
                     state.needs_memory_refresh = true;
@@ -70,7 +74,7 @@ pub fn update(
                 input_state.ui_focus = UIFocus::Grid;
                 sound_effects.play_select(&config);
             },
-            1 => { // PLAY option
+            "PLAY" => {
                 if *play_option_enabled {
                     sound_effects.play_select(&config);
                     log_messages.lock().unwrap().clear();
@@ -92,18 +96,13 @@ pub fn update(
                                         }
                                     } else if ext == "kzp" {
                                         // Logic for KZP (Compressed Package)
-                                        // Since we can't easily read inside the package without mounting,
-                                        // we construct a CartInfo based on the filename.
                                         let filename = path.file_stem().unwrap().to_string_lossy().to_string();
-
-                                        // We assume the ID is the filename
                                         let info = save::CartInfo {
-                                            name: Some(filename.clone()), // Use filename as Game Name
+                                            name: Some(filename.clone()),
                                             id: filename,
-                                            exec: String::from("internal"), // Placeholder
-                                            icon: String::from("icon.png"), // Placeholder
+                                            exec: String::from("internal"),
+                                            icon: String::from("icon.png"),
                                             runtime: Some(String::from("erofs")),
-                                            // Add other fields as necessary for your struct
                                             ..Default::default()
                                         };
                                         games.push((info, path.clone()));
@@ -112,7 +111,7 @@ pub fn update(
                             }
 
                             match games.len() {
-                                0 => { // Case: Found files, but none were valid
+                                0 => {
                                     let mut logs = log_messages.lock().unwrap();
                                     logs.push(format!("[Info] Found {} potential game file(s), but none could be parsed.", game_paths.len()));
                                     logs.push("--- ERRORS ---".to_string());
@@ -120,25 +119,16 @@ pub fn update(
                                     *current_screen = Screen::Debug;
                                 },
                                 1 => {
-                                    // Case: Exactly one game found
                                     *available_games = games;
                                     *game_selection = 0;
-
-                                    // Trigger the same launch flow as GameSelection screen
-                                    // This will show multiplayer prompts for mGBA games
                                     *current_screen = Screen::GameSelection;
                                 },
-                                _ => { // multiple games found
+                                _ => {
                                     println!("[Debug] Found {} games. Switching to selection screen.", games.len());
-
                                     game_icon_queue.clear();
                                     for (cart_info, game_path) in &games {
-                                        // Intelligent Icon Pathing
                                         let is_package = game_path.extension().map_or(false, |e| e == "kzp");
-
                                         let icon_path = if is_package {
-                                            // For .kzp, the icon is inside the image (inaccessible).
-                                            // 1. Try to find a "sidecar" icon (e.g. game.png next to game.kzp)
                                             let sidecar_png = game_path.with_extension("png");
                                             let sidecar_jpg = game_path.with_extension("jpg");
 
@@ -147,24 +137,20 @@ pub fn update(
                                             } else if sidecar_jpg.exists() {
                                                 sidecar_jpg
                                             } else {
-                                                // Instead of a file path, we use a "Magic String" that main.rs will recognize.
                                                 PathBuf::from("::KZP_PLACEHOLDER::")
                                             }
                                         } else {
-                                            // Standard .kzi behavior
                                             game_path.parent().unwrap().join(&cart_info.icon)
                                         };
-
                                         game_icon_queue.push((cart_info.id.clone(), icon_path));
                                     }
-
                                     *available_games = games;
                                     *game_selection = 0;
                                     *current_screen = Screen::GameSelection;
                                 }
                             }
                         },
-                        Err(e) => { // Handle the error case
+                        Err(e) => {
                             let error_msg = format!("[Error] Error scanning for cartridges: {}", e);
                             println!("[Error] {}", &error_msg);
                             log_messages.lock().unwrap().push(error_msg);
@@ -176,23 +162,19 @@ pub fn update(
                     animation_state.trigger_play_option_shake();
                 }
             },
-            2 => { // SESSION LOG COPY
+            "BLADES" => {
+                *current_screen = Screen::BladesDashboard;
+                sound_effects.play_select(config);
+            },
+            "COPY SESSION LOGS" => {
                 if *copy_logs_option_enabled {
                     sound_effects.play_select(&config);
-
-                    // Call our new function and handle the result
                     match copy_session_logs_to_sd() {
                         Ok(path) => {
-                            *flash_message = Some((
-                                format!("SUCCESS: {}", path),
-                                FLASH_MESSAGE_DURATION
-                            ));
+                            *flash_message = Some((format!("SUCCESS: {}", path), FLASH_MESSAGE_DURATION));
                         }
                         Err(e) => {
-                            *flash_message = Some((
-                                format!("ERROR: {}", e),
-                                FLASH_MESSAGE_DURATION
-                            ));
+                            *flash_message = Some((format!("ERROR: {}", e), FLASH_MESSAGE_DURATION));
                         }
                     }
                 } else {
@@ -200,15 +182,15 @@ pub fn update(
                     animation_state.trigger_copy_log_option_shake();
                 }
             },
-            3 => { // SETTINGS
+            "SETTINGS" => {
                 *current_screen = Screen::GeneralSettings;
                 sound_effects.play_select(&config);
             },
-            4 => { // EXTRAS
+            "EXTRAS" => {
                 *current_screen = Screen::Extras;
                 sound_effects.play_select(&config);
             },
-            5 => { // ABOUT
+            "ABOUT" => {
                 *current_screen = Screen::About;
                 sound_effects.play_select(&config);
             },
@@ -218,7 +200,6 @@ pub fn update(
 }
 
 pub fn draw(
-    menu_options: &[&str],
     selected_option: usize,
     play_option_enabled: bool,
     copy_logs_option_enabled: bool,
@@ -235,10 +216,10 @@ pub fn draw(
     scale_factor: f32,
     flash_message: Option<&str>,
 ) {
+    let menu_options = if config.blades_enabled { MAIN_MENU_OPTIONS } else { MAIN_MENU_OPTIONS_NO_BLADES };
     render_background(background_cache, video_cache, config, background_state);
     render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
 
-    // --- Define layout constants ---
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
     let menu_padding = MENU_PADDING * scale_factor;
     let menu_option_height = MENU_OPTION_HEIGHT * scale_factor;
@@ -247,40 +228,16 @@ pub fn draw(
 
     let current_font = get_current_font(font_cache, config);
 
-    // --- Determine menu position based on config ---
     let (start_x, start_y, is_centered) = match config.menu_position {
-        MenuPosition::Center => (
-            screen_width() / 2.0,
-            (screen_height() * 0.3).max(margin_y),
-            true
-        ),
-        MenuPosition::TopLeft => (
-            margin_x,
-            margin_y,
-            false
-        ),
-        MenuPosition::TopRight => (
-            screen_width() - margin_x,
-            margin_y,
-            false
-        ),
-        MenuPosition::BottomLeft => (
-            margin_x,
-            screen_height() - (menu_options.len() as f32 * menu_option_height),
-            false
-        ),
-        MenuPosition::BottomRight => (
-            screen_width() - margin_x,
-            screen_height() - (menu_options.len() as f32 * menu_option_height),
-            false
-        ),
+        MenuPosition::Center => (screen_width() / 2.0, (screen_height() * 0.3).max(margin_y), true),
+        MenuPosition::TopLeft => (margin_x, margin_y, false),
+        MenuPosition::TopRight => (screen_width() - margin_x, margin_y, false),
+        MenuPosition::BottomLeft => (margin_x, screen_height() - (menu_options.len() as f32 * menu_option_height), false),
+        MenuPosition::BottomRight => (screen_width() - margin_x, screen_height() - (menu_options.len() as f32 * menu_option_height), false),
     };
 
-    // Draw menu options
     for (i, &option) in menu_options.iter().enumerate() {
         let y_pos = start_y + (i as f32 * menu_option_height);
-
-        // --- Calculate text dimensions and horizontal position ---
         let text_dims = measure_text(option, Some(current_font), font_size, 1.0);
         let mut x_pos = if is_centered {
             start_x - (text_dims.width / 2.0)
@@ -290,22 +247,15 @@ pub fn draw(
             start_x
         };
 
-        // --- Handle shake effect for disabled options ---
         if i == 1 && !play_option_enabled && i == selected_option {
             x_pos += animation_state.calculate_shake_offset(ShakeTarget::PlayOption);
         }
-        if i == 2 && !copy_logs_option_enabled && i == selected_option {
-            x_pos += animation_state.calculate_shake_offset(ShakeTarget::CopyLogOption);
-        }
-
-        let is_selected = i == selected_option;
-        let is_disabled = match option {
+        let (is_selected, is_disabled) = (i == selected_option, match option {
             "PLAY" => !play_option_enabled,
             "COPY SESSION LOGS" => !copy_logs_option_enabled,
             _ => false,
-        };
+        });
 
-        // --- Draw selected option highlight ---
         if is_selected && config.cursor_style == "BOX" {
             let cursor_color = animation_state.get_cursor_color(config);
             let cursor_scale = animation_state.get_cursor_scale();
@@ -317,63 +267,32 @@ pub fn draw(
             let offset_y = (scaled_height - base_height) / 2.0;
             let rect_x = x_pos - menu_padding;
             let rect_y = y_pos - text_dims.height - menu_padding;
-
-            draw_rectangle_lines(
-                rect_x - offset_x,
-                rect_y - offset_y,
-                scaled_width,
-                scaled_height,
-                4.0 * scale_factor,
-                cursor_color,
-            );
+            draw_rectangle_lines(rect_x - offset_x, rect_y - offset_y, scaled_width, scaled_height, 4.0 * scale_factor, cursor_color);
         }
 
         if is_selected && config.cursor_style == "TEXT" {
             let mut highlight_color = animation_state.get_cursor_color(config);
-
             if is_disabled {
-                // If the item is disabled, dim the cursor color by 50%.
-                // It will look "Red-ish" (showing selection) but Dark (showing disabled).
                 highlight_color.r *= 0.5;
                 highlight_color.g *= 0.5;
                 highlight_color.b *= 0.5;
-                // Ensure alpha is solid so it doesn't look like a ghost
                 highlight_color.a = 1.0;
             }
-
             text_with_color(font_cache, config, option, x_pos, y_pos, font_size, highlight_color);
-
         } else if is_disabled {
-            // Not selected, just disabled -> Gray
             text_disabled(font_cache, config, option, x_pos, y_pos, font_size);
         } else {
-            // Normal -> Config Color (White/etc)
             text_with_config_color(font_cache, config, option, x_pos, y_pos, font_size);
         }
     }
 
-    // --- Draw the Flash Message if it exists ---
     if let Some(message) = flash_message {
         let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
         let current_font = get_current_font(font_cache, config);
-
-        // Measure the text to center it
         let dims = measure_text(message, Some(current_font), font_size, 1.0);
-
-        // Calculate position (centered, near the bottom)
         let x = screen_width() / 2.0 - dims.width / 2.0;
-        let y = screen_height() - (60.0 * scale_factor); // A bit above the version number
-
-        // Draw a semi-transparent background for readability
-        draw_rectangle(
-            x - (10.0 * scale_factor),
-            y - dims.height,
-            dims.width + (20.0 * scale_factor),
-            dims.height + (10.0 * scale_factor),
-            Color::new(0.0, 0.0, 0.0, 0.7),
-        );
-
-        // Draw the message text itself
+        let y = screen_height() - (60.0 * scale_factor);
+        draw_rectangle(x - (10.0 * scale_factor), y - dims.height, dims.width + (20.0 * scale_factor), dims.height + (10.0 * scale_factor), Color::new(0.0, 0.0, 0.0, 0.7));
         text_with_config_color(font_cache, config, message, x, y, font_size);
     }
 }

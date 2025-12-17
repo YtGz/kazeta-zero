@@ -7,7 +7,9 @@ use crate::playtime::PlaytimeTracker;
 use crate::theme_config::ThemeConfigManager;
 use macroquad::prelude::*;
 use std::time::{Duration, Instant};
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashSet};
+use kazeta_ra::{CredentialManager, RAClient};
+use kazeta_ra::types::GameInfoAndProgress;
 
 /// Represents the achievement completion state
 #[derive(Debug, Clone)]
@@ -20,6 +22,7 @@ pub struct AchievementProgress {
 pub struct AchievementTracker {
     pub game_id: Option<u32>,
     pub game_title: String,
+    pub game_hash: Option<String>,
     pub console: String,
     pub achievements: Vec<AchievementInfo>,
     pub progress: AchievementProgress,
@@ -30,6 +33,7 @@ impl AchievementTracker {
         Self {
             game_id: None,
             game_title: String::new(),
+            game_hash: None,
             console: String::new(),
             achievements: Vec::new(),
             progress: AchievementProgress {
@@ -42,6 +46,7 @@ impl AchievementTracker {
     pub fn set_game_info(&mut self, game_id: u32, title: String, console: String) {
         self.game_id = Some(game_id);
         self.game_title = title;
+        self.game_hash = None;
         self.console = console;
         println!(
             "[Achievements] Game info set: {} ({}) - ID: {}",
@@ -89,6 +94,7 @@ impl AchievementTracker {
     pub fn clear(&mut self) {
         self.game_id = None;
         self.game_title.clear();
+        self.game_hash = None;
         self.console.clear();
         self.achievements.clear();
         self.progress.earned = 0;
@@ -225,6 +231,16 @@ pub struct OverlayState {
     pub playtime: PlaytimeTracker,
     pub menu_config: MenuConfigManager,
     pub theme_config: ThemeConfigManager,
+    pub ra_poller: Option<RaPoller>,
+    pub achievements_scroll_offset: usize,
+}
+
+struct RaPoller {
+    game_id: u32,
+    earned: HashSet<u32>,
+    last_poll: Instant,
+    interval: Duration,
+    backoff: Option<Duration>,
 }
 
 impl OverlayState {
@@ -271,6 +287,8 @@ impl OverlayState {
             playtime,
             menu_config,
             theme_config,
+            ra_poller: None,
+            achievements_scroll_offset: 0,
         }
     }
 
@@ -295,6 +313,7 @@ impl OverlayState {
         self.toasts.update();
         self.performance.update();
         self.playtime.update_current_session();
+        self.update_ra_polling();
     }
 
     pub fn handle_message(&mut self, message: OverlayMessage) {
@@ -327,58 +346,70 @@ impl OverlayState {
                 );
                 self.playtime.start_session(cart_id);
             }
-            OverlayMessage::RaGameInfo {
-                game_id,
-                title,
-                console,
-                image_url: _,
-            } => {
-                self.achievements.set_game_info(game_id, title, console);
+        OverlayMessage::RaGameStart {
+            game_title,
+            game_id,
+            game_icon: _,
+            total_achievements,
+            earned_achievements,
+        } => {
+            println!("[State] RA Game started: {} ({}/{})", game_title, earned_achievements, total_achievements);
+            self.achievements.game_title = game_title.clone();
+            self.achievements.game_id = None;
+            if let Some(id) = game_id {
+                self.achievements.game_id = Some(id);
+                self.start_ra_poller(id);
             }
-            OverlayMessage::RaAchievementList { achievements } => {
-                self.achievements.set_achievements(achievements);
+            self.achievements.update_progress(earned_achievements, total_achievements);
+        }
+        OverlayMessage::RaAchievementList { game_title, game_hash, achievements } => {
+            if !game_title.is_empty() {
+                self.achievements.game_title = game_title;
             }
+            self.achievements.game_hash = Some(game_hash);
+            self.achievements.set_achievements(achievements);
+            if let Some(poller) = &mut self.ra_poller {
+                poller.earned = self.achievements.achievements
+                    .iter()
+                    .filter(|a| a.earned)
+                    .map(|a| a.id)
+                    .collect();
+            }
+        }
             OverlayMessage::RaProgressUpdate { earned, total } => {
                 self.achievements.update_progress(earned, total);
             }
-            OverlayMessage::RaUnlock {
+            OverlayMessage::RaAchievementUnlocked {
                 achievement_id,
                 title,
                 description,
                 points,
+                icon_url: _,
+                is_hardcore: _,
             } => {
                 self.achievements.unlock_achievement(achievement_id);
+                let desc_text = description.unwrap_or_default();
                 self.toasts.add_toast(
                     format!("🏆 {} ({} points)", title, points),
                     None,
                     ToastStyle::Success,
                     5000,
                 );
-                println!("[State] Achievement unlocked: {} - {}", title, description);
+                println!("[State] Achievement unlocked: {} - {}", title, desc_text);
             }
-            OverlayMessage::SetTheme { theme } => {
-                if let Err(e) = self.theme_config.set_theme(&theme) {
-                    eprintln!("[State] Failed to set theme: {}", e);
-                    self.toasts.add_toast(
-                        format!("Failed to set theme: {}", e),
-                        None,
-                        ToastStyle::Error,
-                        3000,
-                    );
-                } else {
-                    self.toasts.add_toast(
-                        format!("Theme set to: {}", theme),
-                        None,
-                        ToastStyle::Info,
-                        2000,
-                    );
-                }
+            OverlayMessage::SetTheme { font_color, cursor_color } => {
+                // Note: SetTheme in IPC currently just sets colors, not a full theme
+                // For now, just log it
+                println!("[State] SetTheme called with font_color={}, cursor_color={}", font_color, cursor_color);
+                // TODO: Apply custom colors to theme
             }
-            OverlayMessage::GameStopped => {
-                println!("[State] Game stopped");
+        OverlayMessage::GameStopped { cart_id } => {
+            println!("[State] Game stopped: {}", cart_id);
                 self.playtime.end_session();
                 // Clear achievement data when game stops
                 self.achievements.clear();
+                self.ra_poller = None;
+                self.achievements_scroll_offset = 0;
             }
             OverlayMessage::QuitGame => {
                 // This is handled in main.rs - trigger quit signal
@@ -393,6 +424,119 @@ impl OverlayState {
                     2000,
                 );
             }
+            OverlayMessage::UnlockAchievement { cart_id, achievement_id, timestamp } => {
+                println!("[State] Achievement unlocked: cart={}, id={}, time={}", cart_id, achievement_id, timestamp);
+                // This is handled by RaAchievementUnlocked for RetroAchievements
+            }
+            OverlayMessage::GetStatus => {
+                // Status query - could be used for IPC health checks
+                println!("[State] Status requested");
+            }
+            OverlayMessage::ToggleOverlay => {
+                self.toggle_visibility();
+                println!("[State] Toggled overlay via IPC message");
+            }
+            OverlayMessage::HideOverlay => {
+                self.visible = false;
+                println!("[State] Hiding overlay via IPC message");
+            }
+        }
+    }
+
+    fn start_ra_poller(&mut self, game_id: u32) {
+        let earned: HashSet<u32> = self
+            .achievements
+            .achievements
+            .iter()
+            .filter(|a| a.earned)
+            .map(|a| a.id)
+            .collect();
+
+        self.ra_poller = Some(RaPoller {
+            game_id,
+            earned,
+            last_poll: Instant::now(),
+            interval: Duration::from_secs(20),
+            backoff: None,
+        });
+    }
+
+    fn update_ra_polling(&mut self) {
+        let Some(poller) = self.ra_poller.as_mut() else { return; };
+
+        let interval = poller.backoff.unwrap_or(poller.interval);
+        if poller.last_poll.elapsed() < interval {
+            return;
+        }
+        poller.last_poll = Instant::now();
+
+        let cred_mgr = match CredentialManager::new() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[RA] Credential manager error: {}", e);
+                poller.backoff = Some(interval * 2);
+                return;
+            }
+        };
+
+        let credentials = match cred_mgr.load() {
+            Ok(Some(c)) => c,
+            Ok(None) => {
+                eprintln!("[RA] No credentials found");
+                poller.backoff = Some(interval * 2);
+                return;
+            }
+            Err(e) => {
+                eprintln!("[RA] Failed to load credentials: {}", e);
+                poller.backoff = Some(interval * 2);
+                return;
+            }
+        };
+
+        let client = RAClient::new(credentials);
+        let game_id = poller.game_id;
+        match client.get_game_info_and_progress(game_id) {
+            Ok(info) => {
+                poller.backoff = None;
+                drop(poller); // Drop the mutable borrow before calling apply_ra_poll
+                self.apply_ra_poll(info);
+            }
+            Err(e) => {
+                eprintln!("[RA] Poll failed: {}", e);
+                poller.backoff = Some(interval * 2);
+            }
+        }
+    }
+
+    fn apply_ra_poll(&mut self, info: GameInfoAndProgress) {
+        let Some(poller) = self.ra_poller.as_mut() else { return; };
+        let Some(achievements_map) = info.achievements.as_ref() else { return; };
+
+        let mut earned_now: HashSet<u32> = HashSet::new();
+        let mut newly_unlocked = Vec::new();
+
+        for achievement in achievements_map.values() {
+            if achievement.is_earned() {
+                earned_now.insert(achievement.id);
+                if poller.earned.insert(achievement.id) {
+                    newly_unlocked.push((achievement.id, achievement.title.clone(), achievement.points));
+                }
+            }
+        }
+
+        poller.earned = earned_now;
+        self.achievements
+            .update_progress(poller.earned.len() as u32, info.num_achievements);
+
+        for (id, title, points) in newly_unlocked {
+            self.achievements.unlock_achievement(id);
+            self.toasts.add_toast(
+                format!("🏆 {} ({} pts)", title, points),
+                None,
+                ToastStyle::Success,
+                5000,
+            );
+            println!("[RA] Detected unlock via polling: {} ({})", title, id);
         }
     }
 
@@ -413,6 +557,8 @@ impl OverlayState {
             OverlayScreen::MenuCustomization => self.handle_menu_customization_input(input),
             OverlayScreen::ThemeSelection => self.handle_theme_selection_input(input),
             OverlayScreen::QuitConfirm => self.handle_quit_confirm_input(input),
+            OverlayScreen::BluetoothPairing => self.handle_bluetooth_pairing_input(input),
+            OverlayScreen::ControllerAssign => self.handle_controller_assign_input(input),
         }
     }
 
@@ -578,7 +724,7 @@ impl OverlayState {
                 }
             }
             ControllerInput::Down => {
-                if self.controllers.selected_menu_item < CONTROLLER_MENU_OPTIONS - 1 {
+                if self.controllers.selected_menu_item < CONTROLLER_MENU_OPTIONS.len() - 1 {
                     self.controllers.selected_menu_item += 1;
                 }
             }
@@ -665,11 +811,76 @@ impl OverlayState {
                     );
                 }
             }
-            ControllerInput::Select => {
+            ControllerInput::Left | ControllerInput::Right | ControllerInput::Select => {
+                // Toggle visibility of selected menu item
                 if self.menu_customization_selected < all_items.len() {
                     let item_id = all_items[self.menu_customization_selected];
-                    // Toggle visibility - just log for now as toggle method may not exist
-                    println!("[State] Toggled visibility for: {:?}", item_id);
+                    self.menu_config.config_mut().toggle_visibility(item_id);
+
+                    // Save configuration
+                    if let Err(e) = self.menu_config.save() {
+                        eprintln!("[State] Failed to save menu config: {}", e);
+                        self.toasts.add_toast(
+                            format!("Failed to save menu config: {}", e),
+                            None,
+                            ToastStyle::Error,
+                            3000,
+                        );
+                    } else {
+                        let is_visible = self.menu_config.config().items.iter()
+                            .find(|i| i.id == item_id)
+                            .map(|i| i.visible)
+                            .unwrap_or(false);
+
+                        let status = if is_visible { "shown" } else { "hidden" };
+                        self.toasts.add_toast(
+                            format!("{} is now {}", item_id.display_name(), status),
+                            None,
+                            ToastStyle::Info,
+                            2000,
+                        );
+                        println!("[State] Toggled visibility for {:?}: {}", item_id, is_visible);
+                    }
+                }
+            }
+            ControllerInput::LB => {
+                // Move selected item up in order
+                if self.menu_customization_selected < all_items.len() {
+                    let item_id = all_items[self.menu_customization_selected];
+                    self.menu_config.config_mut().move_up(item_id);
+
+                    // Save configuration
+                    if let Err(e) = self.menu_config.save() {
+                        eprintln!("[State] Failed to save menu config: {}", e);
+                    } else {
+                        self.toasts.add_toast(
+                            format!("Moved {} up", item_id.display_name()),
+                            None,
+                            ToastStyle::Info,
+                            1500,
+                        );
+                        println!("[State] Moved {:?} up", item_id);
+                    }
+                }
+            }
+            ControllerInput::RB => {
+                // Move selected item down in order
+                if self.menu_customization_selected < all_items.len() {
+                    let item_id = all_items[self.menu_customization_selected];
+                    self.menu_config.config_mut().move_down(item_id);
+
+                    // Save configuration
+                    if let Err(e) = self.menu_config.save() {
+                        eprintln!("[State] Failed to save menu config: {}", e);
+                    } else {
+                        self.toasts.add_toast(
+                            format!("Moved {} down", item_id.display_name()),
+                            None,
+                            ToastStyle::Info,
+                            1500,
+                        );
+                        println!("[State] Moved {:?} down", item_id);
+                    }
                 }
             }
             ControllerInput::Back => {
@@ -799,6 +1010,32 @@ impl OverlayState {
             }
             _ => {
                 // TODO: Implement hotkey configuration UI
+            }
+        }
+    }
+
+    fn handle_bluetooth_pairing_input(&mut self, input: ControllerInput) {
+        match input {
+            ControllerInput::Back => {
+                // Return to Controllers menu
+                self.current_screen = OverlayScreen::Controllers;
+                println!("[State] Returning to Controllers menu");
+            }
+            _ => {
+                // TODO: Implement Bluetooth pairing UI
+            }
+        }
+    }
+
+    fn handle_controller_assign_input(&mut self, input: ControllerInput) {
+        match input {
+            ControllerInput::Back => {
+                // Return to Controllers menu
+                self.current_screen = OverlayScreen::Controllers;
+                println!("[State] Returning to Controllers menu");
+            }
+            _ => {
+                // TODO: Implement controller assignment UI
             }
         }
     }

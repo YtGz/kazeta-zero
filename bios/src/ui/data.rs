@@ -20,6 +20,7 @@ pub async fn update(
     animation_state: &mut AnimationState,
     scale_factor: f32,
     copy_op_state: &Arc<Mutex<CopyOperationState>>,
+    back_to_blades: &mut bool,
 ) {
     let mut action_dialog_id = String::new();
     let mut action_option_value = String::new();
@@ -40,7 +41,12 @@ pub async fn update(
         DialogState::None => {
             // Handle back navigation
             if input_state.back {
-                *current_screen = Screen::MainMenu;
+                if *back_to_blades {
+                    *current_screen = Screen::BladesDashboard;
+                    *back_to_blades = false;
+                } else {
+                    *current_screen = Screen::MainMenu;
+                }
                 sound_effects.play_back(&config);
             }
 
