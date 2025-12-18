@@ -1,0 +1,24 @@
+#!/bin/bash
+# Lightweight compositor launcher for Kazeta+ sessions (X11 only).
+# Tries picom first, then xcompmgr. Safe to call multiple times.
+
+set -euo pipefail
+
+if [ "${XDG_SESSION_TYPE:-}" != "x11" ]; then
+    exit 0
+fi
+
+if pgrep -x picom >/dev/null 2>&1 || pgrep -x xcompmgr >/dev/null 2>&1; then
+    exit 0
+fi
+
+if command -v picom >/dev/null 2>&1; then
+    exec picom --daemon --config /usr/share/kazeta/picom.conf --backend glx --vsync
+fi
+
+if command -v xcompmgr >/dev/null 2>&1; then
+    exec xcompmgr -c -f -n
+fi
+
+echo "kazeta-compositor: no compositor found (install picom or xcompmgr)" >&2
+exit 0

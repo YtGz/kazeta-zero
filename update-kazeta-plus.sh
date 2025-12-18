@@ -53,6 +53,8 @@ CURRENT_PACKAGES=(
     "pipewire-alsa" "alsa-utils"
     "mangohud" "lib32-mangohud" "gamemode" "lib32-gamemode" "openssh" "nano"
     "clang"
+    # Compositor for X11 transparency/centering
+    "picom" "xcompmgr"
     "steam"
 )
 

@@ -40,6 +40,11 @@ if [ -z "$DISPLAY" ] && [ -n "$WAYLAND_DISPLAY" ]; then
     export DISPLAY=:0
 fi
 
+# Start a lightweight compositor on X11 for proper window centering/transparency.
+if [ "${XDG_SESSION_TYPE:-}" = "x11" ] && [ -z "${KAZETA_DISABLE_COMPOSITOR:-}" ]; then
+    /usr/bin/kazeta-compositor start
+fi
+
 # Launch the BIOS application in the background.
 /usr/bin/kazeta > /var/kazeta/session.log 2>&1 &
 
