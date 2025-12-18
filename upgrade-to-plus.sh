@@ -303,6 +303,35 @@ echo -e "${GREEN}Services enabled.${NC}"
 echo "--------------------------------------------------"
 
 ### ===================================================================
+###                  INSTALL RUNTIME PACKAGES
+### ===================================================================
+
+echo -e "${YELLOW}Step 8: Installing runtime packages...${NC}"
+
+RUNTIMES_DIR="$SCRIPT_DIR/runtimes"
+KAZETA_RUNTIMES_DIR="/usr/share/kazeta/runtimes"
+
+if [ -d "$RUNTIMES_DIR" ] && [ -n "$(ls -A "$RUNTIMES_DIR"/*.kzr 2>/dev/null)" ]; then
+    echo "  -> Found runtime packages in upgrade kit."
+
+    # Ensure the kazeta runtimes directory exists
+    mkdir -p "$KAZETA_RUNTIMES_DIR"
+
+    for runtime_file in "$RUNTIMES_DIR"/*.kzr; do
+        runtime_name=$(basename "$runtime_file")
+        echo "  -> Installing $runtime_name..."
+        cp "$runtime_file" "$KAZETA_RUNTIMES_DIR/"
+    done
+
+    echo -e "${GREEN}  -> Runtime packages installed:${NC}"
+    ls -lh "$KAZETA_RUNTIMES_DIR"/*.kzr | awk '{printf "     - %-20s %5s\n", $9, $5}'
+else
+    echo "  -> No runtime packages found in upgrade kit, skipping."
+fi
+
+echo "--------------------------------------------------"
+
+### ===================================================================
 ###                             COMPLETE
 ### ===================================================================
 

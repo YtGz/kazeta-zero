@@ -70,27 +70,42 @@ echo "Copying udev rules..."
 cp "$SOURCE_DIR/rootfs/etc/udev/rules.d/51-gcadapter.rules" "$KIT_FULL_PATH/rootfs/etc/udev/rules.d/"
 cp "$SOURCE_DIR/rootfs/etc/udev/rules.d/99-optical-automount.rules" "$KIT_FULL_PATH/rootfs/etc/udev/rules.d/"
 
-echo "Copying shell scripts..."
-scripts_to_copy=( "ethernet-connect" "kazeta" "kazeta-copy-logs" "kazeta-mount" "kazeta-runtime-helper" "kazeta-session" "kazeta-wifi-setup" "kazeta-show-error" )
-for script in "${scripts_to_copy[@]}"; do
-    cp "$SOURCE_DIR/rootfs/usr/bin/$script" "$KIT_FULL_PATH/rootfs/usr/bin/"
-done
-
-echo "Copying kazeta-bios binary..."
-# --- RECOMMENDED CHANGE: Copy release binary ---
-# You usually want the release build in the kit, not debug
-if [ -f "$SOURCE_DIR/bios/target/release/kazeta-bios" ]; then
-    cp "$SOURCE_DIR/bios/target/release/kazeta-bios" "$KIT_FULL_PATH/rootfs/usr/bin/"
+echo "Building all Rust binaries..."
+# Run the build-all script to ensure all binaries are up to date
+if [ -f "$SOURCE_DIR/build-all.sh" ]; then
+    echo "Running build-all.sh to compile all Rust binaries..."
+    cd "$SOURCE_DIR"
+    bash ./build-all.sh --release --skip-runtimes
+    cd - > /dev/null
+    echo "Build complete."
 else
-    echo "WARNING: Release binary not found, copying debug binary."
-    cp "$SOURCE_DIR/bios/target/debug/kazeta-bios" "$KIT_FULL_PATH/rootfs/usr/bin/"
+    echo "WARNING: build-all.sh not found. Skipping automatic build."
+    echo "Make sure binaries are already built!"
 fi
+
+echo "Copying all binaries and scripts from rootfs/usr/bin..."
+# Copy ALL files from rootfs/usr/bin (includes both shell scripts and compiled binaries)
+cp -r "$SOURCE_DIR/rootfs/usr/bin/"* "$KIT_FULL_PATH/rootfs/usr/bin/"
+echo "All binaries copied."
 
 echo "Copying inputplumber profiles..."
 cp "$SOURCE_DIR/rootfs/usr/share/inputplumber/profiles/"*.yaml "$KIT_FULL_PATH/rootfs/usr/share/inputplumber/profiles/"
 
 echo "Copying gcadapter-oc-dkms source..."
 cp -r "$SOURCE_DIR/aur-pkgs/gcadapter-oc-dkms" "$KIT_FULL_PATH/aur-pkgs/"
+
+echo "Copying runtime packages..."
+# Create runtimes directory in the kit
+mkdir -p "$KIT_FULL_PATH/runtimes"
+
+# Copy any .kzr runtime files
+if ls "$SOURCE_DIR"/*.kzr 1> /dev/null 2>&1; then
+    cp "$SOURCE_DIR"/*.kzr "$KIT_FULL_PATH/runtimes/"
+    echo "Runtime packages copied:"
+    ls -lh "$KIT_FULL_PATH/runtimes"/*.kzr | awk '{printf "  - %-30s %5s\n", $9, $5}'
+else
+    echo "No runtime packages (.kzr files) found. Run build-all.sh without --skip-runtimes first."
+fi
 
 echo "All files copied successfully."
 

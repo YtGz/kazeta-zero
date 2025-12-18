@@ -174,6 +174,21 @@ backup_and_copy() {
                 SERVICES_TO_RESTART+=("inputplumber.service")
             fi
             ;;
+        "kazeta-ra")
+            if [ "$needs_restart" = true ]; then
+                SERVICES_TO_RESTART+=("kazeta-ra.service")
+            fi
+            ;;
+        "kazeta-input-daemon")
+            if [ "$needs_restart" = true ]; then
+                SERVICES_TO_RESTART+=("kazeta-input-daemon.service")
+            fi
+            ;;
+        "kazeta-overlay")
+            if [ "$needs_restart" = true ]; then
+                SERVICES_TO_RESTART+=("kazeta-overlay.service")
+            fi
+            ;;
         # Add other daemon mappings here as needed
     esac
 }
@@ -227,6 +242,56 @@ else
 fi
 
 echo -e "${GREEN}Services updated.${NC}"
+echo "--------------------------------------------------"
+
+### ===================================================================
+###                  INSTALL RUNTIME PACKAGES
+### ===================================================================
+
+echo -e "${YELLOW}Step 5: Installing runtime packages...${NC}"
+
+RUNTIMES_DIR="$SCRIPT_DIR/runtimes"
+KAZETA_RUNTIMES_DIR="/usr/share/kazeta/runtimes"
+
+if [ -d "$RUNTIMES_DIR" ] && [ -n "$(ls -A "$RUNTIMES_DIR"/*.kzr 2>/dev/null)" ]; then
+    echo "  -> Found runtime packages in upgrade kit."
+
+    # Ensure the kazeta runtimes directory exists
+    mkdir -p "$KAZETA_RUNTIMES_DIR"
+
+    RUNTIMES_INSTALLED=()
+    for runtime_file in "$RUNTIMES_DIR"/*.kzr; do
+        runtime_name=$(basename "$runtime_file")
+        dest_file="$KAZETA_RUNTIMES_DIR/$runtime_name"
+
+        # Check if runtime already exists and compare
+        if [ -f "$dest_file" ]; then
+            if cmp -s "$runtime_file" "$dest_file"; then
+                echo "  -> $runtime_name already up to date, skipping."
+                continue
+            else
+                echo "  -> Updating $runtime_name..."
+            fi
+        else
+            echo "  -> Installing new runtime: $runtime_name..."
+        fi
+
+        cp "$runtime_file" "$dest_file"
+        RUNTIMES_INSTALLED+=("$runtime_name")
+    done
+
+    if [ ${#RUNTIMES_INSTALLED[@]} -gt 0 ]; then
+        echo -e "${GREEN}  -> Installed/updated runtimes:${NC}"
+        for runtime in "${RUNTIMES_INSTALLED[@]}"; do
+            echo "     - $runtime"
+        done
+    else
+        echo -e "${GREEN}  -> All runtimes already up to date.${NC}"
+    fi
+else
+    echo "  -> No runtime packages found in upgrade kit, skipping."
+fi
+
 echo "--------------------------------------------------"
 
 ### ===================================================================
