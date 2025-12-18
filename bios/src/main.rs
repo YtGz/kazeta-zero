@@ -271,11 +271,11 @@ fn window_conf() -> Conf {
         window_width: SCREEN_WIDTH,
         window_height: SCREEN_HEIGHT,
         high_dpi: false,
-        fullscreen: false,
+        fullscreen: true,
         platform: miniquad::conf::Platform {
             apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
             #[cfg(target_os = "linux")]
-            linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // For production: support both X11 and Wayland systems
+            linux_backend: miniquad::conf::LinuxBackend::X11Only, // Use X11 only since miniquad doesn't support native Wayland
             ..Default::default()
         },
         ..Default::default()
@@ -685,8 +685,8 @@ async fn main() {
         scale_factor
     ).await;
 
-    // apply custom resolution if user specified it
-    apply_resolution(&config.resolution);
+    // Note: apply_resolution() is not called here because we start in fullscreen mode.
+    // Resolution settings only apply when the user switches to windowed mode in settings.
     next_frame().await;
 
     // load custom sound pack
