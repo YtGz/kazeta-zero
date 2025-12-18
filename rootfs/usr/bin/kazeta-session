@@ -35,6 +35,11 @@ if [ -f /var/kazeta/session.log ]; then
     mv /var/kazeta/session.log /var/kazeta/session.log.old
 fi
 
+# Ensure DISPLAY is set for X11 applications running under Wayland
+if [ -z "$DISPLAY" ] && [ -n "$WAYLAND_DISPLAY" ]; then
+    export DISPLAY=:0
+fi
+
 # Launch the BIOS application in the background.
 /usr/bin/kazeta > /var/kazeta/session.log 2>&1 &
 
@@ -64,6 +69,6 @@ if [ -f "$RESTART_SESSION_SENTINEL" ]; then
     exec kazeta-session
 else
     # If no sentinel is found, exit non-zero so systemd can restart or fall back.
-    # exit 1
-    poweroff
+    exit 10
+    # poweroff
 fi

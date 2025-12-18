@@ -204,10 +204,57 @@ echo -e "${GREEN}System files updated.${NC}"
 echo "--------------------------------------------------"
 
 ### ===================================================================
+###                  CLEANUP DEPRECATED FILES
+### ===================================================================
+
+echo -e "${YELLOW}Step 3: Cleaning up deprecated files and services...${NC}"
+
+# List of deprecated files to remove
+DEPRECATED_FILES=(
+    # Old Wayland session (replaced with X11 session)
+    "$DEPLOYMENT_DIR/usr/share/wayland-sessions/kazeta.desktop"
+    # Old overlay service (deprecated)
+    "$DEPLOYMENT_DIR/etc/systemd/system/kazeta-overlay.service"
+)
+
+# List of deprecated systemd services to stop and disable
+DEPRECATED_SERVICES=(
+    "kazeta-overlay.service"
+)
+
+# Remove deprecated files
+FILES_REMOVED=0
+for file in "${DEPRECATED_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        echo "  -> Removing deprecated file: $(basename "$file")"
+        rm -f "$file"
+        FILES_REMOVED=$((FILES_REMOVED + 1))
+    fi
+done
+
+# Stop and disable deprecated services
+SERVICES_CLEANED=0
+for service in "${DEPRECATED_SERVICES[@]}"; do
+    if systemctl is-enabled --quiet "$service" 2>/dev/null; then
+        echo "  -> Disabling deprecated service: $service"
+        systemctl disable --now "$service" 2>/dev/null || true
+        SERVICES_CLEANED=$((SERVICES_CLEANED + 1))
+    fi
+done
+
+if [ $FILES_REMOVED -eq 0 ] && [ $SERVICES_CLEANED -eq 0 ]; then
+    echo "  -> No deprecated files or services found."
+else
+    echo -e "${GREEN}Cleanup complete: removed $FILES_REMOVED file(s), cleaned $SERVICES_CLEANED service(s).${NC}"
+fi
+
+echo "--------------------------------------------------"
+
+### ===================================================================
 ###                       RELOAD UDEV RULES
 ### ===================================================================
 
-echo -e "${YELLOW}Step 3: Reloading udev rules...${NC}"
+echo -e "${YELLOW}Step 4: Reloading udev rules...${NC}"
 udevadm control --reload-rules && udevadm trigger
 echo -e "${GREEN}Udev rules reloaded.${NC}"
 echo "--------------------------------------------------"
@@ -216,7 +263,7 @@ echo "--------------------------------------------------"
 ###                  RELOAD SYSTEMD & RESTART SERVICES
 ### ===================================================================
 
-echo -e "${YELLOW}Step 4: Reloading systemd and restarting updated services...${NC}"
+echo -e "${YELLOW}Step 5: Reloading systemd and restarting updated services...${NC}"
 
 # Reload systemd to pick up any changed service files
 echo "  -> Reloading systemd daemon..."
@@ -248,7 +295,7 @@ echo "--------------------------------------------------"
 ###                  INSTALL RUNTIME PACKAGES
 ### ===================================================================
 
-echo -e "${YELLOW}Step 5: Installing runtime packages...${NC}"
+echo -e "${YELLOW}Step 6: Installing runtime packages...${NC}"
 
 RUNTIMES_DIR="$SCRIPT_DIR/runtimes"
 KAZETA_RUNTIMES_DIR="/usr/share/kazeta/runtimes"
