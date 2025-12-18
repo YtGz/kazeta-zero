@@ -5,7 +5,7 @@ After=graphical.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/kazeta-input
+ExecStart=/usr/bin/kazeta-input-daemon
 Restart=always
 RestartSec=3
 User=gamer
