@@ -7,6 +7,12 @@ cleanup_on_error() {
     umount "${BUILD_PATH}" 2>/dev/null || true
     umount "${MOUNT_PATH}" 2>/dev/null || true
     losetup -j "${BUILD_IMG}" | cut -d : -f 1 | xargs -r losetup -d
+
+    # Restore miniquad patch configuration if backup exists
+    if [ -f .cargo/config.toml.bak ]; then
+        mv .cargo/config.toml.bak .cargo/config.toml
+        echo "Restored miniquad patch configuration after error"
+    fi
 }
 trap cleanup_on_error ERR
 
@@ -88,6 +94,12 @@ fi
 # This ensures the binaries are available to be copied into the image
 echo "Building Rust projects..."
 
+# Temporarily disable miniquad patch for production builds (macOS-only patch not needed on Linux)
+if [ -f .cargo/config.toml ]; then
+    mv .cargo/config.toml .cargo/config.toml.bak
+    echo "Disabled miniquad patch for production build"
+fi
+
 # Build BIOS
 echo "Building kazeta-bios..."
 cd bios
@@ -127,6 +139,12 @@ if [ ! -f "target/release/kazeta-input" ]; then
     exit 1
 fi
 cd ..
+
+# Restore miniquad patch configuration
+if [ -f .cargo/config.toml.bak ]; then
+    mv .cargo/config.toml.bak .cargo/config.toml
+    echo "Restored miniquad patch configuration"
+fi
 
 # chroot into target
 mount --bind ${BUILD_PATH} ${BUILD_PATH}

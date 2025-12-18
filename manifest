@@ -45,7 +45,6 @@ export PACKAGES="\
 	lib32-vulkan-mesa-layers \
 	lib32-vulkan-radeon \
 	libx11 \
-	libwayland-client \
 	lightdm \
 	linux-firmware \
 	linux-headers \
@@ -74,7 +73,6 @@ export PACKAGES="\
 	wayland \
 	wireplumber \
 	xorg-server \
-	xorg-xwayland \
 	xxhash \
 "
 

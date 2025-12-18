@@ -1,4 +1,8 @@
 [patch.crates-io]
-# Patch miniquad to include null checks around Objective-C strings on macOS,
-# preventing startup crashes when Cocoa returns nil (e.g., in non-bundle runs).
+# Patch miniquad with macOS-specific null checks for Objective-C strings
+# This prevents crashes when Cocoa returns nil (e.g., in non-bundle runs on macOS)
+#
+# NOTE: This patch is ONLY for macOS development. Production Linux builds temporarily
+# disable this patch (see build-image.sh) to use upstream miniquad from crates.io.
+# Our application code explicitly sets linux_backend: X11WithWaylandFallback for production.
 miniquad = { path = "vendor/miniquad" }
