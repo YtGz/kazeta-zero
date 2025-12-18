@@ -10,7 +10,9 @@
 set -e
 
 # --- Configuration ---
-SOURCE_DIR="$HOME/Programs/kazeta-plus"
+# Auto-detect source directory from script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$SCRIPT_DIR"
 DEST_BASE_DIR="$HOME/Desktop/kazeta_assets/upgrade_kits"
 MAIN_RS_PATH="$SOURCE_DIR/bios/src/main.rs"
 
@@ -50,10 +52,13 @@ mkdir -p "$KIT_FULL_PATH/rootfs/usr/share/inputplumber/profiles"
 mkdir -p "$KIT_FULL_PATH/aur-pkgs"
 echo "Directory structure created."
 
-# 5. Copy the main upgrade script
-echo "Copying upgrade-to-plus.sh script from local source..."
+# 5. Copy the upgrade scripts
+echo "Copying upgrade scripts from local source..."
 cp "$SOURCE_DIR/upgrade-to-plus.sh" "$KIT_FULL_PATH/upgrade-to-plus.sh"
 chmod +x "$KIT_FULL_PATH/upgrade-to-plus.sh"
+
+cp "$SOURCE_DIR/update-kazeta-plus.sh" "$KIT_FULL_PATH/update-kazeta-plus.sh"
+chmod +x "$KIT_FULL_PATH/update-kazeta-plus.sh"
 echo "Copy complete."
 
 # 6. Copy all necessary files from your local dev environment

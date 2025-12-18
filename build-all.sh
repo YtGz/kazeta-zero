@@ -116,10 +116,10 @@ build_rust_binary() {
 build_rust_binary "Kazeta BIOS" "$SCRIPT_DIR/bios" "kazeta-bios"
 
 # Build RA (RetroAchievements daemon)
-build_rust_binary "RA Daemon" "$SCRIPT_DIR/ra" "ra"
+build_rust_binary "RA Daemon" "$SCRIPT_DIR/ra" "kazeta-ra"
 
 # Build Input Daemon
-build_rust_binary "Input Daemon" "$SCRIPT_DIR/input-daemon" "input-daemon"
+build_rust_binary "Input Daemon" "$SCRIPT_DIR/input-daemon" "kazeta-input"
 
 # Build Overlay Daemon (requires daemon feature)
 build_rust_binary "Overlay Daemon" "$SCRIPT_DIR/overlay" "kazeta-overlay" "--features daemon"
@@ -162,10 +162,10 @@ copy_binary() {
 copy_binary "$SCRIPT_DIR/bios/target/$BUILD_DIR/kazeta-bios" "kazeta" "Kazeta BIOS"
 
 # Copy RA daemon
-copy_binary "$SCRIPT_DIR/ra/target/$BUILD_DIR/ra" "kazeta-ra" "RA Daemon"
+copy_binary "$SCRIPT_DIR/ra/target/$BUILD_DIR/kazeta-ra" "kazeta-ra" "RA Daemon"
 
 # Copy Input daemon
-copy_binary "$SCRIPT_DIR/input-daemon/target/$BUILD_DIR/input-daemon" "kazeta-input-daemon" "Input Daemon"
+copy_binary "$SCRIPT_DIR/input-daemon/target/$BUILD_DIR/kazeta-input" "kazeta-input-daemon" "Input Daemon"
 
 # Copy Overlay daemon
 copy_binary "$SCRIPT_DIR/overlay/target/$BUILD_DIR/kazeta-overlay" "kazeta-overlay" "Overlay Daemon"
@@ -181,37 +181,55 @@ if [ "$BUILD_RUNTIMES" = true ]; then
     echo -e "${BLUE}═══ Step 3: Building Runtime Packages ═══${NC}"
     echo ""
 
-    # Build GBA Runtime
-    if [ -f "$SCRIPT_DIR/runtimes/gba/build.sh" ]; then
-        echo -e "${YELLOW}→ Building GBA Runtime...${NC}"
-        cd "$SCRIPT_DIR/runtimes/gba"
-        # Check if we're on macOS or Linux and adjust accordingly
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo -e "${YELLOW}  Skipping GBA runtime on macOS (Linux-only)${NC}"
-        else
-            bash build.sh --use-system --clean
-            echo -e "${GREEN}  ✓ GBA runtime built${NC}"
+    # Check if we're on Linux
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        echo -e "${YELLOW}Runtime builds are only supported on Linux.${NC}"
+        echo -e "${YELLOW}Skipping runtime package builds.${NC}"
+        echo ""
+    else
+        # Build mGBA Runtime
+        if [ -f "$SCRIPT_DIR/runtimes/gba/build.sh" ]; then
+            echo -e "${YELLOW}→ Building mGBA Runtime...${NC}"
+            cd "$SCRIPT_DIR/runtimes/gba"
+            if bash build.sh --use-system --clean 2>/dev/null; then
+                echo -e "${GREEN}  ✓ mGBA runtime built${NC}"
+            else
+                echo -e "${YELLOW}  ⚠ mGBA runtime build failed (mgba-qt not installed?)${NC}"
+                echo -e "${YELLOW}    Install with: sudo pacman -S mgba-qt${NC}"
+            fi
+            cd "$SCRIPT_DIR"
+            echo ""
         fi
-        cd "$SCRIPT_DIR"
+
+        # Build VBA-M Runtime
+        if [ -f "$SCRIPT_DIR/runtimes/gba/build-vbam.sh" ]; then
+            echo -e "${YELLOW}→ Building VBA-M Runtime...${NC}"
+            if bash "$SCRIPT_DIR/runtimes/gba/build-vbam.sh" 2>/dev/null; then
+                echo -e "${GREEN}  ✓ VBA-M runtime built${NC}"
+            else
+                echo -e "${YELLOW}  ⚠ VBA-M runtime build skipped${NC}"
+                echo -e "${YELLOW}    (VBA-M binary not found in runtimes/gba/vbam-runtime/app/bin/)${NC}"
+            fi
+            echo ""
+        fi
+
+        # Build PS2 Runtime
+        if [ -f "$SCRIPT_DIR/runtimes/ps2/build.sh" ]; then
+            echo -e "${YELLOW}→ Building PS2 Runtime...${NC}"
+            cd "$SCRIPT_DIR/runtimes/ps2"
+            if bash build.sh --use-system --clean 2>/dev/null; then
+                echo -e "${GREEN}  ✓ PS2 runtime built${NC}"
+            else
+                echo -e "${YELLOW}  ⚠ PS2 runtime build failed (pcsx2 not installed?)${NC}"
+                echo -e "${YELLOW}    Install with: sudo pacman -S pcsx2${NC}"
+            fi
+            cd "$SCRIPT_DIR"
+            echo ""
+        fi
+
+        echo -e "${GREEN}✓ Runtime package builds complete${NC}"
         echo ""
     fi
-
-    # Build PS2 Runtime
-    if [ -f "$SCRIPT_DIR/runtimes/ps2/build.sh" ]; then
-        echo -e "${YELLOW}→ Building PS2 Runtime...${NC}"
-        cd "$SCRIPT_DIR/runtimes/ps2"
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo -e "${YELLOW}  Skipping PS2 runtime on macOS (Linux-only)${NC}"
-        else
-            bash build.sh --use-system --clean
-            echo -e "${GREEN}  ✓ PS2 runtime built${NC}"
-        fi
-        cd "$SCRIPT_DIR"
-        echo ""
-    fi
-
-    echo -e "${GREEN}✓ Runtime packages processed${NC}"
-    echo ""
 else
     echo -e "${YELLOW}Skipping runtime package builds (--skip-runtimes specified)${NC}"
     echo ""
