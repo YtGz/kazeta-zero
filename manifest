@@ -91,7 +91,6 @@ export SERVICES="\
 	iwd.service \
 	keyd.service \
 	kazeta-input.service \
-	kazeta-overlay.service \
 	kazeta-profile-loader.service \
 	lightdm.service \
 	NetworkManager.service \

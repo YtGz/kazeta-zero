@@ -272,12 +272,12 @@ fn window_conf() -> Conf {
         window_height: SCREEN_HEIGHT,
         high_dpi: false,
         fullscreen: false,
-        // platform: miniquad::conf::Platform {
-        //     apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
-        //     #[cfg(target_os = "linux")]
-        //     linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // For production: support both X11 and Wayland systems
-        //     ..Default::default()
-        // },
+        platform: miniquad::conf::Platform {
+            apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
+            #[cfg(target_os = "linux")]
+            linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // For production: support both X11 and Wayland systems
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

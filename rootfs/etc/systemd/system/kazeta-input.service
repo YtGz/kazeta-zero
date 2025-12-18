@@ -2,7 +2,6 @@
 Description=Kazeta+ Input Daemon
 Documentation=https://github.com/ziggy/kazeta-plus
 After=graphical.target
-Wants=kazeta-overlay.service
 
 [Service]
 Type=simple
