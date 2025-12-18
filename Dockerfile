@@ -1,17 +1,26 @@
-FROM greyltc/archlinux-aur:latest
+FROM archlinux:latest
 LABEL contributor="shadowapex@gmail.com"
+
+# Initialize pacman keyring and update system
+RUN pacman-key --init && \
+  pacman-key --populate archlinux && \
+  echo -e "keyserver-options auto-key-retrieve" >> /etc/pacman.d/gnupg/gpg.conf && \
+  pacman --noconfirm -Syyuu
+
+# Copy pacman configuration
 COPY rootfs/etc/pacman.conf /etc/pacman.conf
-RUN echo -e "keyserver-options auto-key-retrieve" >> /etc/pacman.d/gnupg/gpg.conf && \
-  # Cannot check space in chroot
-  sed -i '/CheckSpace/s/^/#/g' /etc/pacman.conf && \
-  pacman-key --init && \
-  pacman --noconfirm -Syyuu && \
+
+# Cannot check space in chroot
+RUN sed -i '/CheckSpace/s/^/#/g' /etc/pacman.conf
+
+# Sync package databases and install base build tools
+RUN pacman --noconfirm -Syy && \
   pacman --noconfirm -S \
   arch-install-scripts \
+  base-devel \
   btrfs-progs \
   fmt \
-  xcb-util-wm \
-  wget \
+  git \
   pyalpm \
   python \
   python-build \
@@ -21,14 +30,27 @@ RUN echo -e "keyserver-options auto-key-retrieve" >> /etc/pacman.d/gnupg/gpg.con
   python-markdown-it-py \
   python-setuptools \
   python-wheel \
+  rust \
+  cargo \
   sudo \
-  && \
-  pacman --noconfirm -S --needed git && \
-  echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-  useradd build -G wheel -m && \
-  su - build -c "git clone https://aur.archlinux.org/pikaur.git /tmp/pikaur" && \
+  wget \
+  xcb-util-wm \
+  alsa-lib \
+  dbus \
+  systemd-libs \
+  ffmpeg \
+  clang \
+  pkg-config
+
+# Create build user with sudo access
+RUN echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+  useradd build -G wheel -m
+
+# Build and install pikaur (AUR helper)
+RUN su - build -c "git clone https://aur.archlinux.org/pikaur.git /tmp/pikaur" && \
   su - build -c "cd /tmp/pikaur && makepkg -f" && \
-  pacman --noconfirm -U /tmp/pikaur/pikaur-*.pkg.tar.zst
+  pacman --noconfirm -U /tmp/pikaur/pikaur-*.pkg.tar.zst && \
+  rm -rf /tmp/pikaur
 
 # Auto add PGP keys for users
 RUN mkdir -p /etc/gnupg/ && echo -e "keyserver-options auto-key-retrieve" >> /etc/gnupg/gpg.conf
@@ -45,8 +67,15 @@ RUN sed -i '/BUILDENV/s/check/!check/g' /etc/makepkg.conf && \
 COPY manifest /manifest
 # Freeze packages and overwrite with overrides when needed
 RUN source /manifest && \
-  echo "Server=https://archive.archlinux.org/repos/${ARCHIVE_DATE}/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist && \
-  pacman --noconfirm -Syyuu; if [ -n "${PACKAGE_OVERRIDES}" ]; then wget --directory-prefix=/tmp/extra_pkgs ${PACKAGE_OVERRIDES}; pacman --noconfirm -U --overwrite '*' /tmp/extra_pkgs/*; rm -rf /tmp/extra_pkgs; fi
+  if [ -n "${ARCHIVE_DATE}" ]; then \
+    echo "Server=https://archive.archlinux.org/repos/${ARCHIVE_DATE}/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist; \
+  fi && \
+  pacman --noconfirm -Syyuu; \
+  if [ -n "${PACKAGE_OVERRIDES}" ]; then \
+    wget --directory-prefix=/tmp/extra_pkgs ${PACKAGE_OVERRIDES}; \
+    pacman --noconfirm -U --overwrite '*' /tmp/extra_pkgs/*; \
+    rm -rf /tmp/extra_pkgs; \
+  fi
 
 USER build
 ENV BUILD_USER="build"

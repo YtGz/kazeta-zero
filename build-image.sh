@@ -74,7 +74,8 @@ mkdir ${BUILD_PATH}/extra_pkgs
 
 cp -rv aur-pkgs/*.pkg.tar* ${BUILD_PATH}/extra_pkgs
 
-if [ -n "$(ls -A 'pkgs')" ]; then
+# Only copy if there are actual package files (not just .gitkeep)
+if compgen -G "pkgs/*.pkg.tar*" > /dev/null; then
 	cp -rv pkgs/*.pkg.tar* ${BUILD_PATH}/own_pkgs
 fi
 

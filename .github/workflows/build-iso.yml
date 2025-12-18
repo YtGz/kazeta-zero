@@ -1,0 +1,48 @@
+name: Build Kazeta+ ISO
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: docker build -t kazeta-plus-builder .
+
+    - name: Create output directory
+      run: mkdir -p output
+
+    - name: Build ISO
+      run: |
+        docker run --rm --privileged \
+          -v "$(pwd):/workdir" \
+          -v "$(pwd)/output:/output" \
+          -v "$(pwd)/runtimes:/workdir/runtimes:ro" \
+          -e OUTPUT_DIR=/output \
+          kazeta-plus-builder \
+          sudo /workdir/build-image.sh
+
+    - name: Upload ISO artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kazeta-plus-iso
+        path: |
+          output/*.img.tar.xz
+          output/build_info.txt
+          output/sha256sum.txt
+        retention-days: 30
+
+    - name: Display build info
+      run: cat output/build_info.txt

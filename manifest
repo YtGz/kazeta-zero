@@ -9,6 +9,11 @@ export WEBSITE="https://github.com/the-outcaster/kazeta-plus"
 export DOCUMENTATION_URL="https://github.com/the-outcaster/kazeta-plus/wiki"
 export BUG_REPORT_URL="https://github.com/the-outcaster/kazeta-plus/issues"
 
+# Set archive date to freeze package versions (format: YYYY/MM/DD)
+# Leave empty to use current repos instead of archive
+# export ARCHIVE_DATE="2024/12/01"
+export ARCHIVE_DATE=""
+
 export KERNEL_PACKAGE="linux"
 
 export PACKAGES="\
