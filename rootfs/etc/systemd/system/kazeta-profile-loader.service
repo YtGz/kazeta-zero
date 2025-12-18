@@ -6,10 +6,12 @@ After=inputplumber.service user@1000.service
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 # The small delay is still a good idea to prevent any race conditions
 ExecStartPre=/bin/sleep 2
 # This is the exact busctl command you provided
-ExecStart=/usr/bin/busctl call org.shadowblip.InputPlumber /org/shadowblip/InputPlumber/CompositeDevice0 org.shadowblip.Input.CompositeDevice LoadProfilePath "s" /usr/share/inputplumber/profiles/steam-deck.yaml
+# Use '-' prefix to make this non-fatal if the device doesn't exist yet
+ExecStart=-/usr/bin/busctl call org.shadowblip.InputPlumber /org/shadowblip/InputPlumber/CompositeDevice0 org.shadowblip.Input.CompositeDevice LoadProfilePath "s" /usr/share/inputplumber/profiles/steam-deck.yaml
 
 [Install]
 WantedBy=multi-user.target
