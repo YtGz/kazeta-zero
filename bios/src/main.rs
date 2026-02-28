@@ -61,19 +61,7 @@ mod video;
 // ===================================
 - gamepad tester
 - add option to safely unmount cart in main menu
-- support for local multiplayer (i.e. add support for controllers 2-4)
-
-Maybe
-- built-in AppImage updater for things like RetroArch, Slippi, Project+, Ship of Harkinian, etc.
-
-// ===================================
-// NOTES
-// ===================================
-- setting brightness needs the brightnessctl package
-- Steam Deck volume/brightness controls requires the keyd package
-- support for multiple audio sinks requires us to replace the wireplumber file in /var/kazeta/state/ to .AUDIO_PREFERENCE_SET, as specified in the kazeta-session script
-- multi-cart support requires us to have a LAUNCH_CMD_FILE, as specified in kazeta-session, and we also have to check if a specific .kzi file was passed as an argument in "kazeta"
-- we add a "steam-deck.yaml" device profile for InputPlumber in /usr/share/inputplumber/profiles/ and map two of the back buttons to F13 and F14 so keyd can recognize them as keyboard inputs. These then get loaded into /etc/keyd/default.conf and control the brightness level
+- update Arch base
 */
 
 // ===================================
