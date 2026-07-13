@@ -1,7 +1,7 @@
 mod controllers;
 mod hotkeys;
-mod ipc;
 mod input;
+mod ipc;
 mod menu_config;
 mod performance;
 mod playtime;
@@ -12,9 +12,9 @@ mod themes;
 mod utils;
 
 use anyhow::Result;
+use macroquad::prelude::*;
 use state::OverlayState;
 use std::time::{Duration, Instant};
-use macroquad::prelude::*;
 
 #[cfg(target_os = "macos")]
 fn set_overlay_window_properties() {
@@ -51,15 +51,15 @@ const FRAME_TIME: Duration = Duration::from_micros(1_000_000 / TARGET_FPS);
 fn window_conf() -> Conf {
     Conf {
         window_title: "Kazeta Overlay".to_owned(),
-        window_width: 640,   // Match BIOS window size
-        window_height: 360,  // Match BIOS window size
+        window_width: 640,  // Match BIOS window size
+        window_height: 360, // Match BIOS window size
         window_resizable: false,
         fullscreen: false,
         platform: miniquad::conf::Platform {
             apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
             linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // For production: support both X11 and Wayland systems
             swap_interval: None,
-            framebuffer_alpha: true,  // Enable transparency
+            framebuffer_alpha: true, // Enable transparency
             ..Default::default()
         },
         ..Default::default()
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
     let mut ipc_server = ipc::IpcServer::new()?;
     let mut input_monitor = input::HotkeyMonitor::new()?;
     let mut overlay_state = OverlayState::new().await;
-    
+
     // Initialize gilrs for controller tracking
     #[cfg(feature = "daemon")]
     let mut gilrs = gilrs::Gilrs::new().unwrap_or_else(|e| {
@@ -101,13 +101,19 @@ async fn main() -> Result<()> {
         // Check for hotkey press (Guide button, F12, or Ctrl+O)
         if input_monitor.check_hotkey_pressed() {
             overlay_state.toggle_visibility();
-            println!("[Overlay] Toggled visibility: {}", overlay_state.is_visible());
+            println!(
+                "[Overlay] Toggled visibility: {}",
+                overlay_state.is_visible()
+            );
         }
 
         // Check for performance overlay toggle (F3)
         if input_monitor.check_performance_hotkey_pressed() {
             overlay_state.performance.toggle_visibility();
-            println!("[Overlay] Performance overlay: {}", overlay_state.performance.is_visible());
+            println!(
+                "[Overlay] Performance overlay: {}",
+                overlay_state.performance.is_visible()
+            );
         }
 
         // Update connected controllers from gilrs
@@ -119,11 +125,13 @@ async fn main() -> Result<()> {
             for input in input_monitor.poll_inputs() {
                 overlay_state.handle_input(input);
             }
-            
+
             // Update gamepad tester if on that screen
             #[cfg(feature = "daemon")]
             if overlay_state.current_screen == ipc::OverlayScreen::GamepadTester {
-                overlay_state.controllers.update_tester_from_gilrs(&mut gilrs);
+                overlay_state
+                    .controllers
+                    .update_tester_from_gilrs(&mut gilrs);
             }
         }
 

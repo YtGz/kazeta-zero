@@ -1,4 +1,4 @@
-use crate::{StorageMediaState, Arc, Mutex};
+use crate::{Arc, Mutex, StorageMediaState};
 
 pub struct DialogOption {
     pub text: String,
@@ -27,7 +27,7 @@ pub fn create_confirm_delete_dialog() -> Dialog {
                 text: "CANCEL".to_string(),
                 value: "CANCEL".to_string(),
                 disabled: false,
-            }
+            },
         ],
         selection: 1,
     }
@@ -98,13 +98,11 @@ pub fn create_save_exists_dialog() -> Dialog {
     Dialog {
         id: "save_exists".to_string(),
         desc: Some("THIS SAVE DATA ALREADY EXISTS AT THE SELECTED DESTINATION".to_string()),
-        options: vec![
-            DialogOption {
-                text: "OK".to_string(),
-                value: "OK".to_string(),
-                disabled: false,
-            }
-        ],
+        options: vec![DialogOption {
+            text: "OK".to_string(),
+            value: "OK".to_string(),
+            disabled: false,
+        }],
         selection: 0,
     }
 }
@@ -113,13 +111,11 @@ pub fn create_error_dialog(message: String) -> Dialog {
     Dialog {
         id: "error".to_string(),
         desc: Some(message),
-        options: vec![
-            DialogOption {
-                text: "OK".to_string(),
-                value: "OK".to_string(),
-                disabled: false,
-            }
-        ],
+        options: vec![DialogOption {
+            text: "OK".to_string(),
+            value: "OK".to_string(),
+            disabled: false,
+        }],
         selection: 0,
     }
 }
@@ -162,7 +158,12 @@ pub fn create_player_count_dialog(max_players: u8) -> Dialog {
 /// `player_num` is the player number (1-4) selecting their save
 /// `rom_name` is used to display which game's saves we're looking at
 /// `can_import` adds an option to pull in an embedded save for this player
-pub fn create_save_slot_dialog(existing_saves: &[String], player_num: u8, rom_name: &str, can_import: bool) -> Dialog {
+pub fn create_save_slot_dialog(
+    existing_saves: &[String],
+    player_num: u8,
+    rom_name: &str,
+    can_import: bool,
+) -> Dialog {
     let mut options = Vec::new();
 
     // Option to create a new save for this player
@@ -215,7 +216,11 @@ pub fn create_save_slot_dialog(existing_saves: &[String], player_num: u8, rom_na
     let desc = if player_num == 1 {
         format!("SELECT SAVE FILE\n{}", rom_name.to_uppercase())
     } else {
-        format!("PLAYER {} - SELECT SAVE FILE\n{}", player_num, rom_name.to_uppercase())
+        format!(
+            "PLAYER {} - SELECT SAVE FILE\n{}",
+            player_num,
+            rom_name.to_uppercase()
+        )
     };
 
     Dialog {

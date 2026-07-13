@@ -1,13 +1,13 @@
+use crate::config::{get_user_data_dir, Config};
 use once_cell::sync::Lazy;
 use rodio::{
-    self, buffer::SamplesBuffer, source::Source, Decoder as RodioDecoder,
-    OutputStream, OutputStreamBuilder, Sink,
+    self, buffer::SamplesBuffer, source::Source, Decoder as RodioDecoder, OutputStream,
+    OutputStreamBuilder, Sink,
 };
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufReader, Cursor};
 use std::path::{Path, PathBuf};
-use std::collections::{HashSet, HashMap};
-use crate::config::{Config, get_user_data_dir};
 
 // --- Rodio Global Audio System ---
 pub struct AudioSystem {
@@ -23,8 +23,7 @@ unsafe impl Send for AudioSystem {}
 unsafe impl Sync for AudioSystem {}
 
 pub static AUDIO: Lazy<AudioSystem> = Lazy::new(|| {
-    let stream = OutputStreamBuilder::open_default_stream()
-    .expect("Failed to load audio stream");
+    let stream = OutputStreamBuilder::open_default_stream().expect("Failed to load audio stream");
     AudioSystem { stream }
 });
 
@@ -32,7 +31,7 @@ pub static AUDIO: Lazy<AudioSystem> = Lazy::new(|| {
 
 pub fn load_sound_from_bytes(bytes: &[u8]) -> SamplesBuffer {
     let owned = bytes.to_vec().into_boxed_slice();
-    let cursor = Cursor::new(owned);               // Cursor<Box<[u8]>> is 'static
+    let cursor = Cursor::new(owned); // Cursor<Box<[u8]>> is 'static
     let decoder = rodio::Decoder::new(cursor).unwrap();
     let channels = decoder.channels();
     let sample_rate = decoder.sample_rate();
@@ -97,12 +96,37 @@ impl SoundEffects {
             fallback.clone()
         }
 
-        let cursor_move = load_one_sfx("move.wav", &user_pack_path, &system_pack_path, &default_move);
-        let select = load_one_sfx("select.wav", &user_pack_path, &system_pack_path, &default_select);
-        let reject = load_one_sfx("reject.wav", &user_pack_path, &system_pack_path, &default_reject);
-        let back = load_one_sfx("back.wav", &user_pack_path, &system_pack_path, &default_back);
+        let cursor_move = load_one_sfx(
+            "move.wav",
+            &user_pack_path,
+            &system_pack_path,
+            &default_move,
+        );
+        let select = load_one_sfx(
+            "select.wav",
+            &user_pack_path,
+            &system_pack_path,
+            &default_select,
+        );
+        let reject = load_one_sfx(
+            "reject.wav",
+            &user_pack_path,
+            &system_pack_path,
+            &default_reject,
+        );
+        let back = load_one_sfx(
+            "back.wav",
+            &user_pack_path,
+            &system_pack_path,
+            &default_back,
+        );
 
-        SoundEffects { cursor_move, select, reject, back }
+        SoundEffects {
+            cursor_move,
+            select,
+            reject,
+            back,
+        }
     }
 
     // [!] FIX: We manually create the Sink using .mixer() instead of .play_once()
@@ -146,7 +170,9 @@ pub fn find_sfx_pack_path(pack_name: &str) -> Option<PathBuf> {
                 if theme_entry.path().is_dir() {
                     if let Ok(asset_entries) = fs::read_dir(theme_entry.path()) {
                         for asset_entry in asset_entries.flatten() {
-                            if asset_entry.path().is_dir() && asset_entry.file_name().to_string_lossy() == pack_name {
+                            if asset_entry.path().is_dir()
+                                && asset_entry.file_name().to_string_lossy() == pack_name
+                            {
                                 return Some(asset_entry.path());
                             }
                         }
@@ -186,7 +212,8 @@ pub fn find_sound_packs() -> Vec<String> {
                     if let Ok(asset_entries) = fs::read_dir(theme_entry.path()) {
                         for asset_entry in asset_entries.flatten() {
                             if asset_entry.path().is_dir() {
-                                packs.insert(asset_entry.file_name().to_string_lossy().into_owned());
+                                packs
+                                    .insert(asset_entry.file_name().to_string_lossy().into_owned());
                             }
                         }
                     }
@@ -216,10 +243,7 @@ pub fn play_new_bgm(
             // [!] FIX: Use Sink::connect_new with the mixer
             let sink = Sink::connect_new(&AUDIO.stream.mixer());
 
-            let source = sound_to_play
-            .clone()
-            .repeat_infinite()
-            .amplify(volume);
+            let source = sound_to_play.clone().repeat_infinite().amplify(volume);
 
             sink.append(source);
             *current_bgm = Some(sink);

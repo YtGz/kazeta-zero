@@ -1,15 +1,15 @@
+use crate::audio::play_new_bgm;
+use crate::types::Screen;
+use crate::{config, save, thread, Arc, BufReader, Child, Mutex};
+use chrono::Local;
+use kazeta_overlay::{OverlayClient, OverlayScreen, ToastStyle};
 use macroquad::prelude::*;
 use rodio::{buffer::SamplesBuffer, Sink};
+use std::collections::HashMap;
 use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::collections::HashMap;
-use chrono::Local;
-use crate::{save, Child, Arc, Mutex, thread, BufReader, config};
-use crate::audio::play_new_bgm;
-use crate::types::Screen;
-use kazeta_overlay::{OverlayClient, OverlayScreen, ToastStyle};
 //use macroquad::audio::Sound;
 
 // wrap text in certain menus so it doesn't clip outside the screen
@@ -29,7 +29,8 @@ pub fn wrap_text(text: &str, font: Font, font_size: u16, max_width: f32) -> Vec<
         for word in paragraph.split_whitespace() {
             let word_width = measure_text(word, Some(&font), font_size, 1.0).width;
 
-            if !current_line.is_empty() && current_line_width + space_width + word_width > max_width {
+            if !current_line.is_empty() && current_line_width + space_width + word_width > max_width
+            {
                 lines.push(current_line);
                 current_line = String::new();
                 current_line_width = 0.0;
@@ -53,15 +54,16 @@ pub fn wrap_text(text: &str, font: Font, font_size: u16, max_width: f32) -> Vec<
 pub fn find_asset_files(dir_path: &str, extensions: &[&str]) -> Vec<PathBuf> {
     if let Ok(entries) = fs::read_dir(dir_path) {
         let mut files: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|path| {
-            path.is_file() &&
-            path.extension()
-            .and_then(|s| s.to_str())
-            .map_or(false, |ext| extensions.contains(&ext))
-        })
-        .collect();
+            .flatten()
+            .map(|e| e.path())
+            .filter(|path| {
+                path.is_file()
+                    && path
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .map_or(false, |ext| extensions.contains(&ext))
+            })
+            .collect();
         files.sort();
         return files;
     }
@@ -70,17 +72,19 @@ pub fn find_asset_files(dir_path: &str, extensions: &[&str]) -> Vec<PathBuf> {
 
 // Helper to read the first line from a file containing a specific key
 pub fn read_line_from_file(path: &str, key: &str) -> Option<String> {
-    fs::read_to_string(path).ok()?.lines()
-    .find(|line| line.starts_with(key))
-    .map(|line| line.replace(key, "").trim().to_string())
+    fs::read_to_string(path)
+        .ok()?
+        .lines()
+        .find(|line| line.starts_with(key))
+        .map(|line| line.replace(key, "").trim().to_string())
 }
 
 /// Calls a privileged helper script to copy session logs to the SD card.
 pub fn copy_session_logs_to_sd() -> Result<String, String> {
     let output = Command::new("sudo")
-    .arg("/usr/bin/kazeta-copy-logs")
-    .output()
-    .map_err(|e| format!("Failed to execute helper script: {}", e))?;
+        .arg("/usr/bin/kazeta-copy-logs")
+        .output()
+        .map_err(|e| format!("Failed to execute helper script: {}", e))?;
 
     if output.status.success() {
         // The script prints the destination path on success, so we can capture it.
@@ -135,7 +139,7 @@ pub fn trigger_game_launch(
     notify_game_started(
         &cart_info.id,
         cart_info.name.as_deref().unwrap_or(&cart_info.id),
-        cart_info.runtime.as_deref().unwrap_or("unknown")
+        cart_info.runtime.as_deref().unwrap_or("unknown"),
     );
 
     // Setup RetroAchievements if enabled
@@ -205,7 +209,7 @@ pub fn string_to_color(color_str: &str) -> Color {
         "GREEN" => GREEN,
         "BLUE" => BLUE,
         "PURPLE" => VIOLET, // USING VIOLET AS A CLOSE APPROXIMATION
-        _ => WHITE, // Default to WHITE
+        _ => WHITE,         // Default to WHITE
     }
 }
 
@@ -223,7 +227,7 @@ pub fn apply_resolution(resolution_str: &str) {
 // ===================================
 // OVERLAY FUNCTIONS
 // ===================================
-// 
+//
 // These functions allow the BIOS to communicate with the overlay daemon.
 // The overlay daemon must be running (started when a game launches) for these to work.
 //
@@ -250,9 +254,9 @@ pub fn apply_resolution(resolution_str: &str) {
 
 /// Start the overlay daemon as a background process
 pub fn start_overlay_daemon() -> std::io::Result<()> {
-    use std::process::Stdio;
     use std::io::Write;
-    
+    use std::process::Stdio;
+
     // Clean up any stale socket file first
     let socket_path = Path::new("/tmp/kazeta-overlay.sock");
     if socket_path.exists() {
@@ -263,7 +267,7 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
                 // Set a short timeout
                 let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
                 let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
-                
+
                 // Try to send a status query - if this succeeds, daemon is alive
                 let test_msg = r#"{"type":"get_status"}"#;
                 if stream.write_all(test_msg.as_bytes()).is_ok() {
@@ -291,22 +295,24 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
             PathBuf::from("../../overlay/target/debug/kazeta-overlay"),
             PathBuf::from("overlay/target/debug/kazeta-overlay"),
         ];
-        
+
         if let Some(exe_path) = current_exe.as_ref() {
             if let Some(exe_dir) = exe_path.parent() {
                 possible_paths.push(exe_dir.join("../overlay/target/debug/kazeta-overlay"));
                 possible_paths.push(exe_dir.join("../../overlay/target/debug/kazeta-overlay"));
             }
         }
-        
+
         if let Some(home) = dirs::home_dir() {
-            possible_paths.push(home.join("sandbox/kazeta-plus/overlay/target/debug/kazeta-overlay"));
+            possible_paths
+                .push(home.join("sandbox/kazeta-plus/overlay/target/debug/kazeta-overlay"));
         }
-        
+
         if let Ok(project_root) = std::env::var("KAZETA_PROJECT_ROOT") {
-            possible_paths.push(PathBuf::from(project_root).join("overlay/target/debug/kazeta-overlay"));
+            possible_paths
+                .push(PathBuf::from(project_root).join("overlay/target/debug/kazeta-overlay"));
         }
-        
+
         possible_paths.iter()
             .find(|p| p.exists())
             .cloned()
@@ -326,13 +332,13 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
             overlay_bin.display()
         );
         eprintln!("[Overlay] {}", err_msg);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            err_msg
-        ));
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, err_msg));
     }
 
-    println!("[Overlay] Starting overlay daemon: {}", overlay_bin.display());
+    println!(
+        "[Overlay] Starting overlay daemon: {}",
+        overlay_bin.display()
+    );
 
     // Create a log file for overlay output (helps debug startup issues)
     let log_path = "/tmp/kazeta-overlay.log";
@@ -345,7 +351,7 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
 
     // Spawn the overlay daemon as a detached background process
     let mut cmd = Command::new(&overlay_bin);
-    
+
     if let Some(file) = log_file {
         let stderr_file = file.try_clone().ok();
         cmd.stdout(Stdio::from(file));
@@ -358,12 +364,11 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
         cmd.stdout(Stdio::null());
         cmd.stderr(Stdio::null());
     }
-    
-    cmd.spawn()
-        .map_err(|e| {
-            eprintln!("[Overlay] Failed to start overlay daemon: {}", e);
-            e
-        })?;
+
+    cmd.spawn().map_err(|e| {
+        eprintln!("[Overlay] Failed to start overlay daemon: {}", e);
+        e
+    })?;
 
     // Give it a moment to start up (macroquad needs time to initialize window)
     std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -378,16 +383,18 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
     }
-    
+
     // Check log file for errors
     if let Ok(log_content) = fs::read_to_string(log_path) {
         if !log_content.is_empty() {
             eprintln!("[Overlay] Daemon output:\n{}", log_content);
         }
     }
-    
-    eprintln!("[Overlay] Warning: Daemon may not have started correctly (socket not found after 2s)");
-    Ok(())  // Don't fail, overlay might work when game launches
+
+    eprintln!(
+        "[Overlay] Warning: Daemon may not have started correctly (socket not found after 2s)"
+    );
+    Ok(()) // Don't fail, overlay might work when game launches
 }
 
 /// Stop the overlay daemon (kills any running instance)
@@ -398,13 +405,13 @@ pub fn stop_overlay_daemon() {
         .arg("-f")
         .arg("kazeta-overlay")
         .output();
-    
+
     // Also remove the socket file if it exists
     let socket_path = Path::new("/tmp/kazeta-overlay.sock");
     if socket_path.exists() {
         let _ = fs::remove_file(socket_path);
     }
-    
+
     println!("[Overlay] Daemon stopped");
 }
 
@@ -480,23 +487,26 @@ pub fn unlock_achievement(cart_id: &str, achievement_id: &str) {
 pub fn notify_game_started(cart_id: &str, game_name: &str, runtime: &str) {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
-    
+
     let socket_path = "/tmp/kazeta-overlay.sock";
     if !Path::new(socket_path).exists() {
         return;
     }
-    
+
     let message = serde_json::json!({
         "type": "game_started",
         "cart_id": cart_id,
         "game_name": game_name,
         "runtime": runtime,
     });
-    
+
     if let Ok(mut stream) = UnixStream::connect(socket_path) {
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
         let _ = writeln!(stream, "{}", message);
-        println!("[Overlay] Notified game started: {} ({})", game_name, runtime);
+        println!(
+            "[Overlay] Notified game started: {} ({})",
+            game_name, runtime
+        );
     }
 }
 
@@ -504,17 +514,17 @@ pub fn notify_game_started(cart_id: &str, game_name: &str, runtime: &str) {
 pub fn notify_game_stopped(cart_id: &str) {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
-    
+
     let socket_path = "/tmp/kazeta-overlay.sock";
     if !Path::new(socket_path).exists() {
         return;
     }
-    
+
     let message = serde_json::json!({
         "type": "game_stopped",
         "cart_id": cart_id,
     });
-    
+
     if let Ok(mut stream) = UnixStream::connect(socket_path) {
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
         let _ = writeln!(stream, "{}", message);
@@ -564,7 +574,10 @@ fn setup_retroachievements(cart_info: &save::CartInfo, kzi_path: &Path) {
         return;
     }
 
-    println!("[RA] Setting up RetroAchievements for: {}", rom_path.display());
+    println!(
+        "[RA] Setting up RetroAchievements for: {}",
+        rom_path.display()
+    );
 
     // Call kazeta-ra game-start (this will hash the ROM, fetch game info, and notify overlay)
     // Run in background so it doesn't block game launch

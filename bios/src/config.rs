@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf, error::Error};
 use crate::MenuPosition;
+use serde::{Deserialize, Serialize};
+use std::{error::Error, fs, path::PathBuf};
 
 /// Returns the path to the user's data directory for Kazeta+.
 /// This is a public helper function for other modules to use.
@@ -87,14 +87,28 @@ pub struct RetroAchievementsConfig {
     pub notification_duration: u32,
 }
 
-fn default_ra_enabled() -> bool { true }
-fn default_ra_notifications() -> bool { true }
-fn default_ra_notification_duration() -> u32 { 5000 }
+fn default_ra_enabled() -> bool {
+    true
+}
+fn default_ra_notifications() -> bool {
+    true
+}
+fn default_ra_notification_duration() -> u32 {
+    5000
+}
 
-fn default_blade_games_color() -> String { "#00CC44".to_string() }
-fn default_blade_settings_color() -> String { "#CC6600".to_string() }
-fn default_blade_saves_color() -> String { "#6600CC".to_string() }
-fn default_blade_transparency() -> f32 { 0.95 }
+fn default_blade_games_color() -> String {
+    "#00CC44".to_string()
+}
+fn default_blade_settings_color() -> String {
+    "#CC6600".to_string()
+}
+fn default_blade_saves_color() -> String {
+    "#6600CC".to_string()
+}
+fn default_blade_transparency() -> f32 {
+    0.95
+}
 
 impl Default for Config {
     fn default() -> Self {

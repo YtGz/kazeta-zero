@@ -18,7 +18,7 @@ pub struct ConnectedController {
     pub name: String,
     pub uuid: String,
     pub is_wireless: bool,
-    pub battery_level: Option<u8>, // 0-100%
+    pub battery_level: Option<u8>,      // 0-100%
     pub assigned_player: Option<usize>, // 1-4, or None if unassigned
 }
 
@@ -79,25 +79,25 @@ pub struct GamepadButtonState {
 pub struct ControllerState {
     // Connected controllers
     pub controllers: Vec<ConnectedController>,
-    
+
     // Player assignments (index = player number - 1, value = controller id)
     pub player_assignments: [Option<usize>; MAX_PLAYERS],
-    
+
     // Bluetooth state
     pub bluetooth_devices: Vec<BluetoothDevice>,
     pub bluetooth_state: BluetoothScanState,
     pub bt_selected_index: usize,
     pub bt_scroll_offset: usize,
-    
+
     // Controller assignment state
     pub assign_selected_player: usize, // 0-3 for player 1-4
     pub assign_selected_controller: usize,
-    
+
     // Gamepad tester state
     pub tester_selected_controller: usize,
     pub tester_button_state: GamepadButtonState,
     pub tester_last_input_time: Instant,
-    
+
     // UI state
     pub selected_menu_item: usize,
     pub error_message: Option<String>,
@@ -128,27 +128,27 @@ impl ControllerState {
     #[cfg(feature = "daemon")]
     pub fn update_from_gilrs(&mut self, gilrs: &gilrs::Gilrs) {
         let mut new_controllers = Vec::new();
-        
+
         for (id, gamepad) in gilrs.gamepads() {
             let name = gamepad.name().to_string();
             let uuid = format!("{:?}", gamepad.uuid());
-            
+
             // Check if already in our list
             let existing = self.controllers.iter().find(|c| c.uuid == uuid);
             let assigned_player = existing.and_then(|c| c.assigned_player);
-            
+
             new_controllers.push(ConnectedController {
                 id: id.into(),
                 name,
                 uuid,
-                is_wireless: false, // gilrs doesn't provide this info directly
+                is_wireless: false,  // gilrs doesn't provide this info directly
                 battery_level: None, // Would need platform-specific code
                 assigned_player,
             });
         }
-        
+
         self.controllers = new_controllers;
-        
+
         // Clean up player assignments for disconnected controllers
         for assignment in &mut self.player_assignments {
             if let Some(controller_id) = *assignment {
@@ -160,24 +160,30 @@ impl ControllerState {
     }
 
     /// Assign a controller to a player
-    pub fn assign_controller_to_player(&mut self, controller_id: usize, player: usize) -> Result<(), String> {
+    pub fn assign_controller_to_player(
+        &mut self,
+        controller_id: usize,
+        player: usize,
+    ) -> Result<(), String> {
         if player == 0 || player > MAX_PLAYERS {
             return Err(format!("Invalid player number: {}", player));
         }
-        
+
         // Check if controller exists
-        let controller_idx = self.controllers.iter()
+        let controller_idx = self
+            .controllers
+            .iter()
             .position(|c| c.id == controller_id)
             .ok_or_else(|| format!("Controller {} not found", controller_id))?;
-        
+
         // Get old player assignment for this controller (to clear player_assignments)
         let old_player = self.controllers[controller_idx].assigned_player;
-        
+
         // Clear old player assignment
         if let Some(old_p) = old_player {
             self.player_assignments[old_p - 1] = None;
         }
-        
+
         // Clear any existing controller from this player slot
         if let Some(old_controller_id) = self.player_assignments[player - 1] {
             // Find and clear the old controller's assignment
@@ -188,11 +194,11 @@ impl ControllerState {
                 }
             }
         }
-        
+
         // Make the new assignment
         self.controllers[controller_idx].assigned_player = Some(player);
         self.player_assignments[player - 1] = Some(controller_id);
-        
+
         Ok(())
     }
 
@@ -211,7 +217,7 @@ impl ControllerState {
         if player == 0 || player > MAX_PLAYERS {
             return None;
         }
-        
+
         self.player_assignments[player - 1]
             .and_then(|id| self.controllers.iter().find(|c| c.id == id))
     }
@@ -225,7 +231,7 @@ impl ControllerState {
         for controller in &mut self.controllers {
             controller.assigned_player = None;
         }
-        
+
         // Assign in order
         for (i, controller) in self.controllers.iter_mut().enumerate() {
             if i < MAX_PLAYERS {
@@ -238,13 +244,14 @@ impl ControllerState {
     /// Update gamepad tester state from gilrs events
     #[cfg(feature = "daemon")]
     pub fn update_tester_from_gilrs(&mut self, gilrs: &mut gilrs::Gilrs) {
-        use gilrs::{Button, Axis, EventType};
-        
+        use gilrs::{Axis, Button, EventType};
+
         // Get the selected controller's gilrs ID
-        let selected_id = self.controllers
+        let selected_id = self
+            .controllers
             .get(self.tester_selected_controller)
             .map(|c| c.id);
-        
+
         // Process events
         while let Some(event) = gilrs.next_event() {
             // Only process events from the selected controller
@@ -252,9 +259,9 @@ impl ControllerState {
             if Some(event_id) != selected_id {
                 continue;
             }
-            
+
             self.tester_last_input_time = Instant::now();
-            
+
             match event.event {
                 // Face buttons
                 EventType::ButtonPressed(Button::South, _) => self.tester_button_state.a = true,
@@ -265,23 +272,47 @@ impl ControllerState {
                 EventType::ButtonReleased(Button::West, _) => self.tester_button_state.x = false,
                 EventType::ButtonPressed(Button::North, _) => self.tester_button_state.y = true,
                 EventType::ButtonReleased(Button::North, _) => self.tester_button_state.y = false,
-                
+
                 // D-Pad
-                EventType::ButtonPressed(Button::DPadUp, _) => self.tester_button_state.dpad_up = true,
-                EventType::ButtonReleased(Button::DPadUp, _) => self.tester_button_state.dpad_up = false,
-                EventType::ButtonPressed(Button::DPadDown, _) => self.tester_button_state.dpad_down = true,
-                EventType::ButtonReleased(Button::DPadDown, _) => self.tester_button_state.dpad_down = false,
-                EventType::ButtonPressed(Button::DPadLeft, _) => self.tester_button_state.dpad_left = true,
-                EventType::ButtonReleased(Button::DPadLeft, _) => self.tester_button_state.dpad_left = false,
-                EventType::ButtonPressed(Button::DPadRight, _) => self.tester_button_state.dpad_right = true,
-                EventType::ButtonReleased(Button::DPadRight, _) => self.tester_button_state.dpad_right = false,
-                
+                EventType::ButtonPressed(Button::DPadUp, _) => {
+                    self.tester_button_state.dpad_up = true
+                }
+                EventType::ButtonReleased(Button::DPadUp, _) => {
+                    self.tester_button_state.dpad_up = false
+                }
+                EventType::ButtonPressed(Button::DPadDown, _) => {
+                    self.tester_button_state.dpad_down = true
+                }
+                EventType::ButtonReleased(Button::DPadDown, _) => {
+                    self.tester_button_state.dpad_down = false
+                }
+                EventType::ButtonPressed(Button::DPadLeft, _) => {
+                    self.tester_button_state.dpad_left = true
+                }
+                EventType::ButtonReleased(Button::DPadLeft, _) => {
+                    self.tester_button_state.dpad_left = false
+                }
+                EventType::ButtonPressed(Button::DPadRight, _) => {
+                    self.tester_button_state.dpad_right = true
+                }
+                EventType::ButtonReleased(Button::DPadRight, _) => {
+                    self.tester_button_state.dpad_right = false
+                }
+
                 // Shoulder buttons
-                EventType::ButtonPressed(Button::LeftTrigger, _) => self.tester_button_state.lb = true,
-                EventType::ButtonReleased(Button::LeftTrigger, _) => self.tester_button_state.lb = false,
-                EventType::ButtonPressed(Button::RightTrigger, _) => self.tester_button_state.rb = true,
-                EventType::ButtonReleased(Button::RightTrigger, _) => self.tester_button_state.rb = false,
-                
+                EventType::ButtonPressed(Button::LeftTrigger, _) => {
+                    self.tester_button_state.lb = true
+                }
+                EventType::ButtonReleased(Button::LeftTrigger, _) => {
+                    self.tester_button_state.lb = false
+                }
+                EventType::ButtonPressed(Button::RightTrigger, _) => {
+                    self.tester_button_state.rb = true
+                }
+                EventType::ButtonReleased(Button::RightTrigger, _) => {
+                    self.tester_button_state.rb = false
+                }
+
                 // Trigger axes
                 EventType::AxisChanged(Axis::LeftZ, value, _) => {
                     self.tester_button_state.lt = (value + 1.0) / 2.0; // Convert -1..1 to 0..1
@@ -289,13 +320,21 @@ impl ControllerState {
                 EventType::AxisChanged(Axis::RightZ, value, _) => {
                     self.tester_button_state.rt = (value + 1.0) / 2.0;
                 }
-                
+
                 // Stick buttons
-                EventType::ButtonPressed(Button::LeftThumb, _) => self.tester_button_state.ls_press = true,
-                EventType::ButtonReleased(Button::LeftThumb, _) => self.tester_button_state.ls_press = false,
-                EventType::ButtonPressed(Button::RightThumb, _) => self.tester_button_state.rs_press = true,
-                EventType::ButtonReleased(Button::RightThumb, _) => self.tester_button_state.rs_press = false,
-                
+                EventType::ButtonPressed(Button::LeftThumb, _) => {
+                    self.tester_button_state.ls_press = true
+                }
+                EventType::ButtonReleased(Button::LeftThumb, _) => {
+                    self.tester_button_state.ls_press = false
+                }
+                EventType::ButtonPressed(Button::RightThumb, _) => {
+                    self.tester_button_state.rs_press = true
+                }
+                EventType::ButtonReleased(Button::RightThumb, _) => {
+                    self.tester_button_state.rs_press = false
+                }
+
                 // Stick axes
                 EventType::AxisChanged(Axis::LeftStickX, value, _) => {
                     self.tester_button_state.left_stick_x = value;
@@ -309,15 +348,23 @@ impl ControllerState {
                 EventType::AxisChanged(Axis::RightStickY, value, _) => {
                     self.tester_button_state.right_stick_y = value;
                 }
-                
+
                 // Special buttons
                 EventType::ButtonPressed(Button::Start, _) => self.tester_button_state.start = true,
-                EventType::ButtonReleased(Button::Start, _) => self.tester_button_state.start = false,
-                EventType::ButtonPressed(Button::Select, _) => self.tester_button_state.select = true,
-                EventType::ButtonReleased(Button::Select, _) => self.tester_button_state.select = false,
+                EventType::ButtonReleased(Button::Start, _) => {
+                    self.tester_button_state.start = false
+                }
+                EventType::ButtonPressed(Button::Select, _) => {
+                    self.tester_button_state.select = true
+                }
+                EventType::ButtonReleased(Button::Select, _) => {
+                    self.tester_button_state.select = false
+                }
                 EventType::ButtonPressed(Button::Mode, _) => self.tester_button_state.guide = true,
-                EventType::ButtonReleased(Button::Mode, _) => self.tester_button_state.guide = false,
-                
+                EventType::ButtonReleased(Button::Mode, _) => {
+                    self.tester_button_state.guide = false
+                }
+
                 _ => {}
             }
         }
@@ -371,4 +418,3 @@ pub const CONTROLLER_MENU_OPTIONS: &[&str] = &[
     "AUTO-ASSIGN ALL",
     "BACK",
 ];
-

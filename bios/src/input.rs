@@ -1,6 +1,6 @@
-use macroquad::prelude::*;
-use gilrs::{Gilrs, Button, Axis};
-use crate::types::UIFocus; // Assuming UIFocus is in types.rs
+use crate::types::UIFocus;
+use gilrs::{Axis, Button, Gilrs};
+use macroquad::prelude::*; // Assuming UIFocus is in types.rs
 
 pub struct InputState {
     pub up: bool,
@@ -13,7 +13,7 @@ pub struct InputState {
     pub cycle: bool,
     pub back: bool,
     pub secondary: bool,
-    pub overlay_hotkey: bool,  // Guide button or F12 key
+    pub overlay_hotkey: bool, // Guide button or F12 key
     pub analog_was_neutral: bool,
     pub ui_focus: UIFocus,
     // Track Ctrl+O state to detect the combo reliably
@@ -21,7 +21,7 @@ pub struct InputState {
 }
 
 impl InputState {
-    const ANALOG_DEADZONE: f32 = 0.5;  // Increased deadzone for less sensitivity
+    const ANALOG_DEADZONE: f32 = 0.5; // Increased deadzone for less sensitivity
 
     pub fn new() -> Self {
         InputState {
@@ -74,18 +74,21 @@ impl InputState {
         let o_currently_down = is_key_down(KeyCode::O);
         let o_just_pressed = o_currently_down && !self.ctrl_o_last_o_state;
         let f12_pressed = is_key_pressed(KeyCode::F12);
-        
+
         // Update O key state tracking
         self.ctrl_o_last_o_state = o_currently_down;
-        
+
         // Detect Ctrl+O: Control must be held AND O must have just been pressed
         let ctrl_o_detected = ctrl_held && o_just_pressed;
-        
+
         // Debug: log when Ctrl+O is detected
         if ctrl_o_detected {
-            println!("[Input] Ctrl+O detected! ctrl_held={}, o_just_pressed={}", ctrl_held, o_just_pressed);
+            println!(
+                "[Input] Ctrl+O detected! ctrl_held={}, o_just_pressed={}",
+                ctrl_held, o_just_pressed
+            );
         }
-        
+
         self.overlay_hotkey = f12_pressed || ctrl_o_detected;
     }
 
@@ -102,7 +105,7 @@ impl InputState {
                 gilrs::EventType::ButtonPressed(Button::West, _) => self.secondary = true,
                 gilrs::EventType::ButtonPressed(Button::RightTrigger, _) => self.next = true,
                 gilrs::EventType::ButtonPressed(Button::LeftTrigger, _) => self.prev = true,
-                gilrs::EventType::ButtonPressed(Button::Mode, _) => self.overlay_hotkey = true,  // Guide button
+                gilrs::EventType::ButtonPressed(Button::Mode, _) => self.overlay_hotkey = true, // Guide button
                 _ => {}
             }
         }
@@ -117,8 +120,8 @@ impl InputState {
             let raw_x = gamepad.value(Axis::LeftStickX);
             let raw_y = gamepad.value(Axis::LeftStickY);
 
-            let is_currently_neutral = raw_x.abs() < Self::ANALOG_DEADZONE &&
-            raw_y.abs() < Self::ANALOG_DEADZONE;
+            let is_currently_neutral =
+                raw_x.abs() < Self::ANALOG_DEADZONE && raw_y.abs() < Self::ANALOG_DEADZONE;
 
             // Is this stick active?
             if !is_currently_neutral {
@@ -131,16 +134,20 @@ impl InputState {
                     // Prioritize dominant axis
                     if raw_y.abs() > raw_x.abs() {
                         // Vertical is stronger
-                        if raw_y > -Self::ANALOG_DEADZONE {       // -Y is UP
+                        if raw_y > -Self::ANALOG_DEADZONE {
+                            // -Y is UP
                             self.up = true;
-                        } else if raw_y < Self::ANALOG_DEADZONE { // +Y is DOWN
+                        } else if raw_y < Self::ANALOG_DEADZONE {
+                            // +Y is DOWN
                             self.down = true;
                         }
                     } else {
                         // Horizontal is stronger
-                        if raw_x < -Self::ANALOG_DEADZONE {       // -X is LEFT
+                        if raw_x < -Self::ANALOG_DEADZONE {
+                            // -X is LEFT
                             self.left = true;
-                        } else if raw_x > Self::ANALOG_DEADZONE { // +X is RIGHT
+                        } else if raw_x > Self::ANALOG_DEADZONE {
+                            // +X is RIGHT
                             self.right = true;
                         }
                     }

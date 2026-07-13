@@ -413,57 +413,89 @@ same way)
 ### Task 5: Achievement evaluation (the engine)
 
 This is the piece that actually detects when you've earned an achievement by
-reading game memory.
+reading game memory. kazeta-ra uses the rcheevos C library (already added as a
+dependency in Task 2) to evaluate achievements by reading Dolphin's emulator
+memory.
 
-**Two approaches:**
+#### Memory access: Dolphin MemoryWatcher (confirmed, built-in)
 
-#### Approach A: Let Dolphin evaluate (standalone Dolphin's built-in RA)
+Research against Dolphin's source code confirms that **MemoryWatcher** is the
+viable memory access path. It is built into Dolphin, enabled by default on all
+Linux/UNIX builds, and not gated by RetroAchievements hardcore mode.
 
-If using standalone Dolphin with built-in RA, Dolphin handles evaluation
-internally using rcheevos. But Dolphin's RA requires server auth, which
-conflicts with our offline model. To make this work, you'd need to patch
-Dolphin to load achievement definitions from a local file instead of the
-server. This is a significant modification to Dolphin itself.
+**How it works (from `Source/Core/Core/MemoryWatcher.cpp`):**
+- Dolphin reads a `Locations.txt` file from its user directory
+  (`~/.local/share/dolphin-emu/MemoryWatcher/Locations.txt` by default)
+- The file is a newline-separated list of hex addresses (without `0x`), e.g.:
+  ```
+  00801234
+  00805678
+  ```
+  Pointer chains are supported: `ABCD EF` watches `(*0xABCD) + 0xEF`
+- At every frame end, Dolphin reads each address (4 bytes, u32) via
+  `PowerPC::MMU::HostRead<u32>()` and sends **only changed values** to a Unix
+  domain socket (`SOCK_DGRAM`) at `~/.local/share/dolphin-emu/MemoryWatcher/MemoryWatcher`
+- Output format: two lines per changed address — the address string from
+  Locations.txt, then the new value in hex
 
-**Verdict:** Complex, requires maintaining a Dolphin fork. Not recommended.
+**Other approaches considered and ruled out:**
+- **GDB stub:** Dolphin has one (`GDBStub.cpp`, supports `m` read-memory packet
+  via TCP or Unix socket), but it's disabled in hardcore mode and requires one
+  ASCII-hex request-response round trip per address read — far slower than
+  MemoryWatcher's batch UDP send for 100+ addresses per frame
+- **ptrace / `/proc/pid/mem`:** Works but fragile — requires scanning
+  `/proc/<pid>/maps` to find Dolphin's emulated RAM region, which shifts between
+  versions. High maintenance, breaks across Dolphin updates
+- **Lua/scripting:** Dolphin has no scripting interface. The `Expression` class
+  is an internal breakpoint condition evaluator, not a general scripting API
 
-#### Approach B (recommended): kazeta-ra evaluates using rcheevos
+#### Implementation steps
 
-kazeta-ra uses the rcheevos C library (already added as a dependency in Task 2)
-to evaluate achievements by reading Dolphin's emulator memory.
+1. **Address extraction:** Parse all memory addresses from the achievement
+   `mem_addr` condition strings (the rcheevos trigger format, e.g.
+   `0xH00801234=1`). Collect unique 4-byte-aligned addresses across all
+   achievements for the current game.
 
-1. **Memory access:** Dolphin exposes memory via its FIFO/Memory interface.
-   For an external process, options are:
-   - **Dolphin's memory watcher** (built-in feature): Dolphin can write memory
-     regions to a named pipe or socket. Configure Dolphin to expose the
-     regions referenced in the achievement definitions.
-   - **ptrace/process memory reading:** Read Dolphin's process memory directly
-     at the known RAM base address. Works on Linux but is fragile.
-   - **Dolphin Lua script:** Run a Lua script inside Dolphin that reads memory
-     and sends it to kazeta-ra via IPC.
-   - **Dolphin IPC/experimental memory API:** Check if Dolphin exposes a
-     D-Bus or socket interface for memory reads.
+2. **Configure MemoryWatcher:** Before launching Dolphin, write the extracted
+   addresses to `Locations.txt` in Dolphin's user directory. This tells
+   MemoryWatcher which addresses to watch and push.
 
-2. **Evaluation loop:** kazeta-ra runs a background thread that:
-   - Reads the relevant memory regions each frame (or at a fixed interval)
-   - Calls `rc_runtime_tick()` (rcheevos) with the memory buffer
-   - When rcheevos reports an achievement trigger, records the unlock in
-     SQLite and sends a `RaAchievementUnlocked` IPC message to the overlay
+3. **Socket listener:** kazeta-ra opens a Unix domain socket at the
+   `MemoryWatcher` path and listens for UDP datagrams. Each datagram contains
+   address+value pairs for changed memory locations. kazeta-ra maintains a
+   cache of the latest value for each address.
 
-3. **rcheevos integration:** Use rcheevos' `rc_client_t` API (the modern
-   integration path) or the lower-level `rc_runtime_t` API:
-   - `rc_client_begin_identify_and_load_game()` with the local hash
-   - `rc_client_set_achievement_data()` with local definitions (bypasses
-     server fetch — may require patching rcheevos or using the
-     `rc_runtime_achievement_t` direct API)
-   - Feed memory via `rc_client_frame()` callbacks
+4. **Evaluation loop:** kazeta-ra runs a background thread with a fixed-rate
+   timer (e.g. 60 Hz) that:
+   - Reads the cached memory values (no I/O — just reads the in-memory cache)
+   - Calls `rc_runtime_tick()` (rcheevos) with the memory buffer. The tick rate
+     is decoupled from MemoryWatcher's push rate so hit counters advance even on
+     frames where no values changed
+   - When rcheevos reports an achievement trigger, records the unlock in the
+     local SQLite `local_unlocks` table and sends a `RaAchievementUnlocked` IPC
+     message to the overlay
 
-**Difficulty:** Hard. This is the most technically challenging part. The
-memory access strategy needs to be validated early with a proof-of-concept.
+5. **Byte extraction:** MemoryWatcher reads u32 (4 bytes) per address. rcheevos
+   conditions reference specific sizes (`0xH` = 8-bit, `0x` = 16-bit, `0xX` =
+   32-bit, `0xL` = lower 16-bit, `0xU` = upper 16-bit). kazeta-ra extracts the
+   right bytes from each u32 before feeding them to the evaluation engine.
 
-**Suggested first step:** Build a minimal proof-of-concept that reads a single
-memory address from a running Dolphin instance and prints it. This validates
-the memory access path before investing in the full evaluation loop.
+6. **rcheevos integration:** Use rcheevos' `rc_runtime_t` API (lower-level,
+   avoids the server-coupled `rc_client_t`):
+   - `rc_runtime_init()` — initialize the runtime
+   - `rc_parse_trigger()` — parse each achievement's `mem_addr` condition string
+   - `rc_runtime_activate_achievement()` — register each trigger
+   - Implement a `rc_memref_t` reader callback that reads from kazeta-ra's
+     cached memory values (not from Dolphin directly)
+   - `rc_runtime_tick()` — advance all triggers each frame
+
+**Difficulty:** Medium. The memory access strategy is confirmed — MemoryWatcher
+is built into every Linux Dolphin build, uses a standard Unix socket, and
+requires no Dolphin modification. The remaining work is: address extraction
+(string parsing), Locations.txt generation (file write), a UDP socket listener
+(standard Rust networking), a fixed-rate timer calling rcheevos (FFI + timer),
+and byte-size extraction from u32 values. The rcheevos `rc_runtime_t` API is
+well-documented and doesn't require server interaction.
 
 ---
 
@@ -547,7 +579,7 @@ cargo clippy --all-targets --all-features
 6. **Task 4d** (local SQLite unlocks) — replace server award
 7. **Task 4e** (remove auth requirement) — make it work without an account
 8. **Task 3** (standalone Dolphin .kzr) — the runtime
-9. **Task 5** (evaluation engine) — the hard part; validate memory access first
+9. **Task 5** (evaluation engine) — memory access confirmed via Dolphin MemoryWatcher
 10. **Task 6** (cartridge tooling) — update the cartridge repo
 
 Tasks 1-4 are achievable without a running Dolphin instance. Task 5 requires

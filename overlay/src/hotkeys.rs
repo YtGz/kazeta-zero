@@ -40,9 +40,9 @@ impl HotkeyAction {
 /// Individual input components that can be combined into hotkeys
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InputComponent {
-    Key(String),                    // Keyboard key name (e.g., "F12", "A")
+    Key(String),                      // Keyboard key name (e.g., "F12", "A")
     GamepadButton(GamepadButtonType), // Gamepad button
-    Modifier(ModifierKey),          // Modifier keys (Ctrl, Alt, Shift)
+    Modifier(ModifierKey),            // Modifier keys (Ctrl, Alt, Shift)
 }
 
 impl InputComponent {
@@ -68,10 +68,10 @@ impl InputComponent {
 /// Gamepad button types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GamepadButtonType {
-    South,       // A/Cross
-    East,        // B/Circle
-    West,        // X/Square
-    North,       // Y/Triangle
+    South, // A/Cross
+    East,  // B/Circle
+    West,  // X/Square
+    North, // Y/Triangle
     DPadUp,
     DPadDown,
     DPadLeft,
@@ -82,9 +82,9 @@ pub enum GamepadButtonType {
     RightTrigger,
     Select,
     Start,
-    Mode,        // Guide/Home
-    LeftStick,   // L3
-    RightStick,  // R3
+    Mode,       // Guide/Home
+    LeftStick,  // L3
+    RightStick, // R3
 }
 
 /// Modifier keys
@@ -244,8 +244,8 @@ impl HotkeyManager {
 
     /// Get the configuration file path
     fn get_config_path() -> Result<PathBuf> {
-        let data_dir = dirs::data_local_dir()
-            .context("Could not determine local data directory")?;
+        let data_dir =
+            dirs::data_local_dir().context("Could not determine local data directory")?;
 
         let overlay_dir = data_dir.join("kazeta-plus").join("overlay");
 
@@ -260,22 +260,20 @@ impl HotkeyManager {
 
     /// Load configuration from file
     fn load_config(path: &PathBuf) -> Result<HotkeyConfig> {
-        let contents = fs::read_to_string(path)
-            .context("Failed to read hotkey config file")?;
+        let contents = fs::read_to_string(path).context("Failed to read hotkey config file")?;
 
-        let config: HotkeyConfig = serde_json::from_str(&contents)
-            .context("Failed to parse hotkey config JSON")?;
+        let config: HotkeyConfig =
+            serde_json::from_str(&contents).context("Failed to parse hotkey config JSON")?;
 
         Ok(config)
     }
 
     /// Save configuration to file
     fn save_config(path: &PathBuf, config: &HotkeyConfig) -> Result<()> {
-        let json = serde_json::to_string_pretty(config)
-            .context("Failed to serialize hotkey config")?;
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize hotkey config")?;
 
-        fs::write(path, json)
-            .context("Failed to write hotkey config file")?;
+        fs::write(path, json).context("Failed to write hotkey config file")?;
 
         println!("[Hotkeys] Config saved to {:?}", path);
         Ok(())
@@ -314,9 +312,9 @@ impl HotkeyManager {
         current_inputs: &HashMap<InputComponent, bool>,
     ) -> bool {
         // Check if all components are currently pressed
-        let all_pressed = components.iter().all(|component| {
-            current_inputs.get(component).copied().unwrap_or(false)
-        });
+        let all_pressed = components
+            .iter()
+            .all(|component| current_inputs.get(component).copied().unwrap_or(false));
 
         // Get last state (default to false if never checked)
         let key = components.to_vec();

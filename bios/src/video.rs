@@ -1,8 +1,8 @@
-use ffmpeg_next as ffmpeg;
 use ffmpeg::format::{input, Pixel};
 use ffmpeg::media::Type;
 use ffmpeg::software::scaling::{context::Context as Scaler, flag::Flags};
 use ffmpeg::util::frame::video::Video;
+use ffmpeg_next as ffmpeg;
 use macroquad::prelude::*;
 use std::path::Path;
 
@@ -19,8 +19,8 @@ pub struct VideoPlayer {
     pub duration_secs: f64,
 
     // [!] NEW FIELDS FOR SYNC
-    time_base: f64,      // To convert timestamps to seconds
-    frame_ready: bool,   // Do we have a decoded frame waiting?
+    time_base: f64,    // To convert timestamps to seconds
+    frame_ready: bool, // Do we have a decoded frame waiting?
 }
 
 impl VideoPlayer {
@@ -30,17 +30,20 @@ impl VideoPlayer {
         let input_context = input(path).map_err(|e| e.to_string())?;
 
         let stream = input_context
-        .streams()
-        .best(Type::Video)
-        .ok_or("No video stream found")?;
+            .streams()
+            .best(Type::Video)
+            .ok_or("No video stream found")?;
 
         let stream_index = stream.index();
         let time_base = f64::from(stream.time_base()); // Save this for later
 
         let context_decoder = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
-        .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
 
-        let decoder = context_decoder.decoder().video().map_err(|e| e.to_string())?;
+        let decoder = context_decoder
+            .decoder()
+            .video()
+            .map_err(|e| e.to_string())?;
 
         let width = decoder.width();
         let height = decoder.height();
@@ -54,7 +57,8 @@ impl VideoPlayer {
             width,
             height,
             Flags::BILINEAR,
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
         let texture = Texture2D::from_image(&Image {
             width: width as u16,
@@ -143,7 +147,8 @@ impl VideoPlayer {
         }
     }
 
-    pub fn reset(&mut self) { // allow video to loop (for themes that use a video background)
+    pub fn reset(&mut self) {
+        // allow video to loop (for themes that use a video background)
         // Seek to the beginning of the file
         let _ = self.input_context.seek(0, ..);
         // Clear the frame ready flag so we decode immediately

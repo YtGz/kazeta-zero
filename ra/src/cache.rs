@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
-use std::path::PathBuf;
+use crate::local_definitions::LocalDefinitions;
 use crate::types::*;
+use anyhow::{Context, Result};
+use rusqlite::{params, Connection};
 
 /// Local cache for RetroAchievements data
 /// Reduces API calls and enables offline viewing
@@ -15,12 +15,10 @@ impl RACache {
             .context("Could not find home directory")?
             .join(".local/share/kazeta-plus/ra_cache");
 
-        std::fs::create_dir_all(&cache_dir)
-            .context("Failed to create cache directory")?;
+        std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 
         let db_path = cache_dir.join("achievements.db");
-        let conn = Connection::open(&db_path)
-            .context("Failed to open cache database")?;
+        let conn = Connection::open(&db_path).context("Failed to open cache database")?;
 
         let cache = Self { conn };
         cache.init_tables()?;
@@ -29,8 +27,9 @@ impl RACache {
     }
 
     fn init_tables(&self) -> Result<()> {
-        self.conn.execute_batch(
-            r#"
+        self.conn
+            .execute_batch(
+                r#"
             CREATE TABLE IF NOT EXISTS games (
                 hash TEXT PRIMARY KEY,
                 game_id INTEGER NOT NULL,
@@ -61,8 +60,27 @@ impl RACache {
             );
 
             CREATE INDEX IF NOT EXISTS idx_achievements_game ON achievements(game_hash);
-            "#
-        ).context("Failed to create cache tables")?;
+
+            CREATE TABLE IF NOT EXISTS local_unlocks (
+                achievement_id INTEGER NOT NULL,
+                game_hash TEXT NOT NULL,
+                date_earned TEXT NOT NULL,
+                is_hardcore BOOLEAN DEFAULT FALSE,
+                PRIMARY KEY (achievement_id, game_hash)
+            );
+
+            CREATE TABLE IF NOT EXISTS local_definitions_cache (
+                game_hash TEXT PRIMARY KEY,
+                game_id INTEGER NOT NULL,
+                game_title TEXT NOT NULL,
+                console_id INTEGER NOT NULL,
+                console_name TEXT NOT NULL,
+                definitions_json TEXT NOT NULL,
+                cached_at TEXT NOT NULL
+            );
+            "#,
+            )
+            .context("Failed to create cache tables")?;
 
         Ok(())
     }
@@ -117,30 +135,30 @@ impl RACache {
         ).context("Failed to cache achievement")?;
 
         // Store user progress
-        self.conn.execute(
-            r#"
+        self.conn
+            .execute(
+                r#"
             INSERT OR REPLACE INTO user_progress (achievement_id, date_earned, date_earned_hardcore)
             VALUES (?1, ?2, ?3)
             "#,
-            params![
-                achievement.id,
-                achievement.date_earned,
-                achievement.date_earned_hardcore,
-            ],
-        ).context("Failed to cache user progress")?;
+                params![
+                    achievement.id,
+                    achievement.date_earned,
+                    achievement.date_earned_hardcore,
+                ],
+            )
+            .context("Failed to cache user progress")?;
 
         Ok(())
     }
 
     /// Get cached game ID for a ROM hash
     pub fn get_game_id(&self, hash: &str) -> Result<Option<u32>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT game_id FROM games WHERE hash = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT game_id FROM games WHERE hash = ?1")?;
 
-        let result = stmt.query_row(params![hash], |row| {
-            row.get::<_, u32>(0)
-        });
+        let result = stmt.query_row(params![hash], |row| row.get::<_, u32>(0));
 
         match result {
             Ok(id) => Ok(Some(id)),
@@ -151,13 +169,11 @@ impl RACache {
 
     /// Get cached game title for a ROM hash
     pub fn get_game_title(&self, hash: &str) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT title FROM games WHERE hash = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT title FROM games WHERE hash = ?1")?;
 
-        let result = stmt.query_row(params![hash], |row| {
-            row.get::<_, String>(0)
-        });
+        let result = stmt.query_row(params![hash], |row| row.get::<_, String>(0));
 
         match result {
             Ok(title) => Ok(Some(title)),
@@ -176,23 +192,24 @@ impl RACache {
             LEFT JOIN user_progress p ON a.id = p.achievement_id
             WHERE a.game_hash = ?1
             ORDER BY a.display_order
-            "#
+            "#,
         )?;
 
-        let achievements = stmt.query_map(params![hash], |row| {
-            Ok(CachedAchievement {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                description: row.get(2)?,
-                points: row.get(3)?,
-                badge_name: row.get(4)?,
-                display_order: row.get(5)?,
-                date_earned: row.get(6)?,
-                date_earned_hardcore: row.get(7)?,
-            })
-        })?
-        .filter_map(|r| r.ok())
-        .collect();
+        let achievements = stmt
+            .query_map(params![hash], |row| {
+                Ok(CachedAchievement {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    description: row.get(2)?,
+                    points: row.get(3)?,
+                    badge_name: row.get(4)?,
+                    display_order: row.get(5)?,
+                    date_earned: row.get(6)?,
+                    date_earned_hardcore: row.get(7)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
 
         Ok(achievements)
     }
@@ -243,9 +260,105 @@ impl RACache {
             DELETE FROM user_progress;
             DELETE FROM achievements;
             DELETE FROM games;
-            "#
+            DELETE FROM local_unlocks;
+            DELETE FROM local_definitions_cache;
+            "#,
         )?;
         Ok(())
+    }
+
+    /// Record a local achievement unlock (never contacts any server).
+    pub fn local_unlock(&self, achievement_id: u32, game_hash: &str, hardcore: bool) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.conn.execute(
+            r#"
+            INSERT OR REPLACE INTO local_unlocks (achievement_id, game_hash, date_earned, is_hardcore)
+            VALUES (?1, ?2, ?3, ?4)
+            "#,
+            params![achievement_id, game_hash, now, hardcore],
+        ).context("Failed to record local unlock")?;
+        Ok(())
+    }
+
+    /// Check if an achievement has been locally unlocked.
+    pub fn is_local_unlocked(&self, achievement_id: u32, game_hash: &str) -> Result<bool> {
+        let result = self.conn.query_row(
+            "SELECT 1 FROM local_unlocks WHERE achievement_id = ?1 AND game_hash = ?2",
+            params![achievement_id, game_hash],
+            |_| Ok(()),
+        );
+        match result {
+            Ok(()) => Ok(true),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Get all locally unlocked achievement IDs for a game.
+    pub fn get_local_unlock_ids(&self, game_hash: &str) -> Result<std::collections::HashSet<u32>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT achievement_id FROM local_unlocks WHERE game_hash = ?1")?;
+        let ids = stmt
+            .query_map(params![game_hash], |row| row.get::<_, u32>(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids)
+    }
+
+    /// Get the count of locally unlocked achievements for a game.
+    pub fn get_local_unlock_count(&self, game_hash: &str) -> Result<u32> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM local_unlocks WHERE game_hash = ?1",
+            params![game_hash],
+            |row| row.get(0),
+        )?;
+        Ok(count as u32)
+    }
+
+    /// Cache local definitions for a game (so the evaluation engine can
+    /// access them without re-reading the file).
+    pub fn cache_local_definitions(&self, game_hash: &str, defs: &LocalDefinitions) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let json = serde_json::to_string(defs).context("Failed to serialize local definitions")?;
+        self.conn.execute(
+            r#"
+            INSERT OR REPLACE INTO local_definitions_cache
+                (game_hash, game_id, game_title, console_id, console_name, definitions_json, cached_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "#,
+            params![
+                game_hash,
+                defs.game_id,
+                defs.game_title,
+                defs.console_id,
+                defs.console_name,
+                json,
+                now,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load cached local definitions for a game.
+    pub fn get_cached_local_definitions(
+        &self,
+        game_hash: &str,
+    ) -> Result<Option<LocalDefinitions>> {
+        let result = self.conn.query_row(
+            "SELECT definitions_json FROM local_definitions_cache WHERE game_hash = ?1",
+            params![game_hash],
+            |row| row.get::<_, String>(0),
+        );
+        match result {
+            Ok(json) => {
+                let defs: LocalDefinitions = serde_json::from_str(&json)
+                    .context("Failed to parse cached local definitions")?;
+                Ok(Some(defs))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -271,4 +384,3 @@ impl CachedAchievement {
         self.date_earned_hardcore.is_some()
     }
 }
-

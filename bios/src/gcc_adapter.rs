@@ -1,9 +1,9 @@
 use crate::GccMessage;
 
 use std::fs;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::Sender;
 
 // The path where the overclocked driver exposes its poll rate
 const GCC_POLL_RATE_PATH: &str = "/sys/module/gcadapter_oc/parameters/rate";
@@ -18,7 +18,8 @@ pub fn start_gcc_adapter_polling(tx: Sender<GccMessage>) {
                     if let Ok(rate_ms) = rate_str.trim().parse::<u32>() {
                         if rate_ms > 0 {
                             let poll_rate_hz = 1000 / rate_ms;
-                            tx.send(GccMessage::RateUpdate(poll_rate_hz)).unwrap_or_default();
+                            tx.send(GccMessage::RateUpdate(poll_rate_hz))
+                                .unwrap_or_default();
                             was_connected = true;
                         }
                     }

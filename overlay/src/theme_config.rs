@@ -1,8 +1,8 @@
+use crate::themes::Theme;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use crate::themes::Theme;
 
 /// Theme configuration
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -48,11 +48,13 @@ impl ThemeConfigManager {
         };
 
         // Load the theme
-        let current_theme = Theme::by_name(&config.theme_name)
-            .unwrap_or_else(|| {
-                eprintln!("[ThemeConfig] Theme '{}' not found, using Dark", config.theme_name);
-                Theme::dark()
-            });
+        let current_theme = Theme::by_name(&config.theme_name).unwrap_or_else(|| {
+            eprintln!(
+                "[ThemeConfig] Theme '{}' not found, using Dark",
+                config.theme_name
+            );
+            Theme::dark()
+        });
 
         Ok(Self {
             config,
@@ -63,8 +65,8 @@ impl ThemeConfigManager {
 
     /// Get the configuration file path
     fn get_config_path() -> Result<PathBuf> {
-        let data_dir = dirs::data_local_dir()
-            .context("Could not determine local data directory")?;
+        let data_dir =
+            dirs::data_local_dir().context("Could not determine local data directory")?;
 
         let overlay_dir = data_dir.join("kazeta-plus").join("overlay");
 
@@ -79,22 +81,20 @@ impl ThemeConfigManager {
 
     /// Load configuration from file
     fn load_config(path: &PathBuf) -> Result<ThemeConfig> {
-        let contents = fs::read_to_string(path)
-            .context("Failed to read theme config file")?;
+        let contents = fs::read_to_string(path).context("Failed to read theme config file")?;
 
-        let config: ThemeConfig = serde_json::from_str(&contents)
-            .context("Failed to parse theme config JSON")?;
+        let config: ThemeConfig =
+            serde_json::from_str(&contents).context("Failed to parse theme config JSON")?;
 
         Ok(config)
     }
 
     /// Save configuration to file
     fn save_config(path: &PathBuf, config: &ThemeConfig) -> Result<()> {
-        let json = serde_json::to_string_pretty(config)
-            .context("Failed to serialize theme config")?;
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize theme config")?;
 
-        fs::write(path, json)
-            .context("Failed to write theme config file")?;
+        fs::write(path, json).context("Failed to write theme config file")?;
 
         println!("[ThemeConfig] Config saved to {:?}", path);
         Ok(())
@@ -125,10 +125,7 @@ impl ThemeConfigManager {
 
     /// Get all available theme names
     pub fn available_themes() -> Vec<String> {
-        Theme::all_presets()
-            .into_iter()
-            .map(|t| t.name)
-            .collect()
+        Theme::all_presets().into_iter().map(|t| t.name).collect()
     }
 
     /// Save current configuration to disk
@@ -136,4 +133,3 @@ impl ThemeConfigManager {
         Self::save_config(&self.config_path, &self.config)
     }
 }
-

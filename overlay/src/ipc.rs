@@ -93,13 +93,13 @@ pub struct AchievementInfo {
 
     // Optional fields for enhanced features
     #[serde(default)]
-    pub rarity_percent: Option<f32>,  // 0-100, percentage of players who earned it
+    pub rarity_percent: Option<f32>, // 0-100, percentage of players who earned it
 
     #[serde(default)]
-    pub earned_at: Option<u64>,  // Unix timestamp when earned
+    pub earned_at: Option<u64>, // Unix timestamp when earned
 
     #[serde(default)]
-    pub progress: Option<AchievementProgress>,  // For multi-step achievements
+    pub progress: Option<AchievementProgress>, // For multi-step achievements
 }
 
 /// Progress tracking for multi-step achievements
@@ -124,19 +124,19 @@ pub enum OverlayScreen {
     Main,
     Settings,
     Achievements,
-    Performance,        // Performance monitoring
-    Playtime,           // Playtime tracking
+    Performance, // Performance monitoring
+    Playtime,    // Playtime tracking
     // Controller menu screens
-    Controllers,        // Main controller menu
-    BluetoothPairing,   // Find and pair Bluetooth controllers
-    ControllerAssign,   // Assign controllers to players
-    GamepadTester,      // Test gamepad inputs
-    HotkeySettings,     // Configure hotkey bindings
+    Controllers,      // Main controller menu
+    BluetoothPairing, // Find and pair Bluetooth controllers
+    ControllerAssign, // Assign controllers to players
+    GamepadTester,    // Test gamepad inputs
+    HotkeySettings,   // Configure hotkey bindings
     // Menu customization
-    MenuCustomization,  // Customize main menu items
-    ThemeSelection,     // Select overlay theme
+    MenuCustomization, // Customize main menu items
+    ThemeSelection,    // Select overlay theme
     // Quit confirmation
-    QuitConfirm,        // Confirm quit to BIOS
+    QuitConfirm, // Confirm quit to BIOS
 }
 
 pub struct IpcServer {
@@ -147,12 +147,10 @@ impl IpcServer {
     pub fn new() -> Result<Self> {
         // Remove stale socket if it exists
         if Path::new(SOCKET_PATH).exists() {
-            std::fs::remove_file(SOCKET_PATH)
-                .context("Failed to remove stale socket")?;
+            std::fs::remove_file(SOCKET_PATH).context("Failed to remove stale socket")?;
         }
 
-        let listener = UnixListener::bind(SOCKET_PATH)
-            .context("Failed to bind Unix socket")?;
+        let listener = UnixListener::bind(SOCKET_PATH).context("Failed to bind Unix socket")?;
 
         // Set non-blocking mode
         listener
@@ -194,17 +192,15 @@ impl IpcServer {
 
         for line in reader.lines() {
             match line {
-                Ok(line) => {
-                    match serde_json::from_str::<OverlayMessage>(&line) {
-                        Ok(msg) => {
-                            println!("[IPC] Received message: {:?}", msg);
-                            return Some(msg);
-                        }
-                        Err(e) => {
-                            eprintln!("[IPC] Failed to parse message: {} - Error: {}", line, e);
-                        }
+                Ok(line) => match serde_json::from_str::<OverlayMessage>(&line) {
+                    Ok(msg) => {
+                        println!("[IPC] Received message: {:?}", msg);
+                        return Some(msg);
                     }
-                }
+                    Err(e) => {
+                        eprintln!("[IPC] Failed to parse message: {} - Error: {}", line, e);
+                    }
+                },
                 Err(e) => {
                     eprintln!("[IPC] Error reading line: {}", e);
                     break;

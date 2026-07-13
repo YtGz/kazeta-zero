@@ -1,6 +1,6 @@
-use crate::{Color, Vec2, Config, string_to_color, HashMap};
+use crate::{string_to_color, Color, Config, HashMap, Vec2};
 use macroquad::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 // ===================================
@@ -77,10 +77,10 @@ pub enum Screen {
     UpdateChecker,
     Debug,
     GameSelection,
-    GameLaunchOptions,  // mGBA: multiplayer & save file selection
+    GameLaunchOptions, // mGBA: multiplayer & save file selection
     CdPlayer,
     About,
-    RetroAchievements,  // RetroAchievements login and settings
+    RetroAchievements, // RetroAchievements login and settings
     BladesDashboard,
 }
 
@@ -88,7 +88,7 @@ pub enum Screen {
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameLaunchStep {
     SelectPlayerCount,
-    SelectSaveSlot { player: u8 },  // Which player is selecting their save
+    SelectSaveSlot { player: u8 }, // Which player is selecting their save
     Launching,
 }
 
@@ -96,7 +96,7 @@ pub enum GameLaunchStep {
 #[derive(Clone, Debug, Default)]
 pub struct GameLaunchOptions {
     pub player_count: u8,
-    pub save_slots: Vec<String>,  // Save slot for each player (e.g., "p1", "p2", "new")
+    pub save_slots: Vec<String>, // Save slot for each player (e.g., "p1", "p2", "new")
 }
 
 // UI Focus for Save Data Screen
@@ -178,9 +178,9 @@ pub struct StorageMedia {
 }
 
 pub struct AnimationState {
-    pub shake_time: f32,  // Current shake animation time
-    pub shake_target: ShakeTarget, // Which element is currently shaking
-    pub cursor_animation_time: f32, // Time counter for cursor animations
+    pub shake_time: f32,             // Current shake animation time
+    pub shake_target: ShakeTarget,   // Which element is currently shaking
+    pub cursor_animation_time: f32,  // Time counter for cursor animations
     pub cursor_transition_time: f32, // Time counter for cursor transition animation
     pub current_transition_duration: f32,
     pub dialog_transition_time: f32, // Time counter for dialog transition animation
@@ -256,8 +256,8 @@ impl MenuPosition {
 }
 
 impl AnimationState {
-    const SHAKE_DURATION: f32 = 0.2;    // Duration of shake animation in seconds
-    const SHAKE_INTENSITY: f32 = 3.0;   // How far the arrow shakes
+    const SHAKE_DURATION: f32 = 0.2; // Duration of shake animation in seconds
+    const SHAKE_INTENSITY: f32 = 3.0; // How far the arrow shakes
     const DIALOG_TRANSITION_DURATION: f32 = 0.4; // Duration of dialog transition animation
 
     pub fn new() -> Self {
@@ -276,7 +276,8 @@ impl AnimationState {
 
     pub fn calculate_shake_offset(&self, target: ShakeTarget) -> f32 {
         if self.shake_target == target && self.shake_time > 0.0 {
-            (self.shake_time / Self::SHAKE_DURATION * std::f32::consts::PI * 8.0).sin() * Self::SHAKE_INTENSITY
+            (self.shake_time / Self::SHAKE_DURATION * std::f32::consts::PI * 8.0).sin()
+                * Self::SHAKE_INTENSITY
         } else {
             0.0
         }
@@ -293,7 +294,6 @@ impl AnimationState {
     }
 
     pub fn update_cursor_animation(&mut self, delta_time: f32, speed_setting: &str) {
-
         // Determine numeric speed based on string setting
         let speed = match speed_setting {
             "FAST" => 15.0,
@@ -304,7 +304,8 @@ impl AnimationState {
 
         if speed > 0.0 {
             // Standard animation
-            self.cursor_animation_time = (self.cursor_animation_time + delta_time * speed) % (2.0 * std::f32::consts::PI);
+            self.cursor_animation_time =
+                (self.cursor_animation_time + delta_time * speed) % (2.0 * std::f32::consts::PI);
         } else {
             // If OFF, lock time to PI/2.
             // sin(PI/2) = 1.0, ensuring the cursor stays fully lit/solid instead of freezing at a random dimness.
@@ -354,7 +355,8 @@ impl AnimationState {
         self.cursor_transition_time = duration;
     }
 
-    pub fn get_cursor_color(&self, config: &Config) -> Color { // Add config parameter
+    pub fn get_cursor_color(&self, config: &Config) -> Color {
+        // Add config parameter
         // Get the base color from the config using our existing helper function
         let base_color = string_to_color(&config.cursor_color);
 
@@ -384,7 +386,8 @@ impl AnimationState {
     pub fn update_dialog_transition(&mut self, delta_time: f32) {
         if self.dialog_transition_time > 0.0 {
             self.dialog_transition_time = (self.dialog_transition_time - delta_time).max(0.0);
-            self.dialog_transition_progress = 1.0 - (self.dialog_transition_time / Self::DIALOG_TRANSITION_DURATION);
+            self.dialog_transition_progress =
+                1.0 - (self.dialog_transition_time / Self::DIALOG_TRANSITION_DURATION);
         }
     }
 
@@ -399,6 +402,7 @@ impl AnimationState {
         let t = self.dialog_transition_progress;
         // Use smooth easing function
         let t = t * t * (3.0 - 2.0 * t);
-        self.dialog_transition_start_pos.lerp(self.dialog_transition_end_pos, t)
+        self.dialog_transition_start_pos
+            .lerp(self.dialog_transition_end_pos, t)
     }
 }

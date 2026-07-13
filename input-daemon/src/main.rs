@@ -82,12 +82,12 @@ fn notify_overlay(message: &str) -> Result<()> {
         return Ok(());
     }
 
-    let mut stream = UnixStream::connect(socket_path)
-        .context("Failed to connect to overlay socket")?;
-    
+    let mut stream =
+        UnixStream::connect(socket_path).context("Failed to connect to overlay socket")?;
+
     stream.set_write_timeout(Some(Duration::from_millis(100)))?;
     writeln!(stream, "{}", message)?;
-    
+
     info!("Sent to overlay: {}", message);
     Ok(())
 }
@@ -114,12 +114,14 @@ fn toggle_overlay(state: &Arc<Mutex<GlobalState>>, device_name: &str) {
 /// Check if a device is a gamepad or keyboard we want to monitor
 fn is_relevant_device(device: &Device) -> (bool, bool) {
     let supported = device.supported_keys();
-    
-    let is_gamepad = supported.as_ref()
+
+    let is_gamepad = supported
+        .as_ref()
         .map(|keys| keys.contains(Key::BTN_MODE) || keys.contains(Key::BTN_SOUTH))
         .unwrap_or(false);
-    
-    let is_keyboard = supported.as_ref()
+
+    let is_keyboard = supported
+        .as_ref()
         .map(|keys| keys.contains(Key::KEY_F12) || keys.contains(Key::KEY_A))
         .unwrap_or(false);
 
@@ -129,7 +131,7 @@ fn is_relevant_device(device: &Device) -> (bool, bool) {
 /// Find all input devices (gamepads and keyboards)
 fn find_input_devices(state: &Arc<Mutex<GlobalState>>) -> Vec<(String, Device)> {
     let mut devices = Vec::new();
-    
+
     let input_path = Path::new(INPUT_DIR);
     if !input_path.exists() {
         error!("/dev/input does not exist - not running on Linux?");
@@ -145,11 +147,9 @@ fn find_input_devices(state: &Arc<Mutex<GlobalState>>) -> Vec<(String, Device)> 
         for entry in entries.flatten() {
             let path = entry.path();
             let path_str = path.to_string_lossy().to_string();
-            
-            let name = path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
-            
+
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
             // Only look at event devices
             if !name.starts_with("event") {
                 continue;
@@ -166,8 +166,13 @@ fn find_input_devices(state: &Arc<Mutex<GlobalState>>) -> Vec<(String, Device)> 
                     let (is_gamepad, is_keyboard) = is_relevant_device(&device);
 
                     if is_gamepad || is_keyboard {
-                        info!("Found input device: {} ({}) - gamepad={}, keyboard={}", 
-                              path.display(), device_name, is_gamepad, is_keyboard);
+                        info!(
+                            "Found input device: {} ({}) - gamepad={}, keyboard={}",
+                            path.display(),
+                            device_name,
+                            is_gamepad,
+                            is_keyboard
+                        );
                         devices.push((path_str, device));
                     }
                 }
@@ -288,7 +293,10 @@ fn device_scanner(
     };
 
     // Watch /dev/input for new devices
-    if let Err(e) = inotify.watches().add(INPUT_DIR, WatchMask::CREATE | WatchMask::ATTRIB) {
+    if let Err(e) = inotify
+        .watches()
+        .add(INPUT_DIR, WatchMask::CREATE | WatchMask::ATTRIB)
+    {
         error!("Failed to watch {}: {}", INPUT_DIR, e);
         error!("Falling back to initial device scan only (no hotplug)");
         return handles;
@@ -421,7 +429,8 @@ fn main() -> Result<()> {
     ctrlc::set_handler(move || {
         info!("Received shutdown signal");
         running_ctrlc.store(false, Ordering::Relaxed);
-    }).context("Failed to set Ctrl+C handler")?;
+    })
+    .context("Failed to set Ctrl+C handler")?;
 
     // Spawn monitor threads for initial devices
     let mut handles = Vec::new();

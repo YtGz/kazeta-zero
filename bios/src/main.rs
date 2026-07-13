@@ -1,40 +1,39 @@
-use chrono::Local; // for getting clock
 use crate::{
-    audio::{AUDIO, load_sound_from_bytes, SoundEffects, play_new_bgm},
+    audio::{load_sound_from_bytes, play_new_bgm, SoundEffects, AUDIO},
     cd_player_backend::CdPlayerBackend,
-    config::{Config, get_user_data_dir},
+    config::{get_user_data_dir, Config},
     dialog::{self, Dialog},
     gcc_adapter::start_gcc_adapter_polling,
     input::InputState,
     save::StorageMediaState,
-    settings::GENERAL_SETTINGS,
     settings::render_settings_page,
+    settings::GENERAL_SETTINGS,
     system::*, // Wildcard to get all system functions
-    ui::*,
     ui::blades::BladesState,
+    ui::retroachievements::RASettingsState,
     ui::runtime_downloader::RuntimeDownloaderState,
     ui::theme_downloader::ThemeDownloaderState,
     ui::update_checker::UpdateCheckerState,
     ui::wifi::WifiState,
-    ui::retroachievements::RASettingsState,
+    ui::*,
     utils::*, // Wildcard to get all utility functions
 };
+use ::rand::Rng; // for selecting a random message on startup
+use chrono::Local; // for getting clock
 use gilrs::Gilrs;
 use macroquad::prelude::*;
-use ::rand::Rng; // for selecting a random message on startup
 use regex::Regex; // fetching audio sinks
-use rodio::{
-    buffer::SamplesBuffer,
-    Decoder, Sink,
-};
+use rodio::{buffer::SamplesBuffer, Decoder, Sink};
 use std::{
-    thread, time, fs, process, env,
     collections::{HashMap, HashSet},
+    env, fs,
     io::{BufReader, Cursor, Write},
     path::PathBuf,
+    process,
     process::Child,
+    sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, Mutex},
-    sync::atomic::{Ordering, AtomicBool},
+    thread, time,
 };
 use tempfile::NamedTempFile;
 use video::VideoPlayer;
@@ -88,7 +87,11 @@ pub const DEV_MODE: bool = true; // run with "cargo run --release --features dev
 #[cfg(not(feature = "dev"))]
 pub const DEV_MODE: bool = false;
 
-macro_rules! ver { () => { "1.43" } } // Define the version number here
+macro_rules! ver {
+    () => {
+        "1.43"
+    };
+} // Define the version number here
 #[cfg(feature = "dev")]
 const VERSION_NUMBER: &str = concat!("V", ver!(), "d.KAZETA+");
 
@@ -105,9 +108,24 @@ const FONT_SIZE: u16 = 16;
 const GRID_OFFSET: f32 = 52.0;
 const GRID_WIDTH: usize = 13;
 const GRID_HEIGHT: usize = 5;
-const UI_BG_COLOR: Color = Color {r: 0.0, g: 0.0, b: 0.0, a: 0.5 };
-const UI_BG_COLOR_DARK: Color = Color {r: 0.0, g: 0.0, b: 0.0, a: 0.3 };
-const UI_BG_COLOR_DIALOG: Color = Color {r: 0.0, g: 0.0, b: 0.0, a: 0.8 };
+const UI_BG_COLOR: Color = Color {
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 0.5,
+};
+const UI_BG_COLOR_DARK: Color = Color {
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 0.3,
+};
+const UI_BG_COLOR_DIALOG: Color = Color {
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 0.8,
+};
 const SELECTED_OFFSET: f32 = 5.0;
 const MENU_OPTION_HEIGHT: f32 = 30.0;
 const MENU_PADDING: f32 = 8.0;
@@ -115,12 +133,42 @@ const RECT_COLOR: Color = Color::new(0.15, 0.15, 0.15, 1.0);
 const FLASH_MESSAGE_DURATION: f32 = 5.0; // Show message for 5 seconds
 
 const COLOR_TARGETS: [Color; 6] = [
-Color { r: 1.0, g: 0.5, b: 0.5, a: 1.0 },
-Color { r: 1.0, g: 1.0, b: 0.5, a: 1.0 },
-Color { r: 0.5, g: 1.0, b: 0.5, a: 1.0 },
-Color { r: 0.5, g: 1.0, b: 1.0, a: 1.0 },
-Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
-Color { r: 1.0, g: 0.5, b: 1.0, a: 1.0 },
+    Color {
+        r: 1.0,
+        g: 0.5,
+        b: 0.5,
+        a: 1.0,
+    },
+    Color {
+        r: 1.0,
+        g: 1.0,
+        b: 0.5,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 1.0,
+        b: 0.5,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 0.5,
+        g: 0.5,
+        b: 1.0,
+        a: 1.0,
+    },
+    Color {
+        r: 1.0,
+        g: 0.5,
+        b: 1.0,
+        a: 1.0,
+    },
 ];
 
 const KAZETA_LOADING_MESSAGES: &[&str] = &[
@@ -211,9 +259,21 @@ macro_rules! load_asset_category {
                         println!("[OK] Loaded {}: {}", $type_name.to_lowercase(), file_name);
                         $cache.insert(file_name.to_string(), asset);
                         *$assets_loaded += 1;
-                        animate_step!($display_progress, $assets_loaded, $total_assets, $animation_speed, &status, $draw_fn);
+                        animate_step!(
+                            $display_progress,
+                            $assets_loaded,
+                            $total_assets,
+                            $animation_speed,
+                            &status,
+                            $draw_fn
+                        );
                     }
-                    Err(e) => eprintln!("[ERROR] Failed to load {} {}: {:?}", $type_name.to_lowercase(), path.display(), e),
+                    Err(e) => eprintln!(
+                        "[ERROR] Failed to load {} {}: {:?}",
+                        $type_name.to_lowercase(),
+                        path.display(),
+                        e
+                    ),
                 }
             }
         }
@@ -304,10 +364,22 @@ fn find_all_asset_files() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>, Vec<Path
     // 3. Gather user-installed and theme assets
     if let Some(user_dir) = get_user_data_dir() {
         // Add assets from global user folders first
-        background_files_set.extend(utils::find_asset_files(&user_dir.join("backgrounds").to_string_lossy(), &["png", "mp4"]));
-        logo_files_set.extend(utils::find_asset_files(&user_dir.join("logos").to_string_lossy(), &["png"]));
-        font_files_set.extend(utils::find_asset_files(&user_dir.join("fonts").to_string_lossy(), &["ttf"]));
-        music_files_set.extend(utils::find_asset_files(&user_dir.join("bgm").to_string_lossy(), &["ogg", "wav"]));
+        background_files_set.extend(utils::find_asset_files(
+            &user_dir.join("backgrounds").to_string_lossy(),
+            &["png", "mp4"],
+        ));
+        logo_files_set.extend(utils::find_asset_files(
+            &user_dir.join("logos").to_string_lossy(),
+            &["png"],
+        ));
+        font_files_set.extend(utils::find_asset_files(
+            &user_dir.join("fonts").to_string_lossy(),
+            &["ttf"],
+        ));
+        music_files_set.extend(utils::find_asset_files(
+            &user_dir.join("bgm").to_string_lossy(),
+            &["ogg", "wav"],
+        ));
 
         // --- REVISED LOGIC for scanning theme folders ---
         let theme_dir = user_dir.join("themes");
@@ -317,16 +389,21 @@ fn find_all_asset_files() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>, Vec<Path
                     let theme_path = entry.path();
 
                     // Find all assets within this theme folder just ONCE
-                    let theme_images = utils::find_asset_files(&theme_path.to_string_lossy(), &["png", "mp4"]);
-                    let theme_fonts = utils::find_asset_files(&theme_path.to_string_lossy(), &["ttf"]);
-                    let theme_music = utils::find_asset_files(&theme_path.to_string_lossy(), &["wav", "ogg"]);
+                    let theme_images =
+                        utils::find_asset_files(&theme_path.to_string_lossy(), &["png", "mp4"]);
+                    let theme_fonts =
+                        utils::find_asset_files(&theme_path.to_string_lossy(), &["ttf"]);
+                    let theme_music =
+                        utils::find_asset_files(&theme_path.to_string_lossy(), &["wav", "ogg"]);
 
                     // Now, intelligently sort the images into the correct sets based on filename
                     for image_path in theme_images {
                         if let Some(filename) = image_path.file_name().and_then(|s| s.to_str()) {
                             if filename.ends_with("_logo.png") {
                                 logo_files_set.insert(image_path);
-                            } else if filename.ends_with("_background.png") || filename.ends_with("_background.mp4") {
+                            } else if filename.ends_with("_background.png")
+                                || filename.ends_with("_background.mp4")
+                            {
                                 background_files_set.insert(image_path);
                             }
                         }
@@ -364,26 +441,37 @@ async fn load_all_assets(
     music_files: &[PathBuf],
     scale_factor: f32,
 ) -> (
-    HashMap<String, Texture2D>, // background cache (images)
+    HashMap<String, Texture2D>,   // background cache (images)
     HashMap<String, VideoPlayer>, // video cache
-    HashMap<String, Texture2D>, // logo cache
+    HashMap<String, Texture2D>,   // logo cache
     HashMap<String, SamplesBuffer>,
     HashMap<String, Font>, // font cache
-    SoundEffects, // sfx
+    SoundEffects,          // sfx
 ) {
     let draw_loading_screen = |status_message: &str, progress: f32| {
         let font_size = (16.0 * scale_factor) as u16;
         let line_spacing = 10.0 * scale_factor;
         let lines: Vec<&str> = display_message.lines().collect();
 
-        let total_text_height = (lines.len() as f32 * font_size as f32) + ((lines.len() - 1) as f32 * line_spacing);
+        let total_text_height =
+            (lines.len() as f32 * font_size as f32) + ((lines.len() - 1) as f32 * line_spacing);
         let y_start = screen_height() / 2.0 - total_text_height / 2.0;
 
         for (i, line) in lines.iter().enumerate() {
             let line_width = measure_text(line, Some(font), font_size, 1.0).width;
             let x = (screen_width() - line_width) / 2.0; // Center each line individually
             let y = y_start + (i as f32 * (font_size as f32 + line_spacing));
-            draw_text_ex(line, x, y, TextParams { font: Some(font), font_size, color: WHITE, ..Default::default() });
+            draw_text_ex(
+                line,
+                x,
+                y,
+                TextParams {
+                    font: Some(font),
+                    font_size,
+                    color: WHITE,
+                    ..Default::default()
+                },
+            );
         }
 
         // --- Scale and draw the progress bar ---
@@ -404,8 +492,8 @@ async fn load_all_assets(
             bar_x + inset,
             bar_y + inset,
             (bar_width - inset * 2.0) * safe_progress, // The fill width, adjusted for the border
-            bar_height - inset * 2.0, // The fill height, adjusted for the border
-            RED
+            bar_height - inset * 2.0,                  // The fill height, adjusted for the border
+            RED,
         );
 
         // loading status
@@ -418,13 +506,19 @@ async fn load_all_assets(
             status_message,
             10.0 * scale_factor, // A small margin from the left
             status_y,
-            TextParams { font: Some(font), font_size: status_font_size, color: WHITE, ..Default::default() },
+            TextParams {
+                font: Some(font),
+                font_size: status_font_size,
+                color: WHITE,
+                ..Default::default()
+            },
         );
     };
 
     // --- COUNT TOTAL ASSETS ---
     // This is now correct because the file lists are passed into the function
-    let total_asset_count = 3 + 4 + background_files.len() + logo_files.len() + font_files.len() + music_files.len();
+    let total_asset_count =
+        3 + 4 + background_files.len() + logo_files.len() + font_files.len() + music_files.len();
 
     // --- SETUP ---
     let mut assets_loaded = 0;
@@ -444,57 +538,134 @@ async fn load_all_assets(
 
     // background
     let status = "LOADING DEFAULT BACKGROUND...".to_string();
-    let default_bg = Texture2D::from_file_with_format(include_bytes!("../background.png"), Some(ImageFormat::Png));
+    let default_bg = Texture2D::from_file_with_format(
+        include_bytes!("../background.png"),
+        Some(ImageFormat::Png),
+    );
     background_cache.insert("Default".to_string(), default_bg);
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     // logo
     let status = "LOADING LOGOS...".to_string();
-    let default_logo = Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
+    let default_logo =
+        Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
     logo_cache.insert("Kazeta+ (Default)".to_string(), default_logo);
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
-    let original_logo = Texture2D::from_file_with_format(include_bytes!("../logos/original_logo.png"), Some(ImageFormat::Png));
+    let original_logo = Texture2D::from_file_with_format(
+        include_bytes!("../logos/original_logo.png"),
+        Some(ImageFormat::Png),
+    );
     logo_cache.insert("Kazeta (Original)".to_string(), original_logo);
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     // font
     let status = "LOADING DEFAULT FONT...".to_string();
     let default_font = load_ttf_font_from_bytes(include_bytes!("../november.ttf")).unwrap();
     font_cache.insert("Default".to_string(), default_font);
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     // sfx
     let status = "LOADING DEFAULT SFX...".to_string();
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     assets_loaded += 1;
-    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+    animate_step!(
+        &mut display_progress,
+        &mut assets_loaded,
+        total_asset_count,
+        animation_speed,
+        &status,
+        &draw_loading_screen
+    );
 
     // --- CUSTOM ASSETS ---
     println!("\n[INFO] Pre-loading custom assets...");
 
     // separate image backgrounds from video backgrounds
-    let image_backgrounds: Vec<PathBuf> = background_files.iter()
+    let image_backgrounds: Vec<PathBuf> = background_files
+        .iter()
         .filter(|p| p.extension().map_or(false, |e| e == "png"))
-        .cloned().collect();
+        .cloned()
+        .collect();
 
-    let video_backgrounds: Vec<PathBuf> = background_files.iter()
+    let video_backgrounds: Vec<PathBuf> = background_files
+        .iter()
         .filter(|p| p.extension().map_or(false, |e| e == "mp4"))
-        .cloned().collect();
+        .cloned()
+        .collect();
 
-    load_asset_category!(&image_backgrounds, "BACKGROUND", load_texture, &mut background_cache, &mut assets_loaded, total_asset_count, &mut display_progress, animation_speed, &draw_loading_screen);
+    load_asset_category!(
+        &image_backgrounds,
+        "BACKGROUND",
+        load_texture,
+        &mut background_cache,
+        &mut assets_loaded,
+        total_asset_count,
+        &mut display_progress,
+        animation_speed,
+        &draw_loading_screen
+    );
 
     // Load Videos Manually (Macros struggle with complex types like VideoPlayer)
     for path in video_backgrounds {
@@ -509,18 +680,54 @@ async fn load_all_assets(
                     println!("[OK] Loaded video: {}", file_name);
                     video_cache.insert(file_name.to_string(), player);
                     assets_loaded += 1;
-                    animate_step!(&mut display_progress, &mut assets_loaded, total_asset_count, animation_speed, &status, &draw_loading_screen);
+                    animate_step!(
+                        &mut display_progress,
+                        &mut assets_loaded,
+                        total_asset_count,
+                        animation_speed,
+                        &status,
+                        &draw_loading_screen
+                    );
                 }
                 Err(e) => eprintln!("[ERROR] Failed to load video {}: {}", file_name, e),
             }
         }
     }
 
-    load_asset_category!(logo_files, "LOGO", load_texture, &mut logo_cache, &mut assets_loaded, total_asset_count, &mut display_progress, animation_speed, &draw_loading_screen);
-    load_asset_category!(font_files, "FONT", load_ttf_font, &mut font_cache, &mut assets_loaded, total_asset_count, &mut display_progress, animation_speed, &draw_loading_screen);
+    load_asset_category!(
+        logo_files,
+        "LOGO",
+        load_texture,
+        &mut logo_cache,
+        &mut assets_loaded,
+        total_asset_count,
+        &mut display_progress,
+        animation_speed,
+        &draw_loading_screen
+    );
+    load_asset_category!(
+        font_files,
+        "FONT",
+        load_ttf_font,
+        &mut font_cache,
+        &mut assets_loaded,
+        total_asset_count,
+        &mut display_progress,
+        animation_speed,
+        &draw_loading_screen
+    );
 
     println!("\n[INFO] Pre-loading music files...");
-    load_audio_category!(music_files, "MUSIC", &mut music_cache, &mut assets_loaded, total_asset_count, &mut display_progress, animation_speed, &draw_loading_screen);
+    load_audio_category!(
+        music_files,
+        "MUSIC",
+        &mut music_cache,
+        &mut assets_loaded,
+        total_asset_count,
+        &mut display_progress,
+        animation_speed,
+        &draw_loading_screen
+    );
 
     // Final draw at 100%
     let status = "LOADING COMPLETE".to_string();
@@ -532,7 +739,14 @@ async fn load_all_assets(
     //let sound_effects = audio::SoundEffects::load(&config.sfx_pack).await;
     let sound_effects = audio::SoundEffects::load(&config.sfx_pack);
 
-    (background_cache, video_cache, logo_cache, music_cache, font_cache, sound_effects)
+    (
+        background_cache,
+        video_cache,
+        logo_cache,
+        music_cache,
+        font_cache,
+        sound_effects,
+    )
 }
 
 // ===================================
@@ -551,7 +765,10 @@ async fn main() {
 
     let mut dialogs: Vec<Dialog> = Vec::new();
     let mut dialog_state = DialogState::None;
-    let placeholder = Texture2D::from_file_with_format(include_bytes!("../placeholder.png"), Some(ImageFormat::Png));
+    let placeholder = Texture2D::from_file_with_format(
+        include_bytes!("../placeholder.png"),
+        Some(ImageFormat::Png),
+    );
     let mut icon_cache: HashMap<String, Texture2D> = HashMap::new();
     let mut icon_queue: Vec<(String, String)> = Vec::new();
     let mut playtime_cache: PlaytimeCache = HashMap::new();
@@ -623,8 +840,15 @@ async fn main() {
     println!("[Debug] Sinks loaded at startup: {:#?}", available_sinks);
 
     // If the saved sink isn't available, reset the config value to "Auto"
-    if !available_sinks.iter().any(|s| s.name == config.audio_output) && config.audio_output != "Auto" {
-        println!("[WARN] Saved audio sink '{}' not found. Reverting to 'Auto'.", config.audio_output);
+    if !available_sinks
+        .iter()
+        .any(|s| s.name == config.audio_output)
+        && config.audio_output != "Auto"
+    {
+        println!(
+            "[WARN] Saved audio sink '{}' not found. Reverting to 'Auto'.",
+            config.audio_output
+        );
         config.audio_output = "Auto".to_string();
         config.save();
     }
@@ -673,8 +897,14 @@ async fn main() {
     let scale_factor = screen_height() / BASE_SCREEN_HEIGHT;
 
     // load them
-    let (mut background_cache, mut video_cache, mut logo_cache, mut music_cache, mut font_cache, mut sound_effects) =
-    load_all_assets(
+    let (
+        mut background_cache,
+        mut video_cache,
+        mut logo_cache,
+        mut music_cache,
+        mut font_cache,
+        mut sound_effects,
+    ) = load_all_assets(
         &config,
         loading_text,
         &startup_font,
@@ -682,8 +912,9 @@ async fn main() {
         &logo_files,
         &font_files,
         &music_files,
-        scale_factor
-    ).await;
+        scale_factor,
+    )
+    .await;
 
     // Note: apply_resolution() is not called here because we start in fullscreen mode.
     // Resolution settings only apply when the user switches to windowed mode in settings.
@@ -700,10 +931,13 @@ async fn main() {
     // logos
     // --- Create a custom-ordered list of logo choices for the UI ---
     // 1. Get all the custom logo filenames from the cache keys (excluding the default)
-    let mut custom_logos: Vec<String> = logo_cache.keys()
-    .filter(|k| *k != "Kazeta+ (Default)" && *k != "Kazeta (Original)" && k.ends_with("_logo.png")) // Add this filter
-    .cloned()
-    .collect();
+    let mut custom_logos: Vec<String> = logo_cache
+        .keys()
+        .filter(|k| {
+            *k != "Kazeta+ (Default)" && *k != "Kazeta (Original)" && k.ends_with("_logo.png")
+        }) // Add this filter
+        .cloned()
+        .collect();
     custom_logos.sort(); // Sort just the custom logos alphabetically
 
     // 2. Create the final list with our specific order
@@ -723,12 +957,14 @@ async fn main() {
     };
 
     // backgrounds
-    let mut background_choices: Vec<String> = background_cache.keys()
+    let mut background_choices: Vec<String> = background_cache
+        .keys()
         .filter(|k| k.ends_with("_background.png") || *k == "Default") // Add this filter
         .cloned()
         .collect();
 
-    let video_choices: Vec<String> = video_cache.keys() // video backgrounds
+    let video_choices: Vec<String> = video_cache
+        .keys() // video backgrounds
         .filter(|k| k.ends_with("_background.mp4"))
         .cloned()
         .collect();
@@ -743,18 +979,23 @@ async fn main() {
     // bgm
     let mut bgm_choices: Vec<String> = vec!["OFF".to_string()];
     let track_names: Vec<String> = music_files
-    .iter()
-    .filter_map(|path| path.file_name())
-    .filter_map(|name| name.to_str())
-    .map(|s| s.to_string())
-    .collect();
+        .iter()
+        .filter_map(|path| path.file_name())
+        .filter_map(|name| name.to_str())
+        .map(|s| s.to_string())
+        .collect();
     bgm_choices.extend(track_names);
 
     let mut current_bgm: Option<Sink> = None;
 
     // At the end of your setup, start the BGM based on the config
     if let Some(track_name) = &config.bgm_track {
-        play_new_bgm(track_name, config.bgm_volume, &music_cache, &mut current_bgm);
+        play_new_bgm(
+            track_name,
+            config.bgm_volume,
+            &music_cache,
+            &mut current_bgm,
+        );
     }
 
     // Initialize gamepad support
@@ -768,7 +1009,9 @@ async fn main() {
         eprintln!("[BIOS] Warning: Failed to start overlay daemon: {}", e);
         eprintln!("[BIOS] Overlay will still be available when games launch");
     } else {
-        println!("[BIOS] Overlay daemon started - press F12, Ctrl+O, or Guide button to open overlay");
+        println!(
+            "[BIOS] Overlay daemon started - press F12, Ctrl+O, or Guide button to open overlay"
+        );
     }
 
     // SPLASH SCREEN
@@ -808,12 +1051,16 @@ async fn main() {
             // Try to find the custom splash video file
             if let Some(user_dir) = get_user_data_dir() {
                 // Check in theme-specific directory first
-                let theme_splash_path = user_dir.join("themes").join(&config.theme).join(&config.splash_video);
+                let theme_splash_path = user_dir
+                    .join("themes")
+                    .join(&config.theme)
+                    .join(&config.splash_video);
                 if theme_splash_path.exists() {
                     video_player = VideoPlayer::new(&theme_splash_path).ok();
                 } else {
                     // Check in global backgrounds directory
-                    let global_splash_path = user_dir.join("backgrounds").join(&config.splash_video);
+                    let global_splash_path =
+                        user_dir.join("backgrounds").join(&config.splash_video);
                     if global_splash_path.exists() {
                         video_player = VideoPlayer::new(&global_splash_path).ok();
                     }
@@ -831,11 +1078,15 @@ async fn main() {
         }
 
         // Fallback logo if video fails
-        let fallback_logo = Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
+        let fallback_logo =
+            Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
 
         let state_start_time = get_time();
         // Use video duration, or fallback to 3.0 seconds
-        let duration = video_player.as_ref().map(|vp| vp.duration_secs).unwrap_or(3.0);
+        let duration = video_player
+            .as_ref()
+            .map(|vp| vp.duration_secs)
+            .unwrap_or(3.0);
 
         loop {
             // --- Input Skipping ---
@@ -877,7 +1128,9 @@ async fn main() {
                     elapsed / 0.5
                 } else if elapsed > duration - 0.5 {
                     (duration - elapsed) / 0.5
-                } else { 1.0 } as f32;
+                } else {
+                    1.0
+                } as f32;
 
                 let aspect_ratio = fallback_logo.height() / fallback_logo.width();
                 let scaled_width = 200.0 * (screen_height() / BASE_SCREEN_HEIGHT);
@@ -890,8 +1143,8 @@ async fn main() {
                     Color::new(1.0, 1.0, 1.0, alpha),
                     DrawTextureParams {
                         dest_size: Some(vec2(scaled_width, scaled_height)),
-                    ..Default::default()
-                    }
+                        ..Default::default()
+                    },
                 );
             }
             next_frame().await;
@@ -974,12 +1227,10 @@ async fn main() {
 
     // Spawn background thread for storage media detection
     let thread_storage_state = storage_state.clone();
-    thread::spawn(move || {
-        loop {
-            thread::sleep(time::Duration::from_secs(1));
-            if let Ok(mut state) = thread_storage_state.lock() {
-                state.update_media();
-            }
+    thread::spawn(move || loop {
+        thread::sleep(time::Duration::from_secs(1));
+        if let Ok(mut state) = thread_storage_state.lock() {
+            state.update_media();
         }
     });
 
@@ -996,8 +1247,13 @@ async fn main() {
     // BEGINNING OF MAIN LOOP
     loop {
         let _active_theme = loaded_themes.get(&config.theme).unwrap_or_else(|| {
-            println!("[WARN] Active theme '{}' not found. Falling back to 'Default'.", &config.theme);
-            loaded_themes.get("Default").expect("Default fallback theme is also missing!")
+            println!(
+                "[WARN] Active theme '{}' not found. Falling back to 'Default'.",
+                &config.theme
+            );
+            loaded_themes
+                .get("Default")
+                .expect("Default fallback theme is also missing!")
         });
         let scale_factor = screen_height() / BASE_SCREEN_HEIGHT;
 
@@ -1088,11 +1344,11 @@ async fn main() {
             match dialog_state {
                 DialogState::Opening => {
                     dialog_state = DialogState::Open;
-                },
+                }
                 DialogState::Closing => {
                     dialog_state = DialogState::None;
                     dialogs.clear();
-                },
+                }
                 _ => {}
             }
         }
@@ -1126,11 +1382,11 @@ async fn main() {
                     &config,
                 );
 
-            match action {
-                ui::blades::BladeAction::None => {},
-                ui::blades::BladeAction::LaunchGame((cart_info, kzi_path)) => {
-                    // Mark that this game flow started from Blades so Back can return here.
-                    return_to_blades_after_game = true;
+                match action {
+                    ui::blades::BladeAction::None => {}
+                    ui::blades::BladeAction::LaunchGame((cart_info, kzi_path)) => {
+                        // Mark that this game flow started from Blades so Back can return here.
+                        return_to_blades_after_game = true;
 
                         if cart_info.runtime.as_deref() == Some("vba-m") {
                             // mGBA multiplayer/save-slot flow (reuse existing dialog state)
@@ -1147,13 +1403,19 @@ async fn main() {
 
                             if max_players > 1 {
                                 mgba_launch_step = GameLaunchStep::SelectPlayerCount;
-                                mgba_launch_dialog = Some(dialog::create_player_count_dialog(max_players));
+                                mgba_launch_dialog =
+                                    Some(dialog::create_player_count_dialog(max_players));
                             } else {
                                 mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: 1 };
                                 let save_dir = save::get_mgba_save_dir(&cart_info.id);
                                 let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                                let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                                let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
+                                let existing_saves =
+                                    dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info
+                                    .player_saves
+                                    .get(0)
+                                    .and_then(|s| s.as_ref())
+                                    .is_some();
                                 mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                     &existing_saves,
                                     1,
@@ -1169,7 +1431,10 @@ async fn main() {
                                 {
                                     let mut logs = log_messages.lock().unwrap();
                                     logs.push("--- LAUNCH FROM BLADES ---".to_string());
-                                    logs.push(format!("Name: {}", cart_info.name.as_deref().unwrap_or("N/A")));
+                                    logs.push(format!(
+                                        "Name: {}",
+                                        cart_info.name.as_deref().unwrap_or("N/A")
+                                    ));
                                 }
                                 match save::launch_game(&cart_info, &kzi_path) {
                                     Ok(mut child) => {
@@ -1177,7 +1442,10 @@ async fn main() {
                                         game_process = Some(child);
                                     }
                                     Err(e) => {
-                                        log_messages.lock().unwrap().push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
+                                        log_messages
+                                            .lock()
+                                            .unwrap()
+                                            .push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
                                     }
                                 }
                                 current_screen = Screen::Debug;
@@ -1186,25 +1454,27 @@ async fn main() {
                                     &cart_info,
                                     &kzi_path,
                                     &mut current_bgm,
-                                    &music_cache
+                                    &music_cache,
                                 );
                             }
                         }
                     }
                     ui::blades::BladeAction::GoToScreen(screen) => {
-                        if matches!(screen, Screen::GeneralSettings | Screen::AudioSettings | Screen::GuiSettings | Screen::AssetSettings | Screen::SaveData) {
+                        if matches!(
+                            screen,
+                            Screen::GeneralSettings
+                                | Screen::AudioSettings
+                                | Screen::GuiSettings
+                                | Screen::AssetSettings
+                                | Screen::SaveData
+                        ) {
                             back_to_blades = true;
                         }
                         current_screen = screen;
                     }
                 }
 
-                ui::blades::draw(
-                    &blades_state,
-                    &font_cache,
-                    &config,
-                    get_time(),
-                );
+                ui::blades::draw(&blades_state, &font_cache, &config, get_time());
             }
             Screen::FadingOut => {
                 // During fade, only render, don't process input
@@ -1238,8 +1508,18 @@ async fn main() {
 
                     // Draw fade overlay
                     let alpha = fade_progress as f32;
-                    draw_rectangle(0.0, 0.0, screen_width(), screen_height(),
-                        Color { r: 0.0, g: 0.0, b: 0.0, a: alpha });
+                    draw_rectangle(
+                        0.0,
+                        0.0,
+                        screen_width(),
+                        screen_height(),
+                        Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: alpha,
+                        },
+                    );
 
                     // If fade is complete, wait for linger duration then exit
                     if fade_progress >= 1.0 {
@@ -1249,7 +1529,7 @@ async fn main() {
                         }
                     }
                 }
-            },
+            }
             Screen::MainMenu => {
                 ui::main_menu::update(
                     &mut current_screen,
@@ -1288,10 +1568,13 @@ async fn main() {
                     &current_time_str,
                     &app_state.gcc_adapter_poll_rate,
                     scale_factor,
-                    flash_message.as_ref().map(|(msg, _)| msg.as_str())
+                    flash_message.as_ref().map(|(msg, _)| msg.as_str()),
                 );
-            },
-            Screen::GeneralSettings | Screen::AudioSettings | Screen::GuiSettings | Screen::AssetSettings => {
+            }
+            Screen::GeneralSettings
+            | Screen::AudioSettings
+            | Screen::GuiSettings
+            | Screen::AssetSettings => {
                 // --- Determine what to draw BEFORE updating state ---
                 let (page_number, options) = match current_screen {
                     Screen::GeneralSettings => (1, ui::settings::GENERAL_SETTINGS),
@@ -1303,23 +1586,50 @@ async fn main() {
 
                 // --- Handle input and state changes ---
                 ui::settings::update(
-                    &mut current_screen, &input_state, &mut config, &sound_pack_choices, &loaded_themes, &mut settings_menu_selection,
-                    &mut sound_effects, &mut confirm_selection,
-                    &mut brightness, &mut system_volume, &available_sinks, &mut current_bgm,
-                    &bgm_choices, &music_cache, &mut sfx_pack_to_reload, &logo_choices,
-                    &background_choices, &font_choices, &mut animation_state, &mut back_to_blades,
+                    &mut current_screen,
+                    &input_state,
+                    &mut config,
+                    &sound_pack_choices,
+                    &loaded_themes,
+                    &mut settings_menu_selection,
+                    &mut sound_effects,
+                    &mut confirm_selection,
+                    &mut brightness,
+                    &mut system_volume,
+                    &available_sinks,
+                    &mut current_bgm,
+                    &bgm_choices,
+                    &music_cache,
+                    &mut sfx_pack_to_reload,
+                    &logo_choices,
+                    &background_choices,
+                    &font_choices,
+                    &mut animation_state,
+                    &mut back_to_blades,
                 );
 
                 // --- Draw the UI ---
                 if page_number > 0 {
                     ui::settings::render_settings_page(
-                        page_number, options, &logo_cache, &background_cache, &mut video_cache, &font_cache,
-                        &mut config, settings_menu_selection, &animation_state, &mut background_state,
-                        &battery_info, &current_time_str, &app_state.gcc_adapter_poll_rate,
-                        scale_factor, system_volume, brightness,
+                        page_number,
+                        options,
+                        &logo_cache,
+                        &background_cache,
+                        &mut video_cache,
+                        &font_cache,
+                        &mut config,
+                        settings_menu_selection,
+                        &animation_state,
+                        &mut background_state,
+                        &battery_info,
+                        &current_time_str,
+                        &app_state.gcc_adapter_poll_rate,
+                        scale_factor,
+                        system_volume,
+                        brightness,
                     );
                 }
-            },
+            }
             Screen::Extras => {
                 ui::extras_menu::update(
                     &mut current_screen,
@@ -1408,7 +1718,10 @@ async fn main() {
                         if cart_info.runtime.as_deref() == Some("vba-m") {
                             let runtime_name = cart_info.runtime.as_deref().unwrap_or("unknown");
                             println!("[Debug] {} game detected!", runtime_name);
-                            println!("[Debug] multiplayer_support: {:?}", cart_info.multiplayer_support);
+                            println!(
+                                "[Debug] multiplayer_support: {:?}",
+                                cart_info.multiplayer_support
+                            );
                             println!("[Debug] max_players: {:?}", cart_info.max_players);
 
                             // Store the pending game info
@@ -1432,7 +1745,8 @@ async fn main() {
                                 println!("[Debug] Showing player count dialog");
                                 // Show player count selection first
                                 mgba_launch_step = GameLaunchStep::SelectPlayerCount;
-                                mgba_launch_dialog = Some(dialog::create_player_count_dialog(max_players));
+                                mgba_launch_dialog =
+                                    Some(dialog::create_player_count_dialog(max_players));
                             } else {
                                 println!("[Debug] Single player - showing save slot dialog");
                                 // Single player only - go straight to save selection
@@ -1441,8 +1755,13 @@ async fn main() {
                                 // Find existing save files
                                 let save_dir = save::get_mgba_save_dir(&cart_info.id);
                                 let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                                let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                                let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
+                                let existing_saves =
+                                    dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info
+                                    .player_saves
+                                    .get(0)
+                                    .and_then(|s| s.as_ref())
+                                    .is_some();
 
                                 mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                     &existing_saves,
@@ -1453,73 +1772,116 @@ async fn main() {
                             }
 
                             current_screen = Screen::GameLaunchOptions;
-                } else if DEV_MODE {
-                    // --- DEBUG MODE (non-mGBA) ---
-                    log_messages.lock().unwrap().clear();
-                    { // Scoped lock to add messages
-                        let mut logs = log_messages.lock().unwrap();
+                        } else if DEV_MODE {
+                            // --- DEBUG MODE (non-mGBA) ---
+                            log_messages.lock().unwrap().clear();
+                            {
+                                // Scoped lock to add messages
+                                let mut logs = log_messages.lock().unwrap();
                                 logs.push("--- CARTRIDGE FOUND ---".to_string());
-                                logs.push(format!("Name: {}", cart_info.name.as_deref().unwrap_or("N/A")));
+                                logs.push(format!(
+                                    "Name: {}",
+                                    cart_info.name.as_deref().unwrap_or("N/A")
+                                ));
                                 logs.push(format!("ID: {}", cart_info.id));
                                 logs.push(format!("Exec: {}", cart_info.exec));
-                                logs.push(format!("Runtime: {}", cart_info.runtime.as_deref().unwrap_or("None")));
+                                logs.push(format!(
+                                    "Runtime: {}",
+                                    cart_info.runtime.as_deref().unwrap_or("None")
+                                ));
                                 logs.push(format!("KZI Path: {}", kzi_path.display()));
                             }
                             println!("[Debug] Single Cartridge Found! Preparing to launch...");
-                            println!("[Debug]   Name: {}", cart_info.name.as_deref().unwrap_or("N/A"));
+                            println!(
+                                "[Debug]   Name: {}",
+                                cart_info.name.as_deref().unwrap_or("N/A")
+                            );
                             println!("[Debug]   ID: {}", cart_info.id);
                             println!("[Debug]   Exec: {}", cart_info.exec);
-                            println!("[Debug]   Runtime: {}", cart_info.runtime.as_deref().unwrap_or("None"));
+                            println!(
+                                "[Debug]   Runtime: {}",
+                                cart_info.runtime.as_deref().unwrap_or("None")
+                            );
                             println!("[Debug]   KZI Path: {}", kzi_path.display());
 
                             // Start overlay daemon before launching game
                             if let Err(e) = crate::utils::start_overlay_daemon() {
-                                log_messages.lock().unwrap().push(format!("[WARNING] Failed to start overlay daemon: {}", e));
+                                log_messages.lock().unwrap().push(format!(
+                                    "[WARNING] Failed to start overlay daemon: {}",
+                                    e
+                                ));
                             }
 
                             match save::launch_game(&cart_info, &kzi_path) {
                                 Ok(mut child) => {
-                                    log_messages.lock().unwrap().push("\n--- LAUNCHING GAME ---".to_string());
+                                    log_messages
+                                        .lock()
+                                        .unwrap()
+                                        .push("\n--- LAUNCHING GAME ---".to_string());
                                     start_log_reader(&mut child, log_messages.clone());
                                     game_process = Some(child);
                                 }
                                 Err(e) => {
-                                    log_messages.lock().unwrap().push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
+                                    log_messages
+                                        .lock()
+                                        .unwrap()
+                                        .push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
                                 }
+                            }
+                            current_screen = Screen::Debug;
+                        } else {
+                            // --- PRODUCTION MODE (non-mGBA) ---
+                            (current_screen, fade_start_time) = trigger_game_launch(
+                                cart_info,
+                                kzi_path,
+                                &mut current_bgm,
+                                &music_cache,
+                            );
                         }
-                        current_screen = Screen::Debug;
-                    } else {
-                        // --- PRODUCTION MODE (non-mGBA) ---
-                        (current_screen, fade_start_time) = trigger_game_launch(
-                            cart_info,
-                            kzi_path,
-                            &mut current_bgm,
-                            &music_cache
-                        );
+                        // Reset the return flag once a launch path has been chosen/completed.
+                        return_to_blades_after_game = false;
                     }
-                    // Reset the return flag once a launch path has been chosen/completed.
-                    return_to_blades_after_game = false;
                 }
-            }
 
                 // --- Render ---
                 render_game_selection_menu(
-                    &available_games, &game_icon_cache, &placeholder, game_selection, &animation_state, &logo_cache,
-                    &background_cache, &mut video_cache, &font_cache, &config, &mut background_state,
-                    &battery_info, &current_time_str, &app_state.gcc_adapter_poll_rate, scale_factor
+                    &available_games,
+                    &game_icon_cache,
+                    &placeholder,
+                    game_selection,
+                    &animation_state,
+                    &logo_cache,
+                    &background_cache,
+                    &mut video_cache,
+                    &font_cache,
+                    &config,
+                    &mut background_state,
+                    &battery_info,
+                    &current_time_str,
+                    &app_state.gcc_adapter_poll_rate,
+                    scale_factor,
                 );
-            },
+            }
             Screen::GameLaunchOptions => {
                 // mGBA game launch options dialog (multiplayer & save file selection)
                 // Use an action enum to queue changes after render
                 enum DialogAction {
                     None,
                     Cancel,
-                    GoBackPlayer { prev_player: u8 },
+                    GoBackPlayer {
+                        prev_player: u8,
+                    },
                     GoBackToPlayerCount,
-                    SelectPlayerCount { count: u8 },
-                    SelectSaveSlot { slot: String, next_player: Option<u8> },
-                    ImportSave { player: u8 },
+                    SelectPlayerCount {
+                        count: u8,
+                    },
+                    SelectSaveSlot {
+                        slot: String,
+                        next_player: Option<u8>,
+                    },
+                    ImportSave {
+                        player: u8,
+                    },
                     Launch,
                 }
 
@@ -1547,7 +1909,9 @@ async fn main() {
                             }
                             GameLaunchStep::SelectSaveSlot { player } => {
                                 if *player > 1 {
-                                    action = DialogAction::GoBackPlayer { prev_player: player - 1 };
+                                    action = DialogAction::GoBackPlayer {
+                                        prev_player: player - 1,
+                                    };
                                 } else if mgba_launch_options.player_count > 1 {
                                     action = DialogAction::GoBackToPlayerCount;
                                 } else {
@@ -1595,9 +1959,21 @@ async fn main() {
 
                 // --- Render ---
                 render_game_selection_menu(
-                    &available_games, &game_icon_cache, &placeholder, game_selection, &animation_state, &logo_cache,
-                    &background_cache, &mut video_cache, &font_cache, &config, &mut background_state,
-                    &battery_info, &current_time_str, &app_state.gcc_adapter_poll_rate, scale_factor
+                    &available_games,
+                    &game_icon_cache,
+                    &placeholder,
+                    game_selection,
+                    &animation_state,
+                    &logo_cache,
+                    &background_cache,
+                    &mut video_cache,
+                    &font_cache,
+                    &config,
+                    &mut background_state,
+                    &battery_info,
+                    &current_time_str,
+                    &app_state.gcc_adapter_poll_rate,
+                    scale_factor,
                 );
 
                 if let Some(ref dialog) = mgba_launch_dialog {
@@ -1621,12 +1997,16 @@ async fn main() {
                     }
                     DialogAction::GoBackPlayer { prev_player } => {
                         mgba_launch_options.save_slots.pop();
-                        mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: prev_player };
+                        mgba_launch_step = GameLaunchStep::SelectSaveSlot {
+                            player: prev_player,
+                        };
                         if let Some((cart_info, _)) = &mgba_pending_game {
                             let save_dir = save::get_mgba_save_dir(&cart_info.id);
                             let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                            let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                            let can_import = cart_info.player_saves
+                            let existing_saves =
+                                dialog::find_existing_save_slots(&save_dir, &rom_name);
+                            let can_import = cart_info
+                                .player_saves
                                 .get((prev_player.saturating_sub(1)) as usize)
                                 .and_then(|s| s.as_ref())
                                 .is_some();
@@ -1642,7 +2022,8 @@ async fn main() {
                         mgba_launch_step = GameLaunchStep::SelectPlayerCount;
                         if let Some((cart_info, _)) = &mgba_pending_game {
                             let max_players = cart_info.max_players.unwrap_or(4);
-                            mgba_launch_dialog = Some(dialog::create_player_count_dialog(max_players));
+                            mgba_launch_dialog =
+                                Some(dialog::create_player_count_dialog(max_players));
                         }
                     }
                     DialogAction::SelectPlayerCount { count } => {
@@ -1651,8 +2032,13 @@ async fn main() {
                         if let Some((cart_info, _)) = &mgba_pending_game {
                             let save_dir = save::get_mgba_save_dir(&cart_info.id);
                             let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                            let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                            let can_import = cart_info.player_saves.get(0).and_then(|s| s.as_ref()).is_some();
+                            let existing_saves =
+                                dialog::find_existing_save_slots(&save_dir, &rom_name);
+                            let can_import = cart_info
+                                .player_saves
+                                .get(0)
+                                .and_then(|s| s.as_ref())
+                                .is_some();
                             mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
                                 &existing_saves,
                                 1,
@@ -1661,15 +2047,20 @@ async fn main() {
                             ));
                         }
                     }
-                    DialogAction::SelectSaveSlot { ref slot, next_player } => {
+                    DialogAction::SelectSaveSlot {
+                        ref slot,
+                        next_player,
+                    } => {
                         mgba_launch_options.save_slots.push(slot.clone());
                         if let Some(next_p) = next_player {
                             mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: next_p };
                             if let Some((cart_info, _)) = &mgba_pending_game {
                                 let save_dir = save::get_mgba_save_dir(&cart_info.id);
                                 let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                                let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                                let can_import = cart_info.player_saves
+                                let existing_saves =
+                                    dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                let can_import = cart_info
+                                    .player_saves
                                     .get((next_p.saturating_sub(1)) as usize)
                                     .and_then(|s| s.as_ref())
                                     .is_some();
@@ -1691,11 +2082,15 @@ async fn main() {
                                     mgba_launch_options.save_slots.push(slot_id);
                                     if player < mgba_launch_options.player_count {
                                         let next_p = player + 1;
-                                        mgba_launch_step = GameLaunchStep::SelectSaveSlot { player: next_p };
+                                        mgba_launch_step =
+                                            GameLaunchStep::SelectSaveSlot { player: next_p };
                                         let save_dir = save::get_mgba_save_dir(&cart_info.id);
-                                        let rom_name = save::get_rom_name_from_exec(&cart_info.exec);
-                                        let existing_saves = dialog::find_existing_save_slots(&save_dir, &rom_name);
-                                        let can_import = cart_info.player_saves
+                                        let rom_name =
+                                            save::get_rom_name_from_exec(&cart_info.exec);
+                                        let existing_saves =
+                                            dialog::find_existing_save_slots(&save_dir, &rom_name);
+                                        let can_import = cart_info
+                                            .player_saves
                                             .get((next_p.saturating_sub(1)) as usize)
                                             .and_then(|s| s.as_ref())
                                             .is_some();
@@ -1705,14 +2100,23 @@ async fn main() {
                                             cart_info.name.as_deref().unwrap_or(&cart_info.id),
                                             can_import,
                                         ));
-                                        flash_message = Some((format!("IMPORTED SAVE FOR P{}", player), FLASH_MESSAGE_DURATION));
+                                        flash_message = Some((
+                                            format!("IMPORTED SAVE FOR P{}", player),
+                                            FLASH_MESSAGE_DURATION,
+                                        ));
                                     } else {
-                                        flash_message = Some((format!("IMPORTED SAVE FOR P{}", player), FLASH_MESSAGE_DURATION));
+                                        flash_message = Some((
+                                            format!("IMPORTED SAVE FOR P{}", player),
+                                            FLASH_MESSAGE_DURATION,
+                                        ));
                                         launch_now = true;
                                     }
                                 }
                                 Err(e) => {
-                                    flash_message = Some((format!("IMPORT FAILED: {}", e), FLASH_MESSAGE_DURATION));
+                                    flash_message = Some((
+                                        format!("IMPORT FAILED: {}", e),
+                                        FLASH_MESSAGE_DURATION,
+                                    ));
                                 }
                             }
                         }
@@ -1738,24 +2142,40 @@ async fn main() {
                             {
                                 let mut logs = log_messages.lock().unwrap();
                                 logs.push("--- mGBA LAUNCH ---".to_string());
-                                logs.push(format!("Name: {}", cart_info.name.as_deref().unwrap_or("N/A")));
+                                logs.push(format!(
+                                    "Name: {}",
+                                    cart_info.name.as_deref().unwrap_or("N/A")
+                                ));
                                 logs.push(format!("Players: {}", launch_opts.player_count));
                                 logs.push(format!("Save slots: {:?}", launch_opts.save_slots));
                             }
 
                             // Start overlay daemon before launching game
                             if let Err(e) = crate::utils::start_overlay_daemon() {
-                                log_messages.lock().unwrap().push(format!("[WARNING] Failed to start overlay daemon: {}", e));
+                                log_messages.lock().unwrap().push(format!(
+                                    "[WARNING] Failed to start overlay daemon: {}",
+                                    e
+                                ));
                             }
 
-                            match save::launch_game_with_options(&cart_info, &kzi_path, Some(&launch_opts)) {
+                            match save::launch_game_with_options(
+                                &cart_info,
+                                &kzi_path,
+                                Some(&launch_opts),
+                            ) {
                                 Ok(mut child) => {
-                                    log_messages.lock().unwrap().push("\n--- LAUNCHING GAME ---".to_string());
+                                    log_messages
+                                        .lock()
+                                        .unwrap()
+                                        .push("\n--- LAUNCHING GAME ---".to_string());
                                     start_log_reader(&mut child, log_messages.clone());
                                     game_process = Some(child);
                                 }
                                 Err(e) => {
-                                    log_messages.lock().unwrap().push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
+                                    log_messages
+                                        .lock()
+                                        .unwrap()
+                                        .push(format!("\n--- LAUNCH FAILED ---\nError: {}", e));
                                 }
                             }
                             current_screen = Screen::Debug;
@@ -1764,7 +2184,10 @@ async fn main() {
                             std::env::set_var("MGBA_PLAYERS", launch_opts.player_count.to_string());
                             if launch_opts.player_count > 1 {
                                 std::env::set_var("MGBA_MULTIPLAYER", "true");
-                                std::env::set_var("MGBA_SAVE_SLOTS", launch_opts.save_slots.join(","));
+                                std::env::set_var(
+                                    "MGBA_SAVE_SLOTS",
+                                    launch_opts.save_slots.join(","),
+                                );
                             } else if !launch_opts.save_slots.is_empty() {
                                 std::env::set_var("MGBA_SAVE_SLOT", &launch_opts.save_slots[0]);
                             }
@@ -1773,7 +2196,7 @@ async fn main() {
                                 &cart_info,
                                 &kzi_path,
                                 &mut current_bgm,
-                                &music_cache
+                                &music_cache,
                             );
                         }
                     }
@@ -1784,7 +2207,7 @@ async fn main() {
                 if mgba_launch_dialog.is_none() && current_screen == Screen::GameLaunchOptions {
                     current_screen = Screen::GameSelection;
                 }
-            },
+            }
             Screen::Debug => {
                 // Stop the BGM
                 play_new_bgm("OFF", 0.0, &music_cache, &mut current_bgm);
@@ -1805,11 +2228,15 @@ async fn main() {
                         Ok(filename) => {
                             // Add a confirmation message to the log
                             //messages.push(format!("\nLOG SAVED TO {}", filename));
-                            flash_message = Some((format!("LOG SAVED TO {}", filename), FLASH_MESSAGE_DURATION));
+                            flash_message = Some((
+                                format!("LOG SAVED TO {}", filename),
+                                FLASH_MESSAGE_DURATION,
+                            ));
                         }
                         Err(e) => {
                             //messages.push(format!("\nERROR SAVING LOG: {}", e));
-                            flash_message = Some((format!("ERROR SAVING LOG: {}", e), FLASH_MESSAGE_DURATION));
+                            flash_message =
+                                Some((format!("ERROR SAVING LOG: {}", e), FLASH_MESSAGE_DURATION));
                         }
                     }
                 }
@@ -1844,7 +2271,7 @@ async fn main() {
                     &mut video_cache,
                     &mut background_state,
                 );
-            },
+            }
             Screen::ConfirmReset => {
                 // --- Input Handling ---
                 if input_state.left || input_state.right {
@@ -1856,14 +2283,16 @@ async fn main() {
                     sound_effects.play_back(&config);
                 }
                 if input_state.select {
-                    if confirm_selection == 0 { // User selected YES
+                    if confirm_selection == 0 {
+                        // User selected YES
                         //if let Err(e) = delete_config_file() {
                         if let Err(e) = Config::delete() {
                             println!("[ERROR] Failed to delete config file: {}", e);
                         }
                         current_screen = Screen::ResetComplete;
                         sound_effects.play_select(&config);
-                    } else { // User selected NO
+                    } else {
+                        // User selected NO
                         current_screen = Screen::GeneralSettings;
                         sound_effects.play_back(&config);
                     }
@@ -1872,41 +2301,72 @@ async fn main() {
                 // --- Render ---
                 // First, render the settings page in the background
                 render_settings_page(
-                    1, &GENERAL_SETTINGS, &logo_cache, &background_cache, &mut video_cache, &font_cache,
-                    &mut config, settings_menu_selection, &animation_state, &mut background_state,
-                    &battery_info, &current_time_str, &app_state.gcc_adapter_poll_rate,
-                    scale_factor, system_volume, brightness,
+                    1,
+                    &GENERAL_SETTINGS,
+                    &logo_cache,
+                    &background_cache,
+                    &mut video_cache,
+                    &font_cache,
+                    &mut config,
+                    settings_menu_selection,
+                    &animation_state,
+                    &mut background_state,
+                    &battery_info,
+                    &current_time_str,
+                    &app_state.gcc_adapter_poll_rate,
+                    scale_factor,
+                    system_volume,
+                    brightness,
                 );
                 // Then, render the dialog box on top
                 render_dialog_box(
                     "Reset all settings to default?\nThis cannot be undone.",
                     Some(("YES", "NO")), // Options to display
-                    confirm_selection,  // Which option is selected
-                    &font_cache, &config, scale_factor, &animation_state,
+                    confirm_selection,   // Which option is selected
+                    &font_cache,
+                    &config,
+                    scale_factor,
+                    &animation_state,
                 );
-            },
+            }
             Screen::ResetComplete => {
                 // --- Input Handling ---
                 if input_state.select || input_state.back {
                     // Use the restart function you already have
-                    (current_screen, fade_start_time) = trigger_session_restart(&mut current_bgm, &music_cache);
+                    (current_screen, fade_start_time) =
+                        trigger_session_restart(&mut current_bgm, &music_cache);
                 }
 
                 // --- Render ---
                 render_settings_page(
-                    1, &GENERAL_SETTINGS, &logo_cache, &background_cache, &mut video_cache, &font_cache,
-                    &mut config, settings_menu_selection, &animation_state, &mut background_state,
-                    &battery_info, &current_time_str, &app_state.gcc_adapter_poll_rate,
-                    scale_factor, system_volume, brightness
+                    1,
+                    &GENERAL_SETTINGS,
+                    &logo_cache,
+                    &background_cache,
+                    &mut video_cache,
+                    &font_cache,
+                    &mut config,
+                    settings_menu_selection,
+                    &animation_state,
+                    &mut background_state,
+                    &battery_info,
+                    &current_time_str,
+                    &app_state.gcc_adapter_poll_rate,
+                    scale_factor,
+                    system_volume,
+                    brightness,
                 );
 
                 render_dialog_box(
                     "Settings have been reset.\nRestart required.",
                     None, // No YES/NO options needed
                     0,
-                    &font_cache, &config, scale_factor, &animation_state,
+                    &font_cache,
+                    &config,
+                    scale_factor,
+                    &animation_state,
                 );
-            },
+            }
             Screen::SaveData => {
                 // Process one item from the icon queue each frame to prevent stuttering.
                 if !icon_queue.is_empty() {
@@ -1917,32 +2377,70 @@ async fn main() {
                 }
 
                 ui::data::update(
-                    &mut input_state, &mut current_screen, &sound_effects, &config,
-                    &storage_state, &mut memories, &mut icon_cache, &mut icon_queue,
-                    &mut selected_memory, &mut scroll_offset, &mut dialogs, &mut dialog_state, &mut animation_state,
-                    scale_factor, &copy_op_state, &mut back_to_blades
-                ).await;
+                    &mut input_state,
+                    &mut current_screen,
+                    &sound_effects,
+                    &config,
+                    &storage_state,
+                    &mut memories,
+                    &mut icon_cache,
+                    &mut icon_queue,
+                    &mut selected_memory,
+                    &mut scroll_offset,
+                    &mut dialogs,
+                    &mut dialog_state,
+                    &mut animation_state,
+                    scale_factor,
+                    &copy_op_state,
+                    &mut back_to_blades,
+                )
+                .await;
 
-                render_background(&background_cache, &mut video_cache, &config, &mut background_state);
+                render_background(
+                    &background_cache,
+                    &mut video_cache,
+                    &config,
+                    &mut background_state,
+                );
 
                 ui::data::draw(
-                    selected_memory, &memories, &icon_cache, &font_cache,
-                    &config, &storage_state, &placeholder, scroll_offset,
-                    &input_state, &animation_state, &mut playtime_cache, &mut size_cache,
-                    scale_factor, &dialog_state
+                    selected_memory,
+                    &memories,
+                    &icon_cache,
+                    &font_cache,
+                    &config,
+                    &storage_state,
+                    &placeholder,
+                    scroll_offset,
+                    &input_state,
+                    &animation_state,
+                    &mut playtime_cache,
+                    &mut size_cache,
+                    scale_factor,
+                    &dialog_state,
                 );
 
                 // Draw dialogs on top if they are open
                 if let Some(dialog) = dialogs.last_mut() {
                     if dialog_state == DialogState::Open {
                         ui::render_dialog(
-                            dialog, &memories, selected_memory, &icon_cache, &font_cache,
-                            &config, &copy_op_state, &placeholder, scroll_offset,
-                            &animation_state, &mut playtime_cache, &mut size_cache, scale_factor
+                            dialog,
+                            &memories,
+                            selected_memory,
+                            &icon_cache,
+                            &font_cache,
+                            &config,
+                            &copy_op_state,
+                            &placeholder,
+                            scroll_offset,
+                            &animation_state,
+                            &mut playtime_cache,
+                            &mut size_cache,
+                            scale_factor,
                         );
                     }
                 }
-            },
+            }
             Screen::Wifi => {
                 ui::wifi::update(
                     &mut wifi_state,
@@ -2020,14 +2518,21 @@ async fn main() {
                 loaded_themes = theme::load_all_themes().await;
 
                 // 2. Re-scan all asset directories to find the new files
-                let (background_files, logo_files, font_files, music_files) = find_all_asset_files();
+                let (background_files, logo_files, font_files, music_files) =
+                    find_all_asset_files();
 
                 // --- Define a new message for reloading ---
                 let reloading_text = "APPLYING NEW THEME ASSETS...";
 
                 // 3. Re-load all assets and assign them to the original mutable caches
-                (background_cache, video_cache, logo_cache, music_cache, font_cache, sound_effects) =
-                load_all_assets(
+                (
+                    background_cache,
+                    video_cache,
+                    logo_cache,
+                    music_cache,
+                    font_cache,
+                    sound_effects,
+                ) = load_all_assets(
                     &config,
                     reloading_text,
                     &startup_font,
@@ -2036,7 +2541,8 @@ async fn main() {
                     &font_files,
                     &music_files,
                     scale_factor,
-                ).await;
+                )
+                .await;
 
                 // 4. After reloading, go back to the downloader screen
                 current_screen = Screen::ThemeDownloader;

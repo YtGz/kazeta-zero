@@ -1,7 +1,7 @@
-use std::panic;
-use futures;
-use crate::{*, ui::dialog::*, memory::*}; // Use wildcards for convenience or specify each type
 use crate::audio::SoundEffects;
+use crate::{memory::*, ui::dialog::*, *}; // Use wildcards for convenience or specify each type
+use futures;
+use std::panic;
 
 // This function will handle all input and state changes for the data screen
 pub async fn update(
@@ -29,7 +29,8 @@ pub async fn update(
     if let Ok(mut state) = storage_state.lock() {
         if state.needs_memory_refresh {
             if !state.media.is_empty() {
-                *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                *memories =
+                    load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
             } else {
                 *memories = Vec::new();
             }
@@ -57,7 +58,9 @@ pub async fn update(
                         if state.media.len() > 1 {
                             // Cycle wraps around
                             state.selected = (state.selected + 1) % state.media.len();
-                            *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                            *memories =
+                                load_memories(&state.media[state.selected], icon_cache, icon_queue)
+                                    .await;
                             *scroll_offset = 0;
                             sound_effects.play_select(&config);
                         }
@@ -65,7 +68,9 @@ pub async fn update(
                         // Next stops at end
                         if state.selected < state.media.len() - 1 {
                             state.selected += 1;
-                            *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                            *memories =
+                                load_memories(&state.media[state.selected], icon_cache, icon_queue)
+                                    .await;
                             *scroll_offset = 0;
                             sound_effects.play_select(&config);
                         } else {
@@ -76,7 +81,9 @@ pub async fn update(
                         // Prev stops at beginning
                         if state.selected > 0 {
                             state.selected -= 1;
-                            *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                            *memories =
+                                load_memories(&state.media[state.selected], icon_cache, icon_queue)
+                                    .await;
                             *scroll_offset = 0;
                             sound_effects.play_select(&config);
                         } else {
@@ -92,7 +99,8 @@ pub async fn update(
                     if input_state.select {
                         let memory_index = get_memory_index(*selected_memory, *scroll_offset);
                         if let Some(_) = memories.get(memory_index) {
-                            let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                            let (grid_pos, dialog_pos) =
+                                calculate_icon_transition_positions(*selected_memory, scale_factor);
                             animation_state.trigger_dialog_transition(grid_pos, dialog_pos);
                             dialogs.push(create_main_dialog(&storage_state));
                             *dialog_state = DialogState::Opening;
@@ -116,7 +124,8 @@ pub async fn update(
                             sound_effects.play_cursor_move(&config);
                         } else {
                             // Check if there are any saves in the next row
-                            let next_row_start = get_memory_index(GRID_WIDTH * GRID_HEIGHT, *scroll_offset);
+                            let next_row_start =
+                                get_memory_index(GRID_WIDTH * GRID_HEIGHT, *scroll_offset);
                             if next_row_start < memories.len() {
                                 *scroll_offset += 1;
                                 animation_state.trigger_transition(&config.cursor_transition_speed);
@@ -146,7 +155,7 @@ pub async fn update(
                             }
                         }
                     }
-                },
+                }
                 UIFocus::StorageLeft => {
                     if input_state.right {
                         input_state.ui_focus = UIFocus::StorageRight;
@@ -163,7 +172,12 @@ pub async fn update(
                         if let Ok(mut state) = storage_state.lock() {
                             if state.selected > 0 {
                                 state.selected -= 1;
-                                *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                                *memories = load_memories(
+                                    &state.media[state.selected],
+                                    icon_cache,
+                                    icon_queue,
+                                )
+                                .await;
                                 *scroll_offset = 0;
                                 sound_effects.play_select(&config);
                             } else {
@@ -172,7 +186,7 @@ pub async fn update(
                             }
                         }
                     }
-                },
+                }
                 UIFocus::StorageRight => {
                     if input_state.left {
                         input_state.ui_focus = UIFocus::StorageLeft;
@@ -189,7 +203,12 @@ pub async fn update(
                         if let Ok(mut state) = storage_state.lock() {
                             if state.selected < state.media.len() - 1 {
                                 state.selected += 1;
-                                *memories = load_memories(&state.media[state.selected], icon_cache, icon_queue).await;
+                                *memories = load_memories(
+                                    &state.media[state.selected],
+                                    icon_cache,
+                                    icon_queue,
+                                )
+                                .await;
                                 *scroll_offset = 0;
                                 sound_effects.play_select(&config);
                             } else {
@@ -198,9 +217,9 @@ pub async fn update(
                             }
                         }
                     }
-                },
+                }
             }
-        },
+        }
         DialogState::Open => {
             // When dialog is fully open, only render the dialog
             if let Some(dialog) = dialogs.last_mut() {
@@ -250,7 +269,8 @@ pub async fn update(
                 }
 
                 if cancel {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     sound_effects.play_back(&config);
@@ -260,21 +280,24 @@ pub async fn update(
             match (action_dialog_id.as_str(), action_option_value.as_str()) {
                 ("main", "COPY") => {
                     dialogs.push(create_copy_storage_dialog(&storage_state));
-                },
+                }
                 ("main", "DELETE") => {
                     dialogs.push(create_confirm_delete_dialog());
-                },
+                }
                 ("main", "CANCEL") => {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     //sound_effects.play_back(&config);
-                },
+                }
                 ("confirm_delete", "DELETE") => {
                     if let Ok(mut state) = storage_state.lock() {
                         let memory_index = get_memory_index(*selected_memory, *scroll_offset);
                         if let Some(mem) = memories.get(memory_index) {
-                            if let Err(e) = save::delete_save(&mem.id, &state.media[state.selected].id) {
+                            if let Err(e) =
+                                save::delete_save(&mem.id, &state.media[state.selected].id)
+                            {
                                 dialogs.push(create_error_dialog(format!("ERROR: {}", e)));
                             } else {
                                 state.needs_memory_refresh = true;
@@ -283,19 +306,23 @@ pub async fn update(
                             }
                         }
                     }
-                },
+                }
                 ("confirm_delete", "CANCEL") => {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     //sound_effects.play_back(&config);
-                },
+                }
                 ("copy_storage_select", target_id) if target_id != "CANCEL" => {
                     let memory_index = get_memory_index(*selected_memory, *scroll_offset);
                     let mem = memories[memory_index].clone();
                     let target_id = target_id.to_string();
                     if let Ok(state) = storage_state.lock() {
-                        let to_media = StorageMedia { id: target_id, free: 0 };
+                        let to_media = StorageMedia {
+                            id: target_id,
+                            free: 0,
+                        };
 
                         // Check if save already exists
                         if check_save_exists(&mem, &to_media, icon_cache, icon_queue).await {
@@ -308,34 +335,36 @@ pub async fn update(
                             });
                         }
                     }
-                },
+                }
                 ("copy_storage_select", "CANCEL") => {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     sound_effects.play_back(&config);
-                },
+                }
                 ("save_exists", "OK") => {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     sound_effects.play_back(&config);
-                },
+                }
                 ("error", "OK") => {
-                    let (grid_pos, dialog_pos) = calculate_icon_transition_positions(*selected_memory, scale_factor);
+                    let (grid_pos, dialog_pos) =
+                        calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
                     sound_effects.play_back(&config);
-                },
+                }
                 _ => {} // handles opening and closing states
             }
 
             if !icon_queue.is_empty() {
                 let (cart_id, icon_path) = icon_queue.remove(0);
                 let texture_future = load_texture(&icon_path);
-                let texture_result = panic::catch_unwind(|| {
-                    futures::executor::block_on(texture_future)
-                });
+                let texture_result =
+                    panic::catch_unwind(|| futures::executor::block_on(texture_future));
 
                 if let Ok(Ok(texture)) = texture_result {
                     icon_cache.insert(cart_id.clone(), texture);
@@ -353,7 +382,7 @@ pub async fn update(
                     copy_state.should_clear_dialogs = false;
                 }
             }
-        },
+        }
         _ => {}
     }
 }
@@ -405,8 +434,10 @@ pub fn draw(
         0.0
     };
 
-    if *dialog_state == DialogState::Opening || *dialog_state == DialogState::Closing || *dialog_state == DialogState::None {
-
+    if *dialog_state == DialogState::Opening
+        || *dialog_state == DialogState::Closing
+        || *dialog_state == DialogState::None
+    {
         // During opening, only render the main view and the transitioning icon
         // Only render the icon during transition
         if animation_state.dialog_transition_time > 0.0 {
@@ -418,12 +449,20 @@ pub fn draw(
                 };
 
                 let params = DrawTextureParams {
-                    dest_size: Some(Vec2 {x: TILE_SIZE, y: TILE_SIZE }),
-                    source: Some(Rect { x: 0.0, y: 0.0, h: icon.height(), w: icon.width() }),
+                    dest_size: Some(Vec2 {
+                        x: TILE_SIZE,
+                        y: TILE_SIZE,
+                    }),
+                    source: Some(Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        h: icon.height(),
+                        w: icon.width(),
+                    }),
                     rotation: 0.0,
                     flip_x: false,
                     flip_y: false,
-                    pivot: None
+                    pivot: None,
                 };
 
                 let icon_pos = animation_state.get_dialog_transition_pos();
@@ -453,12 +492,19 @@ pub fn draw(
 
             draw_rectangle_lines(
                 // Add offset_x to X and offset_y to Y
-                offset_x + pixel_pos(xp, scale_factor) - (3.0 * scale_factor) - selected_offset - offset,
-                offset_y + pixel_pos(yp, scale_factor) - (3.0 * scale_factor) - selected_offset + grid_offset - offset - spread + (yp * row_spread),
+                offset_x + pixel_pos(xp, scale_factor)
+                    - (3.0 * scale_factor)
+                    - selected_offset
+                    - offset,
+                offset_y + pixel_pos(yp, scale_factor) - (3.0 * scale_factor) - selected_offset
+                    + grid_offset
+                    - offset
+                    - spread
+                    + (yp * row_spread),
                 scaled_size,
                 scaled_size,
                 cursor_thickness,
-                cursor_color
+                cursor_color,
             );
         }
 
@@ -468,16 +514,35 @@ pub fn draw(
 
                 // Add offsets to grid positions
                 let pos_x = offset_x + pixel_pos(x as f32, scale_factor);
-                let pos_y = offset_y + pixel_pos(y as f32, scale_factor) + grid_offset - spread + (y as f32 * row_spread);
+                let pos_y = offset_y + pixel_pos(y as f32, scale_factor) + grid_offset - spread
+                    + (y as f32 * row_spread);
 
                 if xp as usize == x && yp as usize == y {
                     if let UIFocus::Grid = input_state.ui_focus {
-                        draw_rectangle(pos_x-selected_offset, pos_y-selected_offset, tile_size, tile_size, UI_BG_COLOR);
+                        draw_rectangle(
+                            pos_x - selected_offset,
+                            pos_y - selected_offset,
+                            tile_size,
+                            tile_size,
+                            UI_BG_COLOR,
+                        );
                     } else {
-                        draw_rectangle(pos_x - (2.0 * scale_factor), pos_y- (2.0 * scale_factor), tile_size + (4.0 * scale_factor), tile_size + (4.0 * scale_factor), UI_BG_COLOR);
+                        draw_rectangle(
+                            pos_x - (2.0 * scale_factor),
+                            pos_y - (2.0 * scale_factor),
+                            tile_size + (4.0 * scale_factor),
+                            tile_size + (4.0 * scale_factor),
+                            UI_BG_COLOR,
+                        );
                     }
                 } else {
-                    draw_rectangle(pos_x - (2.0 * scale_factor), pos_y - (2.0 * scale_factor), tile_size + (4.0 * scale_factor), tile_size + (4.0 * scale_factor), UI_BG_COLOR);
+                    draw_rectangle(
+                        pos_x - (2.0 * scale_factor),
+                        pos_y - (2.0 * scale_factor),
+                        tile_size + (4.0 * scale_factor),
+                        tile_size + (4.0 * scale_factor),
+                        UI_BG_COLOR,
+                    );
                 }
 
                 let Some(mem) = memories.get(memory_index) else {
@@ -485,7 +550,10 @@ pub fn draw(
                 };
 
                 // Skip rendering the icon at its grid position during transitions
-                if xp as usize == x && yp as usize == y && animation_state.dialog_transition_time > 0.0 {
+                if xp as usize == x
+                    && yp as usize == y
+                    && animation_state.dialog_transition_time > 0.0
+                {
                     continue;
                 }
 
@@ -495,17 +563,31 @@ pub fn draw(
                 };
 
                 let params = DrawTextureParams {
-                    dest_size: Some(Vec2 {x: tile_size, y: tile_size }),
-                    source: Some(Rect { x: 0.0, y: 0.0, h: icon.height(), w: icon.width() }),
+                    dest_size: Some(Vec2 {
+                        x: tile_size,
+                        y: tile_size,
+                    }),
+                    source: Some(Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        h: icon.height(),
+                        w: icon.width(),
+                    }),
                     rotation: 0.0,
                     flip_x: false,
                     flip_y: false,
-                    pivot: None
+                    pivot: None,
                 };
 
                 if xp as usize == x && yp as usize == y {
                     if let UIFocus::Grid = input_state.ui_focus {
-                        draw_texture_ex(&icon, pos_x-selected_offset, pos_y-selected_offset, WHITE, params);
+                        draw_texture_ex(
+                            &icon,
+                            pos_x - selected_offset,
+                            pos_y - selected_offset,
+                            WHITE,
+                            params,
+                        );
                     } else {
                         draw_texture_ex(&icon, pos_x, pos_y, WHITE, params);
                     }
@@ -528,13 +610,33 @@ pub fn draw(
         let box_line_thickness = 4.0 * scale_factor;
 
         // Draw storage info background
-        draw_rectangle(storage_info_x, storage_info_y, storage_info_w, storage_info_h, UI_BG_COLOR);
-        draw_rectangle_lines(storage_info_x - box_line_thickness, storage_info_y - box_line_thickness, storage_info_w + (box_line_thickness * 2.0), storage_info_h + (box_line_thickness * 2.0), box_line_thickness, UI_BG_COLOR_DARK);
+        draw_rectangle(
+            storage_info_x,
+            storage_info_y,
+            storage_info_w,
+            storage_info_h,
+            UI_BG_COLOR,
+        );
+        draw_rectangle_lines(
+            storage_info_x - box_line_thickness,
+            storage_info_y - box_line_thickness,
+            storage_info_w + (box_line_thickness * 2.0),
+            storage_info_h + (box_line_thickness * 2.0),
+            box_line_thickness,
+            UI_BG_COLOR_DARK,
+        );
 
         if let Ok(state) = storage_state.lock() {
             if !state.media.is_empty() {
                 // Draw storage info text (NOW in the correct, scaled box)
-                text_with_config_color(font_cache, config, &state.media[state.selected].id.to_uppercase(), storage_info_x + (2.0 * scale_factor), storage_info_y + (17.0 * scale_factor), font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &state.media[state.selected].id.to_uppercase(),
+                    storage_info_x + (2.0 * scale_factor),
+                    storage_info_y + (17.0 * scale_factor),
+                    font_size,
+                );
 
                 // Get free space in MB
                 let free_mb = state.media[state.selected].free as f32;
@@ -543,7 +645,14 @@ pub fn draw(
 
                 // Format to show GB with one decimal place
                 let free_space_text = format!("{:.1} GB Free", free_gb).to_uppercase();
-                text_with_config_color(font_cache, config, &free_space_text, storage_info_x + (2.0 * scale_factor), storage_info_y + (33.0 * scale_factor), font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &free_space_text,
+                    storage_info_x + (2.0 * scale_factor),
+                    storage_info_y + (33.0 * scale_factor),
+                    font_size,
+                );
 
                 // Draw left arrow background
                 let left_box_x = offset_x + padding;
@@ -559,17 +668,29 @@ pub fn draw(
                     let scaled_size = base_size * cursor_scale;
                     let offset = (scaled_size - base_size) / 2.0;
 
-                    draw_rectangle(left_box_x-selected_offset + left_shake, left_box_y-selected_offset, tile_size, tile_size, UI_BG_COLOR);
+                    draw_rectangle(
+                        left_box_x - selected_offset + left_shake,
+                        left_box_y - selected_offset,
+                        tile_size,
+                        tile_size,
+                        UI_BG_COLOR,
+                    );
                     draw_rectangle_lines(
-                        left_box_x-3.0-selected_offset + left_shake - offset,
-                        left_box_y-3.0-selected_offset - offset,
+                        left_box_x - 3.0 - selected_offset + left_shake - offset,
+                        left_box_y - 3.0 - selected_offset - offset,
                         scaled_size,
                         scaled_size,
                         cursor_thickness,
-                        cursor_color
+                        cursor_color,
                     );
                 } else {
-                    draw_rectangle(left_box_x-2.0 + left_shake, left_box_y-2.0, tile_size+4.0, tile_size+4.0, UI_BG_COLOR);
+                    draw_rectangle(
+                        left_box_x - 2.0 + left_shake,
+                        left_box_y - 2.0,
+                        tile_size + 4.0,
+                        tile_size + 4.0,
+                        UI_BG_COLOR,
+                    );
                 }
 
                 let left_offset = if let UIFocus::StorageLeft = input_state.ui_focus {
@@ -579,20 +700,42 @@ pub fn draw(
                 };
 
                 let left_points = [
-                    Vec2::new(4.0 + left_box_x + tile_size/2.0 - nav_arrow_size - left_offset + left_shake, left_box_y + tile_size/2.0 - left_offset),
-                    Vec2::new(4.0 + left_box_x + tile_size/2.0 - left_offset + left_shake, left_box_y + tile_size/2.0 - nav_arrow_size - left_offset),
-                    Vec2::new(4.0 + left_box_x + tile_size/2.0 - left_offset + left_shake, left_box_y + tile_size/2.0 + nav_arrow_size - left_offset),
+                    Vec2::new(
+                        4.0 + left_box_x + tile_size / 2.0 - nav_arrow_size - left_offset
+                            + left_shake,
+                        left_box_y + tile_size / 2.0 - left_offset,
+                    ),
+                    Vec2::new(
+                        4.0 + left_box_x + tile_size / 2.0 - left_offset + left_shake,
+                        left_box_y + tile_size / 2.0 - nav_arrow_size - left_offset,
+                    ),
+                    Vec2::new(
+                        4.0 + left_box_x + tile_size / 2.0 - left_offset + left_shake,
+                        left_box_y + tile_size / 2.0 + nav_arrow_size - left_offset,
+                    ),
                 ];
                 let left_color = if state.selected > 0 {
                     WHITE
                 } else {
-                    Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 } // Dark gray when disabled
+                    Color {
+                        r: 0.3,
+                        g: 0.3,
+                        b: 0.3,
+                        a: 1.0,
+                    } // Dark gray when disabled
                 };
                 draw_triangle(left_points[0], left_points[1], left_points[2], left_color);
-                draw_triangle_lines(left_points[0], left_points[1], left_points[2], nav_arrow_outline, BLACK);
+                draw_triangle_lines(
+                    left_points[0],
+                    left_points[1],
+                    left_points[2],
+                    nav_arrow_outline,
+                    BLACK,
+                );
 
                 // Draw right arrow background
-                let right_box_x = offset_x + padding + (GRID_WIDTH as f32 - 1.0) * (tile_size + padding);
+                let right_box_x =
+                    offset_x + padding + (GRID_WIDTH as f32 - 1.0) * (tile_size + padding);
                 let right_box_y = storage_info_y + storage_info_h / 2.0 - tile_size / 2.0;
                 let right_shake = animation_state.calculate_shake_offset(ShakeTarget::RightArrow);
 
@@ -605,17 +748,29 @@ pub fn draw(
                     let scaled_size = base_size * cursor_scale;
                     let offset = (scaled_size - base_size) / 2.0;
 
-                    draw_rectangle(right_box_x-selected_offset + right_shake, right_box_y-selected_offset, tile_size, tile_size, UI_BG_COLOR);
+                    draw_rectangle(
+                        right_box_x - selected_offset + right_shake,
+                        right_box_y - selected_offset,
+                        tile_size,
+                        tile_size,
+                        UI_BG_COLOR,
+                    );
                     draw_rectangle_lines(
-                        right_box_x-3.0-selected_offset + right_shake - offset,
-                        right_box_y-3.0-selected_offset - offset,
+                        right_box_x - 3.0 - selected_offset + right_shake - offset,
+                        right_box_y - 3.0 - selected_offset - offset,
                         scaled_size,
                         scaled_size,
                         cursor_thickness,
-                        cursor_color
+                        cursor_color,
                     );
                 } else {
-                    draw_rectangle(right_box_x-2.0 + right_shake, right_box_y-2.0, tile_size+4.0, tile_size+4.0, UI_BG_COLOR);
+                    draw_rectangle(
+                        right_box_x - 2.0 + right_shake,
+                        right_box_y - 2.0,
+                        tile_size + 4.0,
+                        tile_size + 4.0,
+                        UI_BG_COLOR,
+                    );
                 }
 
                 let right_offset = if let UIFocus::StorageRight = input_state.ui_focus {
@@ -624,17 +779,43 @@ pub fn draw(
                     0.0
                 };
                 let right_points = [
-                    Vec2::new(right_box_x + tile_size/2.0 + nav_arrow_size - 4.0 - right_offset + right_shake, right_box_y + tile_size/2.0 - right_offset),
-                    Vec2::new(right_box_x + tile_size/2.0 - 4.0 - right_offset + right_shake, right_box_y + tile_size/2.0 - nav_arrow_size - right_offset),
-                    Vec2::new(right_box_x + tile_size/2.0 - 4.0 - right_offset + right_shake, right_box_y + tile_size/2.0 + nav_arrow_size - right_offset),
+                    Vec2::new(
+                        right_box_x + tile_size / 2.0 + nav_arrow_size - 4.0 - right_offset
+                            + right_shake,
+                        right_box_y + tile_size / 2.0 - right_offset,
+                    ),
+                    Vec2::new(
+                        right_box_x + tile_size / 2.0 - 4.0 - right_offset + right_shake,
+                        right_box_y + tile_size / 2.0 - nav_arrow_size - right_offset,
+                    ),
+                    Vec2::new(
+                        right_box_x + tile_size / 2.0 - 4.0 - right_offset + right_shake,
+                        right_box_y + tile_size / 2.0 + nav_arrow_size - right_offset,
+                    ),
                 ];
                 let right_color = if state.selected < state.media.len() - 1 {
                     WHITE
                 } else {
-                    Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 } // Dark gray when disabled
+                    Color {
+                        r: 0.3,
+                        g: 0.3,
+                        b: 0.3,
+                        a: 1.0,
+                    } // Dark gray when disabled
                 };
-                draw_triangle(right_points[0], right_points[1], right_points[2], right_color);
-                draw_triangle_lines(right_points[0], right_points[1], right_points[2], nav_arrow_outline, BLACK);
+                draw_triangle(
+                    right_points[0],
+                    right_points[1],
+                    right_points[2],
+                    right_color,
+                );
+                draw_triangle_lines(
+                    right_points[0],
+                    right_points[1],
+                    right_points[2],
+                    nav_arrow_outline,
+                    BLACK,
+                );
             }
         }
 
@@ -645,20 +826,50 @@ pub fn draw(
 
         let save_box_w = 640.0 * scale_factor - (32.0 * scale_factor); // Scale relative to 640 base
 
-        draw_rectangle(save_info_x, save_info_y, save_box_w, 40.0 * scale_factor, UI_BG_COLOR);
-        draw_rectangle_lines(save_info_x - (4.0*scale_factor), save_info_y - (4.0*scale_factor), save_box_w + (8.0 * scale_factor), 48.0 * scale_factor, box_line_thickness, UI_BG_COLOR_DARK);
+        draw_rectangle(
+            save_info_x,
+            save_info_y,
+            save_box_w,
+            40.0 * scale_factor,
+            UI_BG_COLOR,
+        );
+        draw_rectangle_lines(
+            save_info_x - (4.0 * scale_factor),
+            save_info_y - (4.0 * scale_factor),
+            save_box_w + (8.0 * scale_factor),
+            48.0 * scale_factor,
+            box_line_thickness,
+            UI_BG_COLOR_DARK,
+        );
 
         let memory_index = get_memory_index(selected_memory, scroll_offset);
         if input_state.ui_focus == UIFocus::Grid {
             if let Some(selected_mem) = memories.get(memory_index) {
-                let desc = selected_mem.name.clone().unwrap_or_else(|| selected_mem.id.clone());
+                let desc = selected_mem
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| selected_mem.id.clone());
                 let playtime = get_game_playtime(selected_mem, playtime_cache);
                 let size = get_game_size(selected_mem, size_cache);
                 let stats_text = format!("{:.1} MB | {:.1} H", size, playtime);
 
                 // Use save_info_x/y for text positioning
-                text_with_config_color(font_cache, config, &desc, save_info_x + (3.0 * scale_factor), save_info_y + (18.0 * scale_factor), font_size);
-                text_with_config_color(font_cache, config, &stats_text, save_info_x + (3.0 * scale_factor), save_info_y + (36.0 * scale_factor), font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &desc,
+                    save_info_x + (3.0 * scale_factor),
+                    save_info_y + (18.0 * scale_factor),
+                    font_size,
+                );
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &stats_text,
+                    save_info_x + (3.0 * scale_factor),
+                    save_info_y + (36.0 * scale_factor),
+                    font_size,
+                );
             }
         }
         // --- Draw scroll indicators ---
@@ -685,7 +896,8 @@ pub fn draw(
         let next_row_start = get_memory_index(GRID_WIDTH * GRID_HEIGHT, scroll_offset);
         if next_row_start < memories.len() {
             // Down arrow
-            let grid_bottom = (offset_y + grid_offset - spread) + GRID_HEIGHT as f32 * (tile_size + padding + row_spread);
+            let grid_bottom = (offset_y + grid_offset - spread)
+                + GRID_HEIGHT as f32 * (tile_size + padding + row_spread);
             let center_x = screen_width() / 2.0;
             let bottom_y = grid_bottom + distance_bottom;
 
