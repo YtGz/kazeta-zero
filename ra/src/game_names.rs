@@ -26,16 +26,15 @@ impl GameNameMapping {
     /// Load game name mappings from disk
     pub fn load() -> Result<Self> {
         let path = Self::get_config_path()?;
-        
+
         if !path.exists() {
             return Ok(Self::default());
         }
 
-        let content = fs::read_to_string(&path)
-            .context("Failed to read game names config file")?;
+        let content = fs::read_to_string(&path).context("Failed to read game names config file")?;
 
-        let mapping: GameNameMapping = serde_json::from_str(&content)
-            .context("Failed to parse game names config JSON")?;
+        let mapping: GameNameMapping =
+            serde_json::from_str(&content).context("Failed to parse game names config JSON")?;
 
         Ok(mapping)
     }
@@ -43,18 +42,16 @@ impl GameNameMapping {
     /// Save game name mappings to disk
     pub fn save(&self) -> Result<()> {
         let path = Self::get_config_path()?;
-        
+
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create config directory")?;
+            fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
 
-        let json = serde_json::to_string_pretty(self)
-            .context("Failed to serialize game names config")?;
+        let json =
+            serde_json::to_string_pretty(self).context("Failed to serialize game names config")?;
 
-        fs::write(&path, json)
-            .context("Failed to write game names config file")?;
+        fs::write(&path, json).context("Failed to write game names config file")?;
 
         Ok(())
     }
@@ -75,13 +72,12 @@ impl GameNameMapping {
 
     /// Get game name from cartridge TOML file
     fn get_name_from_cartridge(cart_path: &Path) -> Result<String> {
-        use std::io::Read;
         use flate2::read::GzDecoder;
+        use std::io::Read;
         use tar::Archive;
 
         // Open the .kzi file (which is a gzip-compressed tar archive)
-        let file = fs::File::open(cart_path)
-            .context("Failed to open cartridge file")?;
+        let file = fs::File::open(cart_path).context("Failed to open cartridge file")?;
         let decoder = GzDecoder::new(file);
         let mut archive = Archive::new(decoder);
 
@@ -94,10 +90,10 @@ impl GameNameMapping {
 
             if path.file_name().and_then(|n| n.to_str()) == Some("cartridge.toml") {
                 entry.read_to_string(&mut content)?;
-                
+
                 // Parse the TOML content
-                let toml_value: toml::Value = toml::from_str(&content)
-                    .context("Failed to parse cartridge.toml")?;
+                let toml_value: toml::Value =
+                    toml::from_str(&content).context("Failed to parse cartridge.toml")?;
 
                 // Extract ra_game_name field
                 if let Some(name) = toml_value.get("ra_game_name").and_then(|v| v.as_str()) {
@@ -130,10 +126,8 @@ impl GameNameMapping {
             .context("Could not find home directory")?
             .join(".local/share/kazeta-plus");
 
-        fs::create_dir_all(&data_dir)
-            .context("Failed to create kazeta data directory")?;
+        fs::create_dir_all(&data_dir).context("Failed to create kazeta data directory")?;
 
         Ok(data_dir.join("ra_game_names.json"))
     }
 }
-

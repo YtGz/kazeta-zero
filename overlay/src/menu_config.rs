@@ -87,11 +87,8 @@ impl MenuConfig {
 
     /// Get visible menu items in order
     pub fn get_visible_items(&self) -> Vec<MenuItemId> {
-        let mut visible: Vec<_> = self.items
-            .iter()
-            .filter(|item| item.visible)
-            .collect();
-        
+        let mut visible: Vec<_> = self.items.iter().filter(|item| item.visible).collect();
+
         visible.sort_by_key(|item| item.order);
         visible.into_iter().map(|item| item.id).collect()
     }
@@ -152,7 +149,9 @@ impl MenuConfig {
 
     /// Get the index of a menu item in the visible list
     pub fn get_visible_index(&self, id: MenuItemId) -> Option<usize> {
-        self.get_visible_items().iter().position(|&item_id| item_id == id)
+        self.get_visible_items()
+            .iter()
+            .position(|&item_id| item_id == id)
     }
 
     /// Get menu item by visible index
@@ -195,8 +194,8 @@ impl MenuConfigManager {
 
     /// Get the configuration file path
     fn get_config_path() -> Result<PathBuf> {
-        let data_dir = dirs::data_local_dir()
-            .context("Could not determine local data directory")?;
+        let data_dir =
+            dirs::data_local_dir().context("Could not determine local data directory")?;
 
         let overlay_dir = data_dir.join("kazeta-plus").join("overlay");
 
@@ -211,22 +210,20 @@ impl MenuConfigManager {
 
     /// Load configuration from file
     fn load_config(path: &PathBuf) -> Result<MenuConfig> {
-        let contents = fs::read_to_string(path)
-            .context("Failed to read menu config file")?;
+        let contents = fs::read_to_string(path).context("Failed to read menu config file")?;
 
-        let config: MenuConfig = serde_json::from_str(&contents)
-            .context("Failed to parse menu config JSON")?;
+        let config: MenuConfig =
+            serde_json::from_str(&contents).context("Failed to parse menu config JSON")?;
 
         Ok(config)
     }
 
     /// Save configuration to file
     fn save_config(path: &PathBuf, config: &MenuConfig) -> Result<()> {
-        let json = serde_json::to_string_pretty(config)
-            .context("Failed to serialize menu config")?;
+        let json =
+            serde_json::to_string_pretty(config).context("Failed to serialize menu config")?;
 
-        fs::write(path, json)
-            .context("Failed to write menu config file")?;
+        fs::write(path, json).context("Failed to write menu config file")?;
 
         println!("[MenuConfig] Config saved to {:?}", path);
         Ok(())
@@ -247,4 +244,3 @@ impl MenuConfigManager {
         Self::save_config(&self.config_path, &self.config)
     }
 }
-

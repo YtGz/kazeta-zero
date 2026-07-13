@@ -1,9 +1,9 @@
+use crate::audio::AUDIO;
 use cd_da_reader::{CdReader, Toc};
 use rodio::{buffer::SamplesBuffer, Sink, Source};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::audio::AUDIO;
 
 /// Represents the status of the CD player.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,26 +60,23 @@ impl CdPlayerBackend {
         thread::sleep(Duration::from_millis(50));
 
         match CdReader::open("/dev/sr0") {
-            Ok(reader) => {
-                match reader.read_toc() {
-                    Ok(toc) => {
-                        let is_audio = !toc.tracks.is_empty()
-                        && toc.tracks.iter().all(|t| t.is_audio);
+            Ok(reader) => match reader.read_toc() {
+                Ok(toc) => {
+                    let is_audio = !toc.tracks.is_empty() && toc.tracks.iter().all(|t| t.is_audio);
 
-                        if is_audio {
-                            self.status = PlayerStatus::Stopped;
-                            self.toc = Some(toc);
-                        } else {
-                            self.status = PlayerStatus::DataDisc;
-                            self.toc = None;
-                        }
-                    }
-                    Err(e) => {
-                        println!("[CD Player] Failed to read TOC: {:?}", e);
-                        self.status = PlayerStatus::NoDisc;
+                    if is_audio {
+                        self.status = PlayerStatus::Stopped;
+                        self.toc = Some(toc);
+                    } else {
+                        self.status = PlayerStatus::DataDisc;
+                        self.toc = None;
                     }
                 }
-            }
+                Err(e) => {
+                    println!("[CD Player] Failed to read TOC: {:?}", e);
+                    self.status = PlayerStatus::NoDisc;
+                }
+            },
             Err(_) => {
                 self.status = PlayerStatus::NoDisc;
             }
@@ -148,7 +145,10 @@ impl CdPlayerBackend {
             } // Mutex guard is dropped here
 
             // --- 2. Load Track Data (This is the slow part) ---
-            println!("[CD Thread] Opening drive to read track {}...", track_number);
+            println!(
+                "[CD Thread] Opening drive to read track {}...",
+                track_number
+            );
             let reader = match CdReader::open("/dev/sr0") {
                 Ok(r) => r,
                 Err(e) => {
@@ -180,13 +180,16 @@ impl CdPlayerBackend {
                     return;
                 }
             };
-            println!("[CD Thread] Read {} bytes. Converting to f32...", track_data_bytes.len());
+            println!(
+                "[CD Thread] Read {} bytes. Converting to f32...",
+                track_data_bytes.len()
+            );
 
             // Convert Vec<u8> (raw bytes) to Vec<i16> (PCM)
             let pcm_data: Vec<i16> = track_data_bytes
-            .chunks_exact(2)
-            .map(|a| i16::from_le_bytes([a[0], a[1]]))
-            .collect();
+                .chunks_exact(2)
+                .map(|a| i16::from_le_bytes([a[0], a[1]]))
+                .collect();
 
             // Convert i16 samples to f32 samples
             let f32_data: Vec<f32> = pcm_data.into_iter().map(|s| s as f32 / 32768.0).collect();
@@ -326,7 +329,8 @@ impl CdPlayerBackend {
                 self.status = PlayerStatus::Playing;
 
                 // Set new start time based on paused time
-                let resume_time = Instant::now() - self.paused_elapsed_time.unwrap_or(Duration::ZERO);
+                let resume_time =
+                    Instant::now() - self.paused_elapsed_time.unwrap_or(Duration::ZERO);
                 self.playback_start_time = Some(resume_time);
             }
         }

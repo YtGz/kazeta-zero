@@ -95,19 +95,33 @@ fn render_main_menu(state: &OverlayState) {
         let menu_item_id = visible_items[item_idx];
         let y = option_start_y + (i as f32 * option_height);
         let option = menu_item_id.display_name();
-        
+
         // Quit option gets special red coloring
         let is_quit = menu_item_id == crate::menu_config::MenuItemId::Quit;
         let is_selected = item_idx == state.selected_option;
         let color = if is_selected {
-            if is_quit { t.error } else { t.cursor }
+            if is_quit {
+                t.error
+            } else {
+                t.cursor
+            }
         } else {
-            if is_quit { Color::new(t.error.r * 0.7, t.error.g * 0.3, t.error.b * 0.3, 1.0) } else { t.text }
+            if is_quit {
+                Color::new(t.error.r * 0.7, t.error.g * 0.3, t.error.b * 0.3, 1.0)
+            } else {
+                t.text
+            }
         };
 
         // Selection indicator
         if is_selected {
-            draw_text("►", menu_x + 40.0, y + 30.0, 30.0, if is_quit { t.error } else { t.cursor });
+            draw_text(
+                "►",
+                menu_x + 40.0,
+                y + 30.0,
+                30.0,
+                if is_quit { t.error } else { t.cursor },
+            );
         }
 
         draw_text(option, menu_x + 80.0, y + 30.0, 28.0, color);
@@ -115,10 +129,22 @@ fn render_main_menu(state: &OverlayState) {
 
     // Scroll indicators
     if scroll_offset > 0 {
-        draw_text("▲", menu_x + menu_width - 25.0, option_start_y + 10.0, 16.0, t.text_secondary);
+        draw_text(
+            "▲",
+            menu_x + menu_width - 25.0,
+            option_start_y + 10.0,
+            16.0,
+            t.text_secondary,
+        );
     }
     if scroll_offset + MAX_VISIBLE < visible_count {
-        draw_text("▼", menu_x + menu_width - 25.0, option_start_y + (MAX_VISIBLE as f32 * option_height) - 15.0, 16.0, t.text_secondary);
+        draw_text(
+            "▼",
+            menu_x + menu_width - 25.0,
+            option_start_y + (MAX_VISIBLE as f32 * option_height) - 15.0,
+            16.0,
+            t.text_secondary,
+        );
     }
 
     // Playtime display (if game is active)
@@ -133,18 +159,33 @@ fn render_main_menu(state: &OverlayState) {
             format!("Session: {}m", mins)
         };
 
-        draw_text(&session_text, menu_x + 20.0, menu_y + menu_height - 60.0, 18.0, LIGHTGRAY);
+        draw_text(
+            &session_text,
+            menu_x + 20.0,
+            menu_y + menu_height - 60.0,
+            18.0,
+            LIGHTGRAY,
+        );
 
         // Show total playtime for this game
         if let Some(entry) = state.playtime.database.entries.get(&session.cart_id) {
             let total_hours = entry.total_seconds / 3600;
             let total_mins = (entry.total_seconds % 3600) / 60;
             let total_text = if total_hours > 0 {
-                format!("Total: {}h {}m • {} plays", total_hours, total_mins, entry.play_count)
+                format!(
+                    "Total: {}h {}m • {} plays",
+                    total_hours, total_mins, entry.play_count
+                )
             } else {
                 format!("Total: {}m • {} plays", total_mins, entry.play_count)
             };
-            draw_text(&total_text, menu_x + 240.0, menu_y + menu_height - 60.0, 18.0, GRAY);
+            draw_text(
+                &total_text,
+                menu_x + 240.0,
+                menu_y + menu_height - 60.0,
+                18.0,
+                GRAY,
+            );
         }
     }
 
@@ -168,13 +209,7 @@ fn render_settings_screen(state: &OverlayState) {
     draw_rectangle(menu_x, menu_y, menu_width, menu_height, t.panel_background);
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 3.0, t.panel_border);
 
-    draw_text(
-        "SETTINGS",
-        menu_x + 20.0,
-        menu_y + 40.0,
-        36.0,
-        t.cursor,
-    );
+    draw_text("SETTINGS", menu_x + 20.0, menu_y + 40.0, 36.0, t.cursor);
 
     let options = ["Menu Customization", "Theme Selection"];
     let option_start_y = menu_y + 100.0;
@@ -205,10 +240,22 @@ fn render_settings_screen(state: &OverlayState) {
 
     // Scroll indicators (only show if needed)
     if scroll_offset > 0 {
-        draw_text("▲", menu_x + menu_width - 25.0, option_start_y + 10.0, 16.0, t.text_secondary);
+        draw_text(
+            "▲",
+            menu_x + menu_width - 25.0,
+            option_start_y + 10.0,
+            16.0,
+            t.text_secondary,
+        );
     }
     if scroll_offset + MAX_VISIBLE < visible_count {
-        draw_text("▼", menu_x + menu_width - 25.0, option_start_y + (MAX_VISIBLE as f32 * option_height) - 15.0, 16.0, t.text_secondary);
+        draw_text(
+            "▼",
+            menu_x + menu_width - 25.0,
+            option_start_y + (MAX_VISIBLE as f32 * option_height) - 15.0,
+            16.0,
+            t.text_secondary,
+        );
     }
 
     draw_text(
@@ -223,15 +270,15 @@ fn render_settings_screen(state: &OverlayState) {
 /// Get color for achievement rarity display
 fn get_rarity_color(rarity_percent: f32) -> Color {
     if rarity_percent < 5.0 {
-        GOLD  // Ultra rare
+        GOLD // Ultra rare
     } else if rarity_percent < 10.0 {
-        Color::new(0.9, 0.4, 0.9, 1.0)  // Purple - very rare
+        Color::new(0.9, 0.4, 0.9, 1.0) // Purple - very rare
     } else if rarity_percent < 25.0 {
-        Color::new(0.3, 0.6, 1.0, 1.0)  // Blue - rare
+        Color::new(0.3, 0.6, 1.0, 1.0) // Blue - rare
     } else if rarity_percent < 50.0 {
-        GREEN  // Uncommon
+        GREEN // Uncommon
     } else {
-        GRAY  // Common
+        GRAY // Common
     }
 }
 
@@ -261,9 +308,14 @@ fn render_achievements_screen(state: &OverlayState) {
         let progress_pct = tracker.get_progress_percent();
 
         // Progress text
-        let progress_text = format!("{}/{} ({:.0}%)",
-            earned, total, progress_pct);
-        draw_text(&progress_text, menu_x + 15.0, menu_y + 50.0, 16.0, t.text_secondary);
+        let progress_text = format!("{}/{} ({:.0}%)", earned, total, progress_pct);
+        draw_text(
+            &progress_text,
+            menu_x + 15.0,
+            menu_y + 50.0,
+            16.0,
+            t.text_secondary,
+        );
 
         // Progress bar
         let bar_x = menu_x + 15.0;
@@ -272,7 +324,13 @@ fn render_achievements_screen(state: &OverlayState) {
         let bar_height = 6.0;
 
         // Bar background
-        draw_rectangle(bar_x, bar_y, bar_width, bar_height, Color::new(0.2, 0.2, 0.2, 1.0));
+        draw_rectangle(
+            bar_x,
+            bar_y,
+            bar_width,
+            bar_height,
+            Color::new(0.2, 0.2, 0.2, 1.0),
+        );
         // Bar fill
         let progress = progress_pct / 100.0;
         let fill_color = if progress >= 1.0 { GOLD } else { GREEN };
@@ -290,16 +348,28 @@ fn render_achievements_screen(state: &OverlayState) {
 
         // Scroll indicators
         if scroll > 0 {
-            draw_text("▲", menu_x + menu_width - 25.0, list_y - 10.0, 14.0, t.text_secondary);
+            draw_text(
+                "▲",
+                menu_x + menu_width - 25.0,
+                list_y - 10.0,
+                14.0,
+                t.text_secondary,
+            );
         }
         if scroll < max_scroll {
-            draw_text("▼", menu_x + menu_width - 25.0, list_y + (max_visible as f32 * item_height) + 5.0, 14.0, t.text_secondary);
+            draw_text(
+                "▼",
+                menu_x + menu_width - 25.0,
+                list_y + (max_visible as f32 * item_height) + 5.0,
+                14.0,
+                t.text_secondary,
+            );
         }
 
         for i in 0..max_visible {
             let item_idx = scroll + i;
             if item_idx >= total_items {
-                break;  // No more achievements to display
+                break; // No more achievements to display
             }
 
             let achievement = &tracker.achievements[item_idx];
@@ -309,15 +379,19 @@ fn render_achievements_screen(state: &OverlayState) {
             let status_icon = if achievement.earned_hardcore {
                 "⭐" // Hardcore
             } else if achievement.earned {
-                "✓"  // Normal
+                "✓" // Normal
             } else {
-                "○"  // Locked
+                "○" // Locked
             };
             let status_color = if achievement.earned { GREEN } else { GRAY };
             draw_text(status_icon, menu_x + 18.0, y + 26.0, 22.0, status_color);
 
             // Achievement title
-            let title_color = if achievement.earned { t.text } else { t.text_disabled };
+            let title_color = if achievement.earned {
+                t.text
+            } else {
+                t.text_disabled
+            };
             let title_text = if achievement.title.len() > 40 {
                 format!("{}...", &achievement.title[..37])
             } else {
@@ -335,7 +409,13 @@ fn render_achievements_screen(state: &OverlayState) {
             if let Some(rarity) = achievement.rarity_percent {
                 let rarity_color = get_rarity_color(rarity);
                 let rarity_text = format!("{:.1}%", rarity);
-                draw_text(&rarity_text, menu_x + menu_width - 65.0, y + 22.0, 14.0, rarity_color);
+                draw_text(
+                    &rarity_text,
+                    menu_x + menu_width - 65.0,
+                    y + 22.0,
+                    14.0,
+                    rarity_color,
+                );
             }
 
             // Progress bar for multi-step achievements (on same line as description)
@@ -350,13 +430,25 @@ fn render_achievements_screen(state: &OverlayState) {
                 let prog_bar_height = 4.0;
 
                 // Background
-                draw_rectangle(prog_bar_x, prog_bar_y, prog_bar_width, prog_bar_height, Color::new(0.2, 0.2, 0.2, 1.0));
+                draw_rectangle(
+                    prog_bar_x,
+                    prog_bar_y,
+                    prog_bar_width,
+                    prog_bar_height,
+                    Color::new(0.2, 0.2, 0.2, 1.0),
+                );
                 // Fill
                 let fill_width = prog_bar_width * prog_percent;
                 draw_rectangle(prog_bar_x, prog_bar_y, fill_width, prog_bar_height, GREEN);
 
                 // Progress text
-                draw_text(&prog_text, prog_bar_x + prog_bar_width + 5.0, y + 32.0, 11.0, LIGHTGRAY);
+                draw_text(
+                    &prog_text,
+                    prog_bar_x + prog_bar_width + 5.0,
+                    y + 32.0,
+                    11.0,
+                    LIGHTGRAY,
+                );
             }
 
             // Description removed for simplicity
@@ -404,7 +496,13 @@ fn render_controllers_menu(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title
-    draw_text("🎮 CONTROLLERS", menu_x + 20.0, menu_y + 40.0, 32.0, t.cursor);
+    draw_text(
+        "🎮 CONTROLLERS",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        32.0,
+        t.cursor,
+    );
 
     // Connected controller count
     let controller_count = state.controllers.controllers.len();
@@ -431,8 +529,10 @@ fn render_controllers_menu(state: &OverlayState) {
         // Selection indicator
         if is_selected {
             draw_rectangle(
-                menu_x + 15.0, y - 5.0,
-                menu_width - 30.0, option_height - 5.0,
+                menu_x + 15.0,
+                y - 5.0,
+                menu_width - 30.0,
+                option_height - 5.0,
                 Color::new(t.accent.r * 0.2, t.accent.g * 0.2, t.accent.b * 0.2, 0.6),
             );
             draw_text("►", menu_x + 25.0, y + 25.0, 24.0, t.cursor);
@@ -444,15 +544,37 @@ fn render_controllers_menu(state: &OverlayState) {
         match i {
             0 => {
                 // Bluetooth - show paired count if any
-                let paired = state.controllers.bluetooth_devices.iter().filter(|d| d.is_paired).count();
+                let paired = state
+                    .controllers
+                    .bluetooth_devices
+                    .iter()
+                    .filter(|d| d.is_paired)
+                    .count();
                 if paired > 0 {
-                    draw_text(&format!("{} paired", paired), menu_x + menu_width - 120.0, y + 25.0, 18.0, GRAY);
+                    draw_text(
+                        &format!("{} paired", paired),
+                        menu_x + menu_width - 120.0,
+                        y + 25.0,
+                        18.0,
+                        GRAY,
+                    );
                 }
             }
             1 => {
                 // Assign - show assignment summary
-                let assigned = state.controllers.player_assignments.iter().filter(|a| a.is_some()).count();
-                draw_text(&format!("{}/4 assigned", assigned), menu_x + menu_width - 120.0, y + 25.0, 18.0, GRAY);
+                let assigned = state
+                    .controllers
+                    .player_assignments
+                    .iter()
+                    .filter(|a| a.is_some())
+                    .count();
+                draw_text(
+                    &format!("{}/4 assigned", assigned),
+                    menu_x + menu_width - 120.0,
+                    y + 25.0,
+                    18.0,
+                    GRAY,
+                );
             }
             _ => {}
         }
@@ -487,7 +609,13 @@ fn render_bluetooth_screen(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title
-    draw_text("📶 BLUETOOTH CONTROLLERS", menu_x + 20.0, menu_y + 40.0, 28.0, t.cursor);
+    draw_text(
+        "📶 BLUETOOTH CONTROLLERS",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        28.0,
+        t.cursor,
+    );
 
     // Scan state indicator
     let scan_status = match &state.controllers.bluetooth_state {
@@ -537,8 +665,10 @@ fn render_bluetooth_screen(state: &OverlayState) {
             // Selection background
             if is_selected {
                 draw_rectangle(
-                    menu_x + 15.0, y,
-                    menu_width - 30.0, item_height - 5.0,
+                    menu_x + 15.0,
+                    y,
+                    menu_width - 30.0,
+                    item_height - 5.0,
                     Color::new(0.3, 0.3, 0.4, 0.6),
                 );
             }
@@ -554,7 +684,13 @@ fn render_bluetooth_screen(state: &OverlayState) {
             draw_text(icon, menu_x + 25.0, y + 30.0, 24.0, WHITE);
 
             // Device name
-            let name_color = if device.is_connected { t.success } else if device.is_paired { t.text } else { t.text_disabled };
+            let name_color = if device.is_connected {
+                t.success
+            } else if device.is_paired {
+                t.text
+            } else {
+                t.text_disabled
+            };
             draw_text(&device.name, menu_x + 60.0, y + 25.0, 20.0, name_color);
 
             // MAC address (smaller)
@@ -568,16 +704,40 @@ fn render_bluetooth_screen(state: &OverlayState) {
             } else {
                 "Available"
             };
-            let status_color = if device.is_connected { GREEN } else if device.is_paired { YELLOW } else { GRAY };
-                draw_text(status, menu_x + menu_width - 110.0, y + 30.0, 16.0, status_color);
+            let status_color = if device.is_connected {
+                GREEN
+            } else if device.is_paired {
+                YELLOW
+            } else {
+                GRAY
+            };
+            draw_text(
+                status,
+                menu_x + menu_width - 110.0,
+                y + 30.0,
+                16.0,
+                status_color,
+            );
         }
 
         // Scroll indicators
         if scroll_offset > 0 {
-            draw_text("▲", menu_x + menu_width - 25.0, list_y + 10.0, 16.0, t.text_secondary);
+            draw_text(
+                "▲",
+                menu_x + menu_width - 25.0,
+                list_y + 10.0,
+                16.0,
+                t.text_secondary,
+            );
         }
         if scroll_offset + max_visible < device_count {
-            draw_text("▼", menu_x + menu_width - 25.0, list_y + (max_visible as f32 * item_height) - 15.0, 16.0, t.text_secondary);
+            draw_text(
+                "▼",
+                menu_x + menu_width - 25.0,
+                list_y + (max_visible as f32 * item_height) - 15.0,
+                16.0,
+                t.text_secondary,
+            );
         }
     }
 
@@ -602,7 +762,13 @@ fn render_assign_screen(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title
-    draw_text("👥 ASSIGN CONTROLLERS", menu_x + 20.0, menu_y + 40.0, 28.0, t.cursor);
+    draw_text(
+        "👥 ASSIGN CONTROLLERS",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        28.0,
+        t.cursor,
+    );
     draw_text(
         "Use Left/Right to change assignment",
         menu_x + 20.0,
@@ -622,27 +788,37 @@ fn render_assign_screen(state: &OverlayState) {
         // Selection background
         if is_selected {
             draw_rectangle(
-                menu_x + 15.0, y,
-                menu_width - 30.0, slot_height - 5.0,
+                menu_x + 15.0,
+                y,
+                menu_width - 30.0,
+                slot_height - 5.0,
                 Color::new(0.3, 0.3, 0.4, 0.6),
             );
         }
 
         // Player label with color
         let player_colors = [
-            Color::new(0.2, 0.6, 1.0, 1.0),  // P1: Blue
-            Color::new(1.0, 0.3, 0.3, 1.0),  // P2: Red
-            Color::new(0.3, 1.0, 0.3, 1.0),  // P3: Green
-            Color::new(1.0, 1.0, 0.3, 1.0),  // P4: Yellow
+            Color::new(0.2, 0.6, 1.0, 1.0), // P1: Blue
+            Color::new(1.0, 0.3, 0.3, 1.0), // P2: Red
+            Color::new(0.3, 1.0, 0.3, 1.0), // P3: Green
+            Color::new(1.0, 1.0, 0.3, 1.0), // P4: Yellow
         ];
         let player_color = player_colors[player];
-        draw_text(&format!("P{}", player + 1), menu_x + 30.0, y + 35.0, 28.0, player_color);
+        draw_text(
+            &format!("P{}", player + 1),
+            menu_x + 30.0,
+            y + 35.0,
+            28.0,
+            player_color,
+        );
 
         // Assigned controller name
-        let controller_name = state.controllers.get_player_controller(player + 1)
+        let controller_name = state
+            .controllers
+            .get_player_controller(player + 1)
             .map(|c| c.name.clone())
             .unwrap_or_else(|| "< Not Assigned >".to_string());
-        
+
         let name_color = if state.controllers.player_assignments[player].is_some() {
             t.text
         } else {
@@ -658,7 +834,10 @@ fn render_assign_screen(state: &OverlayState) {
     }
 
     // Available controllers summary
-    let unassigned_count = state.controllers.controllers.iter()
+    let unassigned_count = state
+        .controllers
+        .controllers
+        .iter()
         .filter(|c| c.assigned_player.is_none())
         .count();
     if unassigned_count > 0 {
@@ -692,7 +871,13 @@ fn render_gamepad_tester(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title with controller selector
-    draw_text("🕹️ GAMEPAD TESTER", menu_x + 20.0, menu_y + 35.0, 26.0, t.cursor);
+    draw_text(
+        "🕹️ GAMEPAD TESTER",
+        menu_x + 20.0,
+        menu_y + 35.0,
+        26.0,
+        t.cursor,
+    );
 
     if state.controllers.controllers.is_empty() {
         draw_text(
@@ -711,12 +896,15 @@ fn render_gamepad_tester(state: &OverlayState) {
         );
     } else {
         // Controller name with navigation
-        let controller_name = state.controllers.controllers
+        let controller_name = state
+            .controllers
+            .controllers
             .get(state.controllers.tester_selected_controller)
             .map(|c| c.name.as_str())
             .unwrap_or("Unknown");
-        
-        let nav_text = format!("◄ {} ({}/{}) ►", 
+
+        let nav_text = format!(
+            "◄ {} ({}/{}) ►",
             controller_name,
             state.controllers.tester_selected_controller + 1,
             state.controllers.controllers.len()
@@ -731,12 +919,12 @@ fn render_gamepad_tester(state: &OverlayState) {
         let center_y = menu_y + 170.0;
 
         // === Left side: D-Pad and Left Stick ===
-        
+
         // D-Pad
         let dpad_x = left_x;
         let dpad_y = center_y - 40.0;
         let btn_size = 28.0;
-        
+
         draw_text("D-PAD", dpad_x - 10.0, dpad_y - 45.0, 14.0, GRAY);
         // Up
         draw_button(dpad_x, dpad_y - btn_size, btn_size, btn.dpad_up, "▲");
@@ -751,12 +939,19 @@ fn render_gamepad_tester(state: &OverlayState) {
         let ls_x = left_x + 100.0;
         let ls_y = center_y + 40.0;
         draw_text("L STICK", ls_x - 15.0, ls_y - 50.0, 14.0, GRAY);
-        draw_stick(ls_x, ls_y, 35.0, btn.left_stick_x, btn.left_stick_y, btn.ls_press);
+        draw_stick(
+            ls_x,
+            ls_y,
+            35.0,
+            btn.left_stick_x,
+            btn.left_stick_y,
+            btn.ls_press,
+        );
 
         // === Center: Triggers and special buttons ===
-        
+
         let center_x = menu_x + menu_width / 2.0;
-        
+
         // Triggers at top
         let trigger_y = menu_y + 70.0;
         draw_text("LT", center_x - 100.0, trigger_y, 14.0, GRAY);
@@ -779,11 +974,11 @@ fn render_gamepad_tester(state: &OverlayState) {
         draw_text("START", center_x + 25.0, special_y + 35.0, 10.0, DARKGRAY);
 
         // === Right side: Face buttons and Right Stick ===
-        
+
         // Face buttons (ABXY)
         let face_x = right_x;
         let face_y = center_y - 40.0;
-        
+
         draw_text("BUTTONS", face_x - 20.0, face_y - 45.0, 14.0, GRAY);
         // A (bottom)
         draw_button_colored(face_x, face_y + btn_size, btn_size, btn.a, "A", GREEN);
@@ -798,12 +993,25 @@ fn render_gamepad_tester(state: &OverlayState) {
         let rs_x = right_x - 100.0;
         let rs_y = center_y + 40.0;
         draw_text("R STICK", rs_x - 15.0, rs_y - 50.0, 14.0, GRAY);
-        draw_stick(rs_x, rs_y, 35.0, btn.right_stick_x, btn.right_stick_y, btn.rs_press);
+        draw_stick(
+            rs_x,
+            rs_y,
+            35.0,
+            btn.right_stick_x,
+            btn.right_stick_y,
+            btn.rs_press,
+        );
 
         // Last input indicator
         let elapsed = state.controllers.tester_last_input_time.elapsed();
         if elapsed.as_secs() < 2 {
-            draw_text("● Input detected", menu_x + 20.0, menu_y + menu_height - 50.0, 14.0, GREEN);
+            draw_text(
+                "● Input detected",
+                menu_x + 20.0,
+                menu_y + menu_height - 50.0,
+                14.0,
+                GREEN,
+            );
         }
     }
 
@@ -820,38 +1028,66 @@ fn render_gamepad_tester(state: &OverlayState) {
 // Helper functions for gamepad tester rendering
 
 fn draw_button(x: f32, y: f32, size: f32, pressed: bool, label: &str) {
-    let color = if pressed { GREEN } else { Color::new(0.3, 0.3, 0.3, 1.0) };
+    let color = if pressed {
+        GREEN
+    } else {
+        Color::new(0.3, 0.3, 0.3, 1.0)
+    };
     let border = if pressed { WHITE } else { GRAY };
-    
-    draw_rectangle(x - size/2.0, y - size/2.0, size, size, color);
-    draw_rectangle_lines(x - size/2.0, y - size/2.0, size, size, 2.0, border);
-    
+
+    draw_rectangle(x - size / 2.0, y - size / 2.0, size, size, color);
+    draw_rectangle_lines(x - size / 2.0, y - size / 2.0, size, size, 2.0, border);
+
     let label_size = if label.len() > 1 { 12.0 } else { 16.0 };
     let dims = measure_text(label, None, label_size as u16, 1.0);
-    draw_text(label, x - dims.width/2.0, y + dims.height/4.0, label_size, WHITE);
+    draw_text(
+        label,
+        x - dims.width / 2.0,
+        y + dims.height / 4.0,
+        label_size,
+        WHITE,
+    );
 }
 
 fn draw_button_colored(x: f32, y: f32, size: f32, pressed: bool, label: &str, color: Color) {
-    let bg_color = if pressed { color } else { Color::new(0.2, 0.2, 0.2, 1.0) };
-    let border = if pressed { WHITE } else { Color::new(color.r * 0.5, color.g * 0.5, color.b * 0.5, 1.0) };
-    
-    draw_circle(x, y, size/2.0, bg_color);
-    draw_circle_lines(x, y, size/2.0, 2.0, border);
-    
+    let bg_color = if pressed {
+        color
+    } else {
+        Color::new(0.2, 0.2, 0.2, 1.0)
+    };
+    let border = if pressed {
+        WHITE
+    } else {
+        Color::new(color.r * 0.5, color.g * 0.5, color.b * 0.5, 1.0)
+    };
+
+    draw_circle(x, y, size / 2.0, bg_color);
+    draw_circle_lines(x, y, size / 2.0, 2.0, border);
+
     let dims = measure_text(label, None, 14, 1.0);
-    draw_text(label, x - dims.width/2.0, y + dims.height/4.0, 14.0, WHITE);
+    draw_text(
+        label,
+        x - dims.width / 2.0,
+        y + dims.height / 4.0,
+        14.0,
+        WHITE,
+    );
 }
 
 fn draw_stick(x: f32, y: f32, radius: f32, stick_x: f32, stick_y: f32, pressed: bool) {
     // Outer circle (deadzone area)
     draw_circle_lines(x, y, radius, 2.0, GRAY);
-    
+
     // Stick position
     let stick_radius = radius * 0.4;
     let pos_x = x + stick_x * (radius - stick_radius);
     let pos_y = y - stick_y * (radius - stick_radius); // Invert Y for display
-    
-    let stick_color = if pressed { GREEN } else { Color::new(0.6, 0.6, 0.6, 1.0) };
+
+    let stick_color = if pressed {
+        GREEN
+    } else {
+        Color::new(0.6, 0.6, 0.6, 1.0)
+    };
     draw_circle(pos_x, pos_y, stick_radius, stick_color);
     draw_circle_lines(pos_x, pos_y, stick_radius, 2.0, WHITE);
 }
@@ -860,7 +1096,11 @@ fn draw_trigger(x: f32, y: f32, width: f32, height: f32, value: f32) {
     // Background
     draw_rectangle(x, y, width, height, Color::new(0.2, 0.2, 0.2, 1.0));
     // Fill
-    let fill_color = if value > 0.1 { GREEN } else { Color::new(0.3, 0.3, 0.3, 1.0) };
+    let fill_color = if value > 0.1 {
+        GREEN
+    } else {
+        Color::new(0.3, 0.3, 0.3, 1.0)
+    };
     draw_rectangle(x, y, width * value, height, fill_color);
     // Border
     draw_rectangle_lines(x, y, width, height, 1.0, GRAY);
@@ -872,11 +1112,23 @@ fn render_hotkey_settings(_state: &OverlayState) {
     let menu_x = (screen_width() - menu_width) / 2.0;
     let menu_y = (screen_height() - menu_height) / 2.0;
 
-    draw_rectangle(menu_x, menu_y, menu_width, menu_height, Color::new(0.1, 0.1, 0.15, 0.98));
+    draw_rectangle(
+        menu_x,
+        menu_y,
+        menu_width,
+        menu_height,
+        Color::new(0.1, 0.1, 0.15, 0.98),
+    );
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, YELLOW);
 
     // Title
-    draw_text("⌨️ HOTKEY SETTINGS", menu_x + 20.0, menu_y + 40.0, 28.0, YELLOW);
+    draw_text(
+        "⌨️ HOTKEY SETTINGS",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        28.0,
+        YELLOW,
+    );
 
     // Coming soon message
     draw_text(
@@ -893,17 +1145,65 @@ fn render_hotkey_settings(_state: &OverlayState) {
     // Show current default bindings
     draw_text("Current Hotkeys:", menu_x + 20.0, info_y, 20.0, WHITE);
 
-    draw_text("• Toggle Overlay:", menu_x + 30.0, info_y + line_height, 16.0, LIGHTGRAY);
-    draw_text("F12, Ctrl+O, Guide Button", menu_x + 200.0, info_y + line_height, 16.0, GREEN);
+    draw_text(
+        "• Toggle Overlay:",
+        menu_x + 30.0,
+        info_y + line_height,
+        16.0,
+        LIGHTGRAY,
+    );
+    draw_text(
+        "F12, Ctrl+O, Guide Button",
+        menu_x + 200.0,
+        info_y + line_height,
+        16.0,
+        GREEN,
+    );
 
-    draw_text("• Performance HUD:", menu_x + 30.0, info_y + line_height * 2.0, 16.0, LIGHTGRAY);
-    draw_text("F3", menu_x + 200.0, info_y + line_height * 2.0, 16.0, GREEN);
+    draw_text(
+        "• Performance HUD:",
+        menu_x + 30.0,
+        info_y + line_height * 2.0,
+        16.0,
+        LIGHTGRAY,
+    );
+    draw_text(
+        "F3",
+        menu_x + 200.0,
+        info_y + line_height * 2.0,
+        16.0,
+        GREEN,
+    );
 
-    draw_text("• Quick Save:", menu_x + 30.0, info_y + line_height * 3.0, 16.0, LIGHTGRAY);
-    draw_text("F5", menu_x + 200.0, info_y + line_height * 3.0, 16.0, GREEN);
+    draw_text(
+        "• Quick Save:",
+        menu_x + 30.0,
+        info_y + line_height * 3.0,
+        16.0,
+        LIGHTGRAY,
+    );
+    draw_text(
+        "F5",
+        menu_x + 200.0,
+        info_y + line_height * 3.0,
+        16.0,
+        GREEN,
+    );
 
-    draw_text("• Quick Load:", menu_x + 30.0, info_y + line_height * 4.0, 16.0, LIGHTGRAY);
-    draw_text("F9", menu_x + 200.0, info_y + line_height * 4.0, 16.0, GREEN);
+    draw_text(
+        "• Quick Load:",
+        menu_x + 30.0,
+        info_y + line_height * 4.0,
+        16.0,
+        LIGHTGRAY,
+    );
+    draw_text(
+        "F9",
+        menu_x + 200.0,
+        info_y + line_height * 4.0,
+        16.0,
+        GREEN,
+    );
 
     // Coming soon notice
     draw_text(
@@ -935,7 +1235,13 @@ fn render_menu_customization(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title
-    draw_text("⚙️ MENU CUSTOMIZATION", menu_x + 20.0, menu_y + 40.0, 28.0, t.cursor);
+    draw_text(
+        "⚙️ MENU CUSTOMIZATION",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        28.0,
+        t.cursor,
+    );
 
     // Instructions
     draw_text(
@@ -963,17 +1269,23 @@ fn render_menu_customization(state: &OverlayState) {
         let item_id = all_items[item_idx];
         let y = item_start_y + (i as f32 * item_height);
         let is_selected = item_idx == state.menu_customization_selected;
-        
+
         // Get item config
-        let item_config = state.menu_config.config().items.iter()
+        let item_config = state
+            .menu_config
+            .config()
+            .items
+            .iter()
             .find(|item| item.id == item_id)
             .unwrap();
 
         // Selection background
         if is_selected {
             draw_rectangle(
-                menu_x + 15.0, y,
-                menu_width - 30.0, item_height - 5.0,
+                menu_x + 15.0,
+                y,
+                menu_width - 30.0,
+                item_height - 5.0,
                 Color::new(0.3, 0.3, 0.4, 0.6),
             );
             draw_text("►", menu_x + 25.0, y + 28.0, 24.0, t.cursor);
@@ -981,16 +1293,42 @@ fn render_menu_customization(state: &OverlayState) {
 
         // Visibility indicator
         let visibility_icon = if item_config.visible { "✓" } else { "✗" };
-        let visibility_color = if item_config.visible { t.success } else { t.error };
-        draw_text(visibility_icon, menu_x + 60.0, y + 28.0, 20.0, visibility_color);
+        let visibility_color = if item_config.visible {
+            t.success
+        } else {
+            t.error
+        };
+        draw_text(
+            visibility_icon,
+            menu_x + 60.0,
+            y + 28.0,
+            20.0,
+            visibility_color,
+        );
 
         // Item name
-        let name_color = if item_config.visible { t.text } else { t.text_disabled };
-        draw_text(item_id.display_name(), menu_x + 100.0, y + 28.0, 22.0, name_color);
+        let name_color = if item_config.visible {
+            t.text
+        } else {
+            t.text_disabled
+        };
+        draw_text(
+            item_id.display_name(),
+            menu_x + 100.0,
+            y + 28.0,
+            22.0,
+            name_color,
+        );
 
         // Order indicator
         let order_text = format!("#{:02}", item_config.order + 1);
-        draw_text(&order_text, menu_x + menu_width - 100.0, y + 28.0, 18.0, LIGHTGRAY);
+        draw_text(
+            &order_text,
+            menu_x + menu_width - 100.0,
+            y + 28.0,
+            18.0,
+            LIGHTGRAY,
+        );
 
         // Move indicators
         if is_selected {
@@ -1005,10 +1343,22 @@ fn render_menu_customization(state: &OverlayState) {
 
     // Scroll indicators
     if scroll_offset > 0 {
-        draw_text("▲", menu_x + menu_width - 25.0, item_start_y + 10.0, 16.0, LIGHTGRAY);
+        draw_text(
+            "▲",
+            menu_x + menu_width - 25.0,
+            item_start_y + 10.0,
+            16.0,
+            LIGHTGRAY,
+        );
     }
     if scroll_offset + max_visible < all_items.len() {
-        draw_text("▼", menu_x + menu_width - 25.0, item_start_y + (max_visible as f32 * item_height) - 15.0, 16.0, LIGHTGRAY);
+        draw_text(
+            "▼",
+            menu_x + menu_width - 25.0,
+            item_start_y + (max_visible as f32 * item_height) - 15.0,
+            16.0,
+            LIGHTGRAY,
+        );
     }
 
     // Controls hint
@@ -1032,7 +1382,13 @@ fn render_theme_selection(state: &OverlayState) {
     draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 2.0, t.panel_border);
 
     // Title
-    draw_text("🎨 THEME SELECTION", menu_x + 20.0, menu_y + 40.0, 28.0, t.cursor);
+    draw_text(
+        "🎨 THEME SELECTION",
+        menu_x + 20.0,
+        menu_y + 40.0,
+        28.0,
+        t.cursor,
+    );
 
     // Instructions
     draw_text(
@@ -1063,13 +1419,16 @@ fn render_theme_selection(state: &OverlayState) {
         let is_current = theme_name == state.theme_config.theme_name();
 
         // Get theme preview
-        let preview_theme = crate::themes::Theme::by_name(theme_name).unwrap_or_else(|| crate::themes::Theme::dark());
+        let preview_theme = crate::themes::Theme::by_name(theme_name)
+            .unwrap_or_else(|| crate::themes::Theme::dark());
 
         // Selection background
         if is_selected {
             draw_rectangle(
-                menu_x + 15.0, y,
-                menu_width - 30.0, theme_height - 5.0,
+                menu_x + 15.0,
+                y,
+                menu_width - 30.0,
+                theme_height - 5.0,
                 Color::new(t.accent.r * 0.2, t.accent.g * 0.2, t.accent.b * 0.2, 0.6),
             );
             draw_text("►", menu_x + 25.0, y + 35.0, 24.0, t.cursor);
@@ -1091,25 +1450,68 @@ fn render_theme_selection(state: &OverlayState) {
         let swatch_spacing = 25.0;
 
         // Background
-        draw_rectangle(swatch_start_x, swatch_y, swatch_size, swatch_size, preview_theme.panel_background);
-        draw_rectangle_lines(swatch_start_x, swatch_y, swatch_size, swatch_size, 1.0, preview_theme.panel_border);
-        
+        draw_rectangle(
+            swatch_start_x,
+            swatch_y,
+            swatch_size,
+            swatch_size,
+            preview_theme.panel_background,
+        );
+        draw_rectangle_lines(
+            swatch_start_x,
+            swatch_y,
+            swatch_size,
+            swatch_size,
+            1.0,
+            preview_theme.panel_border,
+        );
+
         // Text
-        draw_rectangle(swatch_start_x + swatch_spacing, swatch_y, swatch_size, swatch_size, preview_theme.text);
-        
+        draw_rectangle(
+            swatch_start_x + swatch_spacing,
+            swatch_y,
+            swatch_size,
+            swatch_size,
+            preview_theme.text,
+        );
+
         // Cursor/Accent
-        draw_rectangle(swatch_start_x + swatch_spacing * 2.0, swatch_y, swatch_size, swatch_size, preview_theme.cursor);
-        
+        draw_rectangle(
+            swatch_start_x + swatch_spacing * 2.0,
+            swatch_y,
+            swatch_size,
+            swatch_size,
+            preview_theme.cursor,
+        );
+
         // Accent
-        draw_rectangle(swatch_start_x + swatch_spacing * 3.0, swatch_y, swatch_size, swatch_size, preview_theme.accent);
+        draw_rectangle(
+            swatch_start_x + swatch_spacing * 3.0,
+            swatch_y,
+            swatch_size,
+            swatch_size,
+            preview_theme.accent,
+        );
     }
 
     // Scroll indicators
     if scroll_offset > 0 {
-        draw_text("▲", menu_x + menu_width - 25.0, theme_start_y + 10.0, 16.0, t.text_secondary);
+        draw_text(
+            "▲",
+            menu_x + menu_width - 25.0,
+            theme_start_y + 10.0,
+            16.0,
+            t.text_secondary,
+        );
     }
     if scroll_offset + max_visible < themes.len() {
-        draw_text("▼", menu_x + menu_width - 25.0, theme_start_y + (max_visible as f32 * theme_height) - 15.0, 16.0, t.text_secondary);
+        draw_text(
+            "▼",
+            menu_x + menu_width - 25.0,
+            theme_start_y + (max_visible as f32 * theme_height) - 15.0,
+            16.0,
+            t.text_secondary,
+        );
     }
 
     // Controls hint
@@ -1132,7 +1534,13 @@ fn render_performance(state: &OverlayState) {
     draw_panel(panel_x, panel_y, panel_width, panel_height, &t);
 
     // Title
-    draw_text("PERFORMANCE", panel_x + 20.0, panel_y + 40.0, 32.0, t.cursor);
+    draw_text(
+        "PERFORMANCE",
+        panel_x + 20.0,
+        panel_y + 40.0,
+        32.0,
+        t.cursor,
+    );
 
     // Performance stats
     let stats_y = panel_y + 80.0;
@@ -1180,8 +1588,21 @@ fn render_playtime(state: &OverlayState) {
     let panel_y = (screen_height() - panel_height) / 2.0;
 
     // Panel background
-    draw_rectangle(panel_x, panel_y, panel_width, panel_height, t.panel_background);
-    draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, 3.0, t.panel_border);
+    draw_rectangle(
+        panel_x,
+        panel_y,
+        panel_width,
+        panel_height,
+        t.panel_background,
+    );
+    draw_rectangle_lines(
+        panel_x,
+        panel_y,
+        panel_width,
+        panel_height,
+        3.0,
+        t.panel_border,
+    );
 
     // Title
     draw_text("PLAYTIME", panel_x + 20.0, panel_y + 40.0, 32.0, t.cursor);
@@ -1193,7 +1614,10 @@ fn render_playtime(state: &OverlayState) {
         let seconds = session_time.as_secs() % 60;
 
         draw_text(
-            &format!("Current Session: {:02}:{:02}:{:02}", hours, minutes, seconds),
+            &format!(
+                "Current Session: {:02}:{:02}:{:02}",
+                hours, minutes, seconds
+            ),
             panel_x + 40.0,
             panel_y + 100.0,
             24.0,
@@ -1224,11 +1648,7 @@ fn draw_vignette() {
     let h = screen_height();
     let fade = |alpha: f32| Color::new(0.0, 0.0, 0.0, alpha);
 
-    let bands = [
-        (0.04, fade(0.20)),
-        (0.07, fade(0.12)),
-        (0.10, fade(0.08)),
-    ];
+    let bands = [(0.04, fade(0.20)), (0.07, fade(0.12)), (0.10, fade(0.08))];
 
     for (thickness_ratio, color) in bands {
         let t = h * thickness_ratio;
@@ -1259,11 +1679,30 @@ fn render_quit_confirm(state: &OverlayState) {
     let dialog_y = (screen_height() - dialog_height) / 2.0;
 
     // Dialog background with red tint
-    draw_rectangle(dialog_x, dialog_y, dialog_width, dialog_height, Color::new(t.error.r * 0.15, t.error.g * 0.08, t.error.b * 0.08, 0.98));
-    draw_rectangle_lines(dialog_x, dialog_y, dialog_width, dialog_height, 3.0, t.error);
+    draw_rectangle(
+        dialog_x,
+        dialog_y,
+        dialog_width,
+        dialog_height,
+        Color::new(t.error.r * 0.15, t.error.g * 0.08, t.error.b * 0.08, 0.98),
+    );
+    draw_rectangle_lines(
+        dialog_x,
+        dialog_y,
+        dialog_width,
+        dialog_height,
+        3.0,
+        t.error,
+    );
 
     // Warning icon and title
-    draw_text("⚠️ QUIT GAME?", dialog_x + 130.0, dialog_y + 50.0, 32.0, t.error);
+    draw_text(
+        "⚠️ QUIT GAME?",
+        dialog_x + 130.0,
+        dialog_y + 50.0,
+        32.0,
+        t.error,
+    );
 
     // Message
     draw_text(
@@ -1295,7 +1734,14 @@ fn render_quit_confirm(state: &OverlayState) {
     let cancel_border = if cancel_selected { t.cursor } else { GRAY };
 
     draw_rectangle(dialog_x + 50.0, button_y, 150.0, 35.0, cancel_bg);
-    draw_rectangle_lines(dialog_x + 50.0, button_y, 150.0, 35.0, if cancel_selected { 3.0 } else { 2.0 }, cancel_border);
+    draw_rectangle_lines(
+        dialog_x + 50.0,
+        button_y,
+        150.0,
+        35.0,
+        if cancel_selected { 3.0 } else { 2.0 },
+        cancel_border,
+    );
 
     // Selection indicator for Cancel
     if cancel_selected {
@@ -1310,14 +1756,31 @@ fn render_quit_confirm(state: &OverlayState) {
     } else {
         Color::new(0.6, 0.2, 0.2, 1.0)
     };
-    let quit_border = if quit_selected { Color::new(1.0, 0.4, 0.4, 1.0) } else { RED };
+    let quit_border = if quit_selected {
+        Color::new(1.0, 0.4, 0.4, 1.0)
+    } else {
+        RED
+    };
 
     draw_rectangle(dialog_x + 250.0, button_y, 150.0, 35.0, quit_bg);
-    draw_rectangle_lines(dialog_x + 250.0, button_y, 150.0, 35.0, if quit_selected { 3.0 } else { 2.0 }, quit_border);
+    draw_rectangle_lines(
+        dialog_x + 250.0,
+        button_y,
+        150.0,
+        35.0,
+        if quit_selected { 3.0 } else { 2.0 },
+        quit_border,
+    );
 
     // Selection indicator for Quit
     if quit_selected {
-        draw_text("►", dialog_x + 225.0, button_y + 25.0, 24.0, Color::new(1.0, 0.4, 0.4, 1.0));
+        draw_text(
+            "►",
+            dialog_x + 225.0,
+            button_y + 25.0,
+            24.0,
+            Color::new(1.0, 0.4, 0.4, 1.0),
+        );
     }
 
     draw_text("QUIT", dialog_x + 290.0, button_y + 25.0, 20.0, WHITE);
@@ -1433,13 +1896,7 @@ fn render_performance_hud(state: &OverlayState) {
     } else {
         RED
     };
-    draw_text(
-        &format!("FPS: {:.1}", fps),
-        text_x,
-        text_y,
-        16.0,
-        fps_color,
-    );
+    draw_text(&format!("FPS: {:.1}", fps), text_x, text_y, 16.0, fps_color);
     text_y += line_height;
 
     // Frame time

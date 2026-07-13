@@ -39,8 +39,7 @@ impl CredentialManager {
             .context("Could not find home directory")?
             .join(".local/share/kazeta-plus");
 
-        fs::create_dir_all(&data_dir)
-            .context("Failed to create kazeta data directory")?;
+        fs::create_dir_all(&data_dir).context("Failed to create kazeta data directory")?;
 
         let credentials_path = data_dir.join("ra_credentials.json");
 
@@ -74,8 +73,8 @@ impl CredentialManager {
         let content = fs::read_to_string(&self.credentials_path)
             .context("Failed to read credentials file")?;
 
-        let creds: Credentials = serde_json::from_str(&content)
-            .context("Failed to parse credentials")?;
+        let creds: Credentials =
+            serde_json::from_str(&content).context("Failed to parse credentials")?;
 
         Ok(Some(creds))
     }
@@ -90,18 +89,20 @@ impl CredentialManager {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&config_path)
-            .context("Failed to read BIOS config file")?;
+        let content =
+            fs::read_to_string(&config_path).context("Failed to read BIOS config file")?;
 
         // Parse TOML manually to extract retroachievements section
-        let config: toml::Value = toml::from_str(&content)
-            .context("Failed to parse BIOS config TOML")?;
+        let config: toml::Value =
+            toml::from_str(&content).context("Failed to parse BIOS config TOML")?;
 
         if let Some(ra_section) = config.get("retroachievements") {
-            let username = ra_section.get("username")
+            let username = ra_section
+                .get("username")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            let api_key = ra_section.get("api_key")
+            let api_key = ra_section
+                .get("api_key")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
@@ -117,11 +118,10 @@ impl CredentialManager {
 
     /// Save credentials to storage
     pub fn save(&self, credentials: &Credentials) -> Result<()> {
-        let json = serde_json::to_string_pretty(credentials)
-            .context("Failed to serialize credentials")?;
+        let json =
+            serde_json::to_string_pretty(credentials).context("Failed to serialize credentials")?;
 
-        fs::write(&self.credentials_path, json)
-            .context("Failed to write credentials file")?;
+        fs::write(&self.credentials_path, json).context("Failed to write credentials file")?;
 
         // Set restrictive permissions (Unix only)
         #[cfg(unix)]
@@ -138,8 +138,7 @@ impl CredentialManager {
     /// Delete stored credentials
     pub fn delete(&self) -> Result<()> {
         if self.credentials_path.exists() {
-            fs::remove_file(&self.credentials_path)
-                .context("Failed to delete credentials file")?;
+            fs::remove_file(&self.credentials_path).context("Failed to delete credentials file")?;
         }
         Ok(())
     }
@@ -174,4 +173,3 @@ impl Default for CredentialManager {
         Self::new().expect("Failed to create credential manager")
     }
 }
-

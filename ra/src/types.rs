@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+fn default_achievement_type() -> String {
+    "standard".to_string()
+}
+
 /// Console IDs as defined by RetroAchievements
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u32)]
@@ -17,6 +21,8 @@ pub enum ConsoleId {
     PlayStation2 = 21,
     Atari2600 = 25,
     VirtualBoy = 28,
+    GameCube = 16,
+    Wii = 19,
 }
 
 impl ConsoleId {
@@ -35,6 +41,8 @@ impl ConsoleId {
             "nds" | "ds" | "nintendo ds" => Some(Self::NintendoDS),
             "atari2600" | "2600" => Some(Self::Atari2600),
             "vb" | "virtual boy" => Some(Self::VirtualBoy),
+            "gamecube" | "gc" | "ngc" => Some(Self::GameCube),
+            "wii" => Some(Self::Wii),
             _ => None,
         }
     }
@@ -58,6 +66,8 @@ impl ConsoleId {
             Self::NintendoDS => "nds".to_string(),
             Self::Atari2600 => "atari2600".to_string(),
             Self::VirtualBoy => "vb".to_string(),
+            Self::GameCube => "gamecube".to_string(),
+            Self::Wii => "wii".to_string(),
         }
     }
 }
@@ -145,6 +155,11 @@ pub struct Achievement {
     pub badge_name: String,
     #[serde(rename = "DisplayOrder")]
     pub display_order: u32,
+    #[serde(rename = "MemAddr")]
+    pub mem_addr: Option<String>,
+    #[serde(rename = "Type")]
+    #[serde(default = "default_achievement_type")]
+    pub achievement_type: String,
     #[serde(rename = "DateEarned")]
     pub date_earned: Option<String>,
     #[serde(rename = "DateEarnedHardcore")]
@@ -209,3 +224,40 @@ pub struct GameListEntry {
     pub points: u32,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gamecube_from_str() {
+        assert_eq!(ConsoleId::from_str("gamecube"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::from_str("gc"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::from_str("ngc"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::from_str("GAMECUBE"), Some(ConsoleId::GameCube));
+    }
+
+    #[test]
+    fn test_wii_from_str() {
+        assert_eq!(ConsoleId::from_str("wii"), Some(ConsoleId::Wii));
+    }
+
+    #[test]
+    fn test_gamecube_as_u32() {
+        assert_eq!(ConsoleId::GameCube.as_u32(), 16);
+    }
+
+    #[test]
+    fn test_wii_as_u32() {
+        assert_eq!(ConsoleId::Wii.as_u32(), 19);
+    }
+
+    #[test]
+    fn test_gamecube_to_string() {
+        assert_eq!(ConsoleId::GameCube.to_string(), "gamecube");
+    }
+
+    #[test]
+    fn test_wii_to_string() {
+        assert_eq!(ConsoleId::Wii.to_string(), "wii");
+    }
+}

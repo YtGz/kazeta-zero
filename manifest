@@ -25,6 +25,8 @@ export PACKAGES="\
 	brightnessctl \
 	clang \
 	dkms \
+	dolphin-emu \
+	erofs-utils \
 	ffmpeg \
 	fuse2 \
 	fuse3 \

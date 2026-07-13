@@ -8,6 +8,10 @@ description = "RetroAchievements integration for Kazeta+"
 name = "kazeta-ra"
 path = "src/main.rs"
 
+[[bin]]
+name = "kazeta-ra-export"
+path = "src/export.rs"
+
 [lib]
 name = "kazeta_ra"
 path = "src/lib.rs"

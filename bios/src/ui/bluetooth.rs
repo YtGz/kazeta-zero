@@ -1,26 +1,25 @@
-#[cfg(target_os = "linux")]
-use bluer::{
-    AdapterEvent, Result, Session, DiscoveryFilter,
-    agent::{Agent, RequestAuthorization, RequestConfirmation, RequestPasskey, RequestPinCode},
-};
 use crate::{
     audio::SoundEffects,
     config::Config,
+    get_current_font, measure_text, render_background, render_ui_overlay, text_with_config_color,
     types::{AnimationState, BackgroundState, BatteryInfo, Screen},
     ui::text_with_color,
-    render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color,
-    FONT_SIZE, InputState, DEV_MODE, VideoPlayer,
+    InputState, VideoPlayer, DEV_MODE, FONT_SIZE,
+};
+#[cfg(target_os = "linux")]
+use bluer::{
+    agent::{Agent, RequestAuthorization, RequestConfirmation, RequestPasskey, RequestPinCode},
+    AdapterEvent, DiscoveryFilter, Result, Session,
 };
 use futures::StreamExt;
 use macroquad::prelude::*;
-use std::{
-    thread,
-    collections::HashMap,
-    result::Result as StdResult,
-};
+use std::{collections::HashMap, result::Result as StdResult, thread};
 use tokio::{
     runtime::Runtime,
-    sync::mpsc::{unbounded_channel as tokio_channel, UnboundedReceiver as TokioReceiver, UnboundedSender as TokioSender},
+    sync::mpsc::{
+        unbounded_channel as tokio_channel, UnboundedReceiver as TokioReceiver,
+        UnboundedSender as TokioSender,
+    },
     time::{sleep, Duration},
 };
 
@@ -115,7 +114,10 @@ pub fn update(
                 sorted_devices.sort_by(|a, b| a.name.cmp(&b.name));
                 state.devices = sorted_devices;
 
-                println!("[UI_DEBUG] Updated device list. Count: {}", state.devices.len());
+                println!(
+                    "[UI_DEBUG] Updated device list. Count: {}",
+                    state.devices.len()
+                );
             }
             BluetoothMessage::ScanResult(Err(e)) | BluetoothMessage::Error(e) => {
                 state.screen_state = BluetoothScreenState::Error(e);
@@ -129,7 +131,10 @@ pub fn update(
                 state.screen_state = BluetoothScreenState::Connected(device_name);
             }
             BluetoothMessage::ForgetSuccess(device_name) => {
-                println!("[UI_UPDATE] Received ForgetSuccess for {}. List will refresh.", device_name);
+                println!(
+                    "[UI_UPDATE] Received ForgetSuccess for {}. List will refresh.",
+                    device_name
+                );
                 // The device list will update automatically from the agent's
                 // DeviceRemoved event or the next poll.
             }
@@ -169,14 +174,16 @@ pub fn update(
             }
         }
         BluetoothScreenState::ForgetConfirm(device) => {
-            if input_state.select { // "Yes"
+            if input_state.select {
+                // "Yes"
                 println!("[UI_UPDATE] Confirmed forget for {}", device.name);
                 // Send the command to the agent
                 let _ = state.tx_cmd.send(format!("forget {}", device.mac_address));
                 state.screen_state = BluetoothScreenState::DeviceList; // Go back to list
                 state.selected_index = 0; // Reset cursor
                 sound_effects.play_select(config);
-            } else if input_state.back { // "No"
+            } else if input_state.back {
+                // "No"
                 println!("[UI_UPDATE] Canceled forget for {}", device.name);
                 state.screen_state = BluetoothScreenState::DeviceList;
                 sound_effects.play_back(config);
@@ -193,7 +200,9 @@ pub fn update(
         // "Back" from a waiting screen should also go to the list
         BluetoothScreenState::Pairing(_) | BluetoothScreenState::Connecting(_) => {
             if input_state.back {
-                println!("[UI_UPDATE] Back pressed on Pairing/Connecting - Navigating to DeviceList."); // Add log
+                println!(
+                    "[UI_UPDATE] Back pressed on Pairing/Connecting - Navigating to DeviceList."
+                ); // Add log
                 state.screen_state = BluetoothScreenState::DeviceList;
                 state.selected_index = 0;
                 sound_effects.play_back(config);
@@ -221,9 +230,23 @@ pub fn draw(
     render_background(background_cache, video_cache, config, background_state);
 
     // dim the background for easier legibility
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
 
-    render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     let font = get_current_font(font_cache, config);
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
@@ -240,7 +263,14 @@ pub fn draw(
                 let dots = ".".repeat(dot_count);
                 let text = format!("Scanning for new devices{}", dots);
                 let dims = measure_text(&text, Some(font), font_size, 1.0);
-                text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y, font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &text,
+                    center_x - dims.width / 2.0,
+                    center_y,
+                    font_size,
+                );
             } else {
                 for (i, device) in state.devices.iter().enumerate() {
                     let y_pos = start_y + (i as f32 * line_height);
@@ -258,7 +288,7 @@ pub fn draw(
                             dims.width + 40.0,
                             line_height,
                             8.0,
-                            cursor_color
+                            cursor_color,
                         );
                     }
 
@@ -266,10 +296,25 @@ pub fn draw(
                     if is_selected && config.cursor_style == "TEXT" {
                         // [!] TEXT Highlight Style
                         let highlight_color = animation_state.get_cursor_color(config);
-                        text_with_color(font_cache, config, &device.name, x_pos, y_pos, font_size, highlight_color);
+                        text_with_color(
+                            font_cache,
+                            config,
+                            &device.name,
+                            x_pos,
+                            y_pos,
+                            font_size,
+                            highlight_color,
+                        );
                     } else {
                         // Standard Text
-                        text_with_config_color(font_cache, config, &device.name, x_pos, y_pos, font_size);
+                        text_with_config_color(
+                            font_cache,
+                            config,
+                            &device.name,
+                            x_pos,
+                            y_pos,
+                            font_size,
+                        );
                     }
                 }
             }
@@ -277,35 +322,76 @@ pub fn draw(
         BluetoothScreenState::ForgetConfirm(device) => {
             let text = format!("Remove {}?", device.name);
             let dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y - line_height, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - dims.width / 2.0,
+                center_y - line_height,
+                font_size,
+            );
 
             let prompt = "Select = Yes / Back = No";
             let prompt_dims = measure_text(prompt, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, prompt, center_x - prompt_dims.width / 2.0, center_y + line_height, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                prompt,
+                center_x - prompt_dims.width / 2.0,
+                center_y + line_height,
+                font_size,
+            );
         }
         BluetoothScreenState::Pairing(name) => {
             let text = format!("Pairing with {}...", name);
             let dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - dims.width / 2.0,
+                center_y,
+                font_size,
+            );
         }
         BluetoothScreenState::Connecting(name) => {
             let text = format!("Connecting to {}...", name);
             let dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - dims.width / 2.0,
+                center_y,
+                font_size,
+            );
         }
         BluetoothScreenState::Connected(name) => {
             let text = format!("Successfully connected to {}!", name);
             let dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - dims.width / 2.0,
+                center_y,
+                font_size,
+            );
         }
         BluetoothScreenState::Error(msg) => {
             let text = format!("Error: {}", msg);
             let dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - dims.width / 2.0, center_y, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - dims.width / 2.0,
+                center_y,
+                font_size,
+            );
         }
     }
 }
-
 
 // --- Background Thread Function ---
 
@@ -325,7 +411,7 @@ async fn run_bluetooth_agent(
         request_confirmation: Some(Box::new(|req: RequestConfirmation| {
             println!(
                 "[BT_AGENT] Auto-accepting pairing confirmation (Passkey: {})",
-                    req.passkey
+                req.passkey
             );
             // We return a Pinned Future that resolves to Ok(())
             Box::pin(async { Ok(()) })
@@ -369,8 +455,12 @@ async fn run_bluetooth_agent(
     // which scans for both Classic and LE devices. This is what we want.
 
     if let Err(e) = adapter.set_discovery_filter(filter).await {
-        eprintln!("[BT_AGENT] Warning: Could not set discovery filter: {}. May only see known devices.", e);
-        tx.send(BluetoothMessage::Error(format!("Filter failed: {}", e))).ok();
+        eprintln!(
+            "[BT_AGENT] Warning: Could not set discovery filter: {}. May only see known devices.",
+            e
+        );
+        tx.send(BluetoothMessage::Error(format!("Filter failed: {}", e)))
+            .ok();
     }
     println!("[BT_AGENT] Filter set.");
 
@@ -568,10 +658,7 @@ async fn run_bluetooth_agent(
     Ok(())
 }
 
-fn manage_bluetooth_agent(
-    tx: TokioSender<BluetoothMessage>,
-    rx_cmd: TokioReceiver<String>,
-) {
+fn manage_bluetooth_agent(tx: TokioSender<BluetoothMessage>, rx_cmd: TokioReceiver<String>) {
     thread::spawn(move || {
         println!("[BT_AGENT] Starting Bluetooth agent thread...");
         let rt = Runtime::new().expect("Failed to create Tokio runtime");
@@ -579,7 +666,9 @@ fn manage_bluetooth_agent(
         let tx_err = tx.clone();
         if let Err(e) = rt.block_on(run_bluetooth_agent(tx, rx_cmd)) {
             eprintln!("[BT_AGENT] run_bluetooth_agent failed: {}", e);
-            tx_err.send(BluetoothMessage::Error(format!("Agent failed: {}", e))).ok();
+            tx_err
+                .send(BluetoothMessage::Error(format!("Agent failed: {}", e)))
+                .ok();
         }
         println!("[BT_AGENT] Bluetooth agent thread finished.");
     });

@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use crate::{
     audio::SoundEffects,
     config::Config,
+    get_current_font, measure_text, render_background, render_ui_overlay, text_with_config_color,
     types::{AnimationState, BackgroundState, BatteryInfo, Screen},
     ui::text_with_color,
-    render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color,
-    FONT_SIZE, MENU_PADDING, MENU_OPTION_HEIGHT, InputState, VideoPlayer,
+    InputState, VideoPlayer, FONT_SIZE, MENU_OPTION_HEIGHT, MENU_PADDING,
 };
 
 #[cfg(target_os = "linux")]
@@ -39,7 +39,11 @@ pub fn update(
     config: &Config,
 ) {
     if input_state.up {
-        *extras_menu_selection = if *extras_menu_selection == 0 { EXTRAS_MENU_OPTIONS.len() - 1 } else { *extras_menu_selection - 1 };
+        *extras_menu_selection = if *extras_menu_selection == 0 {
+            EXTRAS_MENU_OPTIONS.len() - 1
+        } else {
+            *extras_menu_selection - 1
+        };
         animation_state.trigger_transition(&config.cursor_transition_speed);
         sound_effects.play_cursor_move(config);
     }
@@ -94,9 +98,23 @@ pub fn draw(
     render_background(background_cache, video_cache, config, background_state);
 
     // dim the background for easier legibility
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
 
-    render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
     let menu_padding = MENU_PADDING * scale_factor;
@@ -140,7 +158,15 @@ pub fn draw(
 
         if is_selected && config.cursor_style == "TEXT" {
             let highlight_color = animation_state.get_cursor_color(config);
-            text_with_color(font_cache, config, option, x_pos, y_pos, font_size, highlight_color);
+            text_with_color(
+                font_cache,
+                config,
+                option,
+                x_pos,
+                y_pos,
+                font_size,
+                highlight_color,
+            );
         } else {
             text_with_config_color(font_cache, config, option, x_pos, y_pos, font_size);
         }

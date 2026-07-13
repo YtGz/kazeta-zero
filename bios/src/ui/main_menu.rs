@@ -1,21 +1,39 @@
 use crate::{
-    Screen, UIFocus, InputState, copy_session_logs_to_sd, render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color, text_disabled, FLASH_MESSAGE_DURATION, FONT_SIZE, MENU_PADDING, MENU_OPTION_HEIGHT, ShakeTarget, save, StorageMediaState, VideoPlayer,
     audio::SoundEffects,
     config::Config,
+    copy_session_logs_to_sd, get_current_font, measure_text, render_background, render_ui_overlay,
+    save, text_disabled, text_with_config_color,
     types::{AnimationState, BackgroundState, BatteryInfo, MenuPosition},
     ui::text_with_color,
+    InputState, Screen, ShakeTarget, StorageMediaState, UIFocus, VideoPlayer,
+    FLASH_MESSAGE_DURATION, FONT_SIZE, MENU_OPTION_HEIGHT, MENU_PADDING,
 };
 use macroquad::prelude::*;
 use rodio::{buffer::SamplesBuffer, Sink};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
     sync::atomic::Ordering,
+    sync::{Arc, Mutex},
 };
 
-pub const MAIN_MENU_OPTIONS: &[&str] = &["DATA", "PLAY", "BLADES", "COPY SESSION LOGS", "SETTINGS", "EXTRAS", "ABOUT"];
-pub const MAIN_MENU_OPTIONS_NO_BLADES: &[&str] = &["DATA", "PLAY", "COPY SESSION LOGS", "SETTINGS", "EXTRAS", "ABOUT"];
+pub const MAIN_MENU_OPTIONS: &[&str] = &[
+    "DATA",
+    "PLAY",
+    "BLADES",
+    "COPY SESSION LOGS",
+    "SETTINGS",
+    "EXTRAS",
+    "ABOUT",
+];
+pub const MAIN_MENU_OPTIONS_NO_BLADES: &[&str] = &[
+    "DATA",
+    "PLAY",
+    "COPY SESSION LOGS",
+    "SETTINGS",
+    "EXTRAS",
+    "ABOUT",
+];
 
 pub fn update(
     current_screen: &mut Screen,
@@ -38,7 +56,11 @@ pub fn update(
     flash_message: &mut Option<(String, f32)>,
     _game_process: &mut Option<std::process::Child>,
 ) {
-    let menu_options = if config.blades_enabled { MAIN_MENU_OPTIONS } else { MAIN_MENU_OPTIONS_NO_BLADES };
+    let menu_options = if config.blades_enabled {
+        MAIN_MENU_OPTIONS
+    } else {
+        MAIN_MENU_OPTIONS_NO_BLADES
+    };
 
     // Update play option enabled status based on cart connection
     *play_option_enabled = cart_connected.load(Ordering::Relaxed);
@@ -73,7 +95,7 @@ pub fn update(
                 *current_screen = Screen::SaveData;
                 input_state.ui_focus = UIFocus::Grid;
                 sound_effects.play_select(&config);
-            },
+            }
             "PLAY" => {
                 if *play_option_enabled {
                     sound_effects.play_select(&config);
@@ -96,7 +118,8 @@ pub fn update(
                                         }
                                     } else if ext == "kzp" {
                                         // Logic for KZP (Compressed Package)
-                                        let filename = path.file_stem().unwrap().to_string_lossy().to_string();
+                                        let filename =
+                                            path.file_stem().unwrap().to_string_lossy().to_string();
                                         let info = save::CartInfo {
                                             name: Some(filename.clone()),
                                             id: filename,
@@ -117,17 +140,21 @@ pub fn update(
                                     logs.push("--- ERRORS ---".to_string());
                                     logs.extend(parse_errors);
                                     *current_screen = Screen::Debug;
-                                },
+                                }
                                 1 => {
                                     *available_games = games;
                                     *game_selection = 0;
                                     *current_screen = Screen::GameSelection;
-                                },
+                                }
                                 _ => {
-                                    println!("[Debug] Found {} games. Switching to selection screen.", games.len());
+                                    println!(
+                                        "[Debug] Found {} games. Switching to selection screen.",
+                                        games.len()
+                                    );
                                     game_icon_queue.clear();
                                     for (cart_info, game_path) in &games {
-                                        let is_package = game_path.extension().map_or(false, |e| e == "kzp");
+                                        let is_package =
+                                            game_path.extension().map_or(false, |e| e == "kzp");
                                         let icon_path = if is_package {
                                             let sidecar_png = game_path.with_extension("png");
                                             let sidecar_jpg = game_path.with_extension("jpg");
@@ -149,7 +176,7 @@ pub fn update(
                                     *current_screen = Screen::GameSelection;
                                 }
                             }
-                        },
+                        }
                         Err(e) => {
                             let error_msg = format!("[Error] Error scanning for cartridges: {}", e);
                             println!("[Error] {}", &error_msg);
@@ -161,39 +188,41 @@ pub fn update(
                     sound_effects.play_reject(&config);
                     animation_state.trigger_play_option_shake();
                 }
-            },
+            }
             "BLADES" => {
                 *current_screen = Screen::BladesDashboard;
                 sound_effects.play_select(config);
-            },
+            }
             "COPY SESSION LOGS" => {
                 if *copy_logs_option_enabled {
                     sound_effects.play_select(&config);
                     match copy_session_logs_to_sd() {
                         Ok(path) => {
-                            *flash_message = Some((format!("SUCCESS: {}", path), FLASH_MESSAGE_DURATION));
+                            *flash_message =
+                                Some((format!("SUCCESS: {}", path), FLASH_MESSAGE_DURATION));
                         }
                         Err(e) => {
-                            *flash_message = Some((format!("ERROR: {}", e), FLASH_MESSAGE_DURATION));
+                            *flash_message =
+                                Some((format!("ERROR: {}", e), FLASH_MESSAGE_DURATION));
                         }
                     }
                 } else {
                     sound_effects.play_reject(&config);
                     animation_state.trigger_copy_log_option_shake();
                 }
-            },
+            }
             "SETTINGS" => {
                 *current_screen = Screen::GeneralSettings;
                 sound_effects.play_select(&config);
-            },
+            }
             "EXTRAS" => {
                 *current_screen = Screen::Extras;
                 sound_effects.play_select(&config);
-            },
+            }
             "ABOUT" => {
                 *current_screen = Screen::About;
                 sound_effects.play_select(&config);
-            },
+            }
             _ => {}
         }
     }
@@ -216,9 +245,21 @@ pub fn draw(
     scale_factor: f32,
     flash_message: Option<&str>,
 ) {
-    let menu_options = if config.blades_enabled { MAIN_MENU_OPTIONS } else { MAIN_MENU_OPTIONS_NO_BLADES };
+    let menu_options = if config.blades_enabled {
+        MAIN_MENU_OPTIONS
+    } else {
+        MAIN_MENU_OPTIONS_NO_BLADES
+    };
     render_background(background_cache, video_cache, config, background_state);
-    render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
     let menu_padding = MENU_PADDING * scale_factor;
@@ -229,11 +270,23 @@ pub fn draw(
     let current_font = get_current_font(font_cache, config);
 
     let (start_x, start_y, is_centered) = match config.menu_position {
-        MenuPosition::Center => (screen_width() / 2.0, (screen_height() * 0.3).max(margin_y), true),
+        MenuPosition::Center => (
+            screen_width() / 2.0,
+            (screen_height() * 0.3).max(margin_y),
+            true,
+        ),
         MenuPosition::TopLeft => (margin_x, margin_y, false),
         MenuPosition::TopRight => (screen_width() - margin_x, margin_y, false),
-        MenuPosition::BottomLeft => (margin_x, screen_height() - (menu_options.len() as f32 * menu_option_height), false),
-        MenuPosition::BottomRight => (screen_width() - margin_x, screen_height() - (menu_options.len() as f32 * menu_option_height), false),
+        MenuPosition::BottomLeft => (
+            margin_x,
+            screen_height() - (menu_options.len() as f32 * menu_option_height),
+            false,
+        ),
+        MenuPosition::BottomRight => (
+            screen_width() - margin_x,
+            screen_height() - (menu_options.len() as f32 * menu_option_height),
+            false,
+        ),
     };
 
     for (i, &option) in menu_options.iter().enumerate() {
@@ -250,11 +303,14 @@ pub fn draw(
         if i == 1 && !play_option_enabled && i == selected_option {
             x_pos += animation_state.calculate_shake_offset(ShakeTarget::PlayOption);
         }
-        let (is_selected, is_disabled) = (i == selected_option, match option {
-            "PLAY" => !play_option_enabled,
-            "COPY SESSION LOGS" => !copy_logs_option_enabled,
-            _ => false,
-        });
+        let (is_selected, is_disabled) = (
+            i == selected_option,
+            match option {
+                "PLAY" => !play_option_enabled,
+                "COPY SESSION LOGS" => !copy_logs_option_enabled,
+                _ => false,
+            },
+        );
 
         if is_selected && config.cursor_style == "BOX" {
             let cursor_color = animation_state.get_cursor_color(config);
@@ -267,7 +323,14 @@ pub fn draw(
             let offset_y = (scaled_height - base_height) / 2.0;
             let rect_x = x_pos - menu_padding;
             let rect_y = y_pos - text_dims.height - menu_padding;
-            draw_rectangle_lines(rect_x - offset_x, rect_y - offset_y, scaled_width, scaled_height, 4.0 * scale_factor, cursor_color);
+            draw_rectangle_lines(
+                rect_x - offset_x,
+                rect_y - offset_y,
+                scaled_width,
+                scaled_height,
+                4.0 * scale_factor,
+                cursor_color,
+            );
         }
 
         if is_selected && config.cursor_style == "TEXT" {
@@ -278,7 +341,15 @@ pub fn draw(
                 highlight_color.b *= 0.5;
                 highlight_color.a = 1.0;
             }
-            text_with_color(font_cache, config, option, x_pos, y_pos, font_size, highlight_color);
+            text_with_color(
+                font_cache,
+                config,
+                option,
+                x_pos,
+                y_pos,
+                font_size,
+                highlight_color,
+            );
         } else if is_disabled {
             text_disabled(font_cache, config, option, x_pos, y_pos, font_size);
         } else {
@@ -292,7 +363,13 @@ pub fn draw(
         let dims = measure_text(message, Some(current_font), font_size, 1.0);
         let x = screen_width() / 2.0 - dims.width / 2.0;
         let y = screen_height() - (60.0 * scale_factor);
-        draw_rectangle(x - (10.0 * scale_factor), y - dims.height, dims.width + (20.0 * scale_factor), dims.height + (10.0 * scale_factor), Color::new(0.0, 0.0, 0.0, 0.7));
+        draw_rectangle(
+            x - (10.0 * scale_factor),
+            y - dims.height,
+            dims.width + (20.0 * scale_factor),
+            dims.height + (10.0 * scale_factor),
+            Color::new(0.0, 0.0, 0.0, 0.7),
+        );
         text_with_config_color(font_cache, config, message, x, y, font_size);
     }
 }

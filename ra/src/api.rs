@@ -1,6 +1,6 @@
-use anyhow::{bail, Context, Result};
 use crate::auth::Credentials;
 use crate::types::*;
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 const RA_API_BASE: &str = "https://retroachievements.org/API";
@@ -18,7 +18,10 @@ impl RAClient {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { client, credentials }
+        Self {
+            client,
+            credentials,
+        }
     }
 
     /// Get user summary (profile info)
@@ -28,7 +31,9 @@ impl RAClient {
             RA_API_BASE, self.credentials.username, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .context("Failed to send request to RA API")?;
 
@@ -36,8 +41,7 @@ impl RAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let summary: UserSummary = response.json()
-            .context("Failed to parse user summary")?;
+        let summary: UserSummary = response.json().context("Failed to parse user summary")?;
 
         Ok(summary)
     }
@@ -49,7 +53,9 @@ impl RAClient {
             RA_API_BASE, hash, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .context("Failed to send request to RA API")?;
 
@@ -62,14 +68,14 @@ impl RAClient {
         }
 
         let text = response.text()?;
-        
+
         // RA API returns empty object {} or error for unknown hash
         if text == "{}" || text.is_empty() || text.contains("\"ID\":0") {
             return Ok(None);
         }
 
-        let lookup: GameInfoAndProgress = serde_json::from_str(&text)
-            .context("Failed to parse game lookup response")?;
+        let lookup: GameInfoAndProgress =
+            serde_json::from_str(&text).context("Failed to parse game lookup response")?;
 
         Ok(Some(lookup.id))
     }
@@ -81,7 +87,9 @@ impl RAClient {
             RA_API_BASE, game_id, self.credentials.username, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .context("Failed to send request to RA API")?;
 
@@ -89,16 +97,45 @@ impl RAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let info: GameInfoAndProgress = response.json()
-            .context("Failed to parse game info")?;
+        let info: GameInfoAndProgress = response.json().context("Failed to parse game info")?;
+
+        Ok(info)
+    }
+
+    /// Get full game info (including MemAddr achievement definitions) by game ID.
+    /// Uses API_GetGameInfoExtended.php which does not require a user parameter.
+    pub fn get_game_info_extended(&self, game_id: u32) -> Result<GameInfoAndProgress> {
+        let url = format!(
+            "{}/API_GetGameInfoExtended.php?i={}&y={}",
+            RA_API_BASE, game_id, self.credentials.api_key
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .context("Failed to send request to RA API")?;
+
+        if !response.status().is_success() {
+            bail!("RA API returned error: {}", response.status());
+        }
+
+        let info: GameInfoAndProgress = response.json().context("Failed to parse game info")?;
 
         Ok(info)
     }
 
     /// Award an achievement (unlock)
     /// Note: This requires a session token, not the web API key
-    pub fn award_achievement(&self, achievement_id: u32, hardcore: bool) -> Result<AwardAchievementResponse> {
-        let token = self.credentials.token.as_ref()
+    pub fn award_achievement(
+        &self,
+        achievement_id: u32,
+        hardcore: bool,
+    ) -> Result<AwardAchievementResponse> {
+        let token = self
+            .credentials
+            .token
+            .as_ref()
             .context("No session token available. Login required.")?;
 
         let url = format!(
@@ -110,7 +147,9 @@ impl RAClient {
             if hardcore { 1 } else { 0 }
         );
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .send()
             .context("Failed to send award request to RA API")?;
 
@@ -118,8 +157,8 @@ impl RAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let result: AwardAchievementResponse = response.json()
-            .context("Failed to parse award response")?;
+        let result: AwardAchievementResponse =
+            response.json().context("Failed to parse award response")?;
 
         Ok(result)
     }
@@ -132,7 +171,9 @@ impl RAClient {
             RA_API_BASE, self.credentials.username, password
         );
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .send()
             .context("Failed to send login request")?;
 
@@ -150,8 +191,7 @@ impl RAClient {
             error: Option<String>,
         }
 
-        let login: LoginResponse = response.json()
-            .context("Failed to parse login response")?;
+        let login: LoginResponse = response.json().context("Failed to parse login response")?;
 
         if !login.success {
             bail!("Login failed: {}", login.error.unwrap_or_default());
@@ -164,10 +204,14 @@ impl RAClient {
     pub fn get_game_list(&self, console_id: ConsoleId) -> Result<Vec<GameListEntry>> {
         let url = format!(
             "{}/API_GetGameList.php?c={}&y={}",
-            RA_API_BASE, console_id.as_u32(), self.credentials.api_key
+            RA_API_BASE,
+            console_id.as_u32(),
+            self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .context("Failed to send request to RA API")?;
 
@@ -175,8 +219,7 @@ impl RAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let games: Vec<GameListEntry> = response.json()
-            .context("Failed to parse game list")?;
+        let games: Vec<GameListEntry> = response.json().context("Failed to parse game list")?;
 
         Ok(games)
     }
@@ -213,7 +256,10 @@ impl AsyncRAClient {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { client, credentials }
+        Self {
+            client,
+            credentials,
+        }
     }
 
     /// Get user summary (profile info)
@@ -223,7 +269,9 @@ impl AsyncRAClient {
             RA_API_BASE, self.credentials.username, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .await
             .context("Failed to send request to RA API")?;
@@ -232,7 +280,8 @@ impl AsyncRAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let summary: UserSummary = response.json()
+        let summary: UserSummary = response
+            .json()
             .await
             .context("Failed to parse user summary")?;
 
@@ -246,7 +295,9 @@ impl AsyncRAClient {
             RA_API_BASE, hash, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .await
             .context("Failed to send request to RA API")?;
@@ -266,8 +317,8 @@ impl AsyncRAClient {
             return Ok(None);
         }
 
-        let lookup: GameInfoAndProgress = serde_json::from_str(&text)
-            .context("Failed to parse game lookup response")?;
+        let lookup: GameInfoAndProgress =
+            serde_json::from_str(&text).context("Failed to parse game lookup response")?;
 
         Ok(Some(lookup.id))
     }
@@ -279,7 +330,9 @@ impl AsyncRAClient {
             RA_API_BASE, game_id, self.credentials.username, self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .await
             .context("Failed to send request to RA API")?;
@@ -288,17 +341,23 @@ impl AsyncRAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let info: GameInfoAndProgress = response.json()
-            .await
-            .context("Failed to parse game info")?;
+        let info: GameInfoAndProgress =
+            response.json().await.context("Failed to parse game info")?;
 
         Ok(info)
     }
 
     /// Award an achievement (unlock)
     /// Note: This requires a session token, not the web API key
-    pub async fn award_achievement(&self, achievement_id: u32, hardcore: bool) -> Result<AwardAchievementResponse> {
-        let token = self.credentials.token.as_ref()
+    pub async fn award_achievement(
+        &self,
+        achievement_id: u32,
+        hardcore: bool,
+    ) -> Result<AwardAchievementResponse> {
+        let token = self
+            .credentials
+            .token
+            .as_ref()
             .context("No session token available. Login required.")?;
 
         let url = format!(
@@ -310,7 +369,9 @@ impl AsyncRAClient {
             if hardcore { 1 } else { 0 }
         );
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .send()
             .await
             .context("Failed to send award request to RA API")?;
@@ -319,7 +380,8 @@ impl AsyncRAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let result: AwardAchievementResponse = response.json()
+        let result: AwardAchievementResponse = response
+            .json()
             .await
             .context("Failed to parse award response")?;
 
@@ -334,7 +396,9 @@ impl AsyncRAClient {
             RA_API_BASE, self.credentials.username, password
         );
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .send()
             .await
             .context("Failed to send login request")?;
@@ -353,7 +417,8 @@ impl AsyncRAClient {
             error: Option<String>,
         }
 
-        let login: LoginResponse = response.json()
+        let login: LoginResponse = response
+            .json()
             .await
             .context("Failed to parse login response")?;
 
@@ -368,10 +433,14 @@ impl AsyncRAClient {
     pub async fn get_game_list(&self, console_id: ConsoleId) -> Result<Vec<GameListEntry>> {
         let url = format!(
             "{}/API_GetGameList.php?c={}&y={}",
-            RA_API_BASE, console_id.as_u32(), self.credentials.api_key
+            RA_API_BASE,
+            console_id.as_u32(),
+            self.credentials.api_key
         );
 
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .send()
             .await
             .context("Failed to send request to RA API")?;
@@ -380,9 +449,8 @@ impl AsyncRAClient {
             bail!("RA API returned error: {}", response.status());
         }
 
-        let games: Vec<GameListEntry> = response.json()
-            .await
-            .context("Failed to parse game list")?;
+        let games: Vec<GameListEntry> =
+            response.json().await.context("Failed to parse game list")?;
 
         Ok(games)
     }
@@ -405,4 +473,3 @@ impl AsyncRAClient {
         self.credentials.hardcore
     }
 }
-

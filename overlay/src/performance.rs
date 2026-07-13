@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "daemon")]
-use sysinfo::{System, RefreshKind, ProcessRefreshKind, CpuRefreshKind, MemoryRefreshKind};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
 const FRAME_HISTORY_SIZE: usize = 120; // Track last 2 seconds at 60fps
 
@@ -43,7 +43,7 @@ impl PerformanceStats {
         let system = System::new_with_specifics(
             RefreshKind::new()
                 .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::everything()),
         );
 
         Self {

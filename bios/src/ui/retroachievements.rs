@@ -5,10 +5,10 @@ use std::process::Command;
 use crate::{
     audio::SoundEffects,
     config::Config,
+    get_current_font, measure_text, render_background, render_ui_overlay, text_with_config_color,
     types::{AnimationState, BackgroundState, BatteryInfo, Screen},
     ui::text_with_color,
-    render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color,
-    FONT_SIZE, MENU_PADDING, MENU_OPTION_HEIGHT, InputState, VideoPlayer,
+    InputState, VideoPlayer, FONT_SIZE, MENU_OPTION_HEIGHT, MENU_PADDING,
 };
 
 const RA_SETTINGS_OPTIONS: &[&str] = &[
@@ -32,6 +32,7 @@ pub struct RASettingsState {
     pub status_message: Option<String>,
     pub is_logged_in: bool,
     pub logged_in_user: Option<String>,
+    pub is_local_mode: bool,
 }
 
 impl RASettingsState {
@@ -44,30 +45,29 @@ impl RASettingsState {
     /// Initialize from config (loads username/api_key if present)
     pub fn load_from_config(config: &Config) -> Self {
         let mut state = Self::default();
-        
+
         // Load credentials from config if present
         if let Some(ref username) = config.retroachievements.username {
             state.username_input = username.clone();
         }
         // Don't load API key into input field for security, but it will be available via config
-        
+
         state.refresh_status();
         state
     }
 
-    /// Check if kazeta-ra is logged in
+    /// Check if kazeta-ra is logged in or in local mode
     pub fn refresh_status(&mut self) {
         // Check login status via kazeta-ra CLI
-        if let Ok(output) = Command::new("kazeta-ra")
-            .arg("status")
-            .output()
-        {
+        if let Ok(output) = Command::new("kazeta-ra").arg("status").output() {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
+                // Check for local mode (offline achievements)
+                self.is_local_mode = stdout.contains("\"local_mode\":true") || stdout.contains("\"local_mode\": true");
                 // Parse JSON response
                 if stdout.contains("\"enabled\":true") || stdout.contains("\"enabled\": true") {
-                    self.is_logged_in = true;
-                    // Extract username
+                    self.is_logged_in = !self.is_local_mode;
+                    // Extract username (will be null in local mode)
                     if let Some(start) = stdout.find("\"username\":\"") {
                         let rest = &stdout[start + 12..];
                         if let Some(end) = rest.find('"') {
@@ -78,6 +78,9 @@ impl RASettingsState {
                         if let Some(end) = rest.find('"') {
                             self.logged_in_user = Some(rest[..end].to_string());
                         }
+                    }
+                    if self.is_local_mode {
+                        self.logged_in_user = None;
                     }
                 } else {
                     self.is_logged_in = false;
@@ -127,12 +130,12 @@ impl RASettingsState {
                     config.retroachievements.username = Some(username.clone());
                     config.retroachievements.api_key = Some(api_key.clone());
                     config.save();
-                    
+
                     // Also update input fields for display
                     if self.username_input.is_empty() {
                         self.username_input = username.clone();
                     }
-                    
+
                     self.status_message = Some("Login successful!".to_string());
                     self.is_logged_in = true;
                     self.logged_in_user = Some(username.clone());
@@ -152,9 +155,7 @@ impl RASettingsState {
     /// Logout from RetroAchievements
     /// Optionally clears credentials from config
     pub fn logout(&mut self, _config: &mut Config) {
-        let _ = Command::new("kazeta-ra")
-            .arg("logout")
-            .output();
+        let _ = Command::new("kazeta-ra").arg("logout").output();
 
         // Optionally clear credentials from config (user can keep them for next login)
         // Uncomment the following lines if you want to clear on logout:
@@ -222,54 +223,67 @@ pub fn update(
     // Handle selection
     if input_state.select || input_state.left || input_state.right {
         match ra_state.selection {
-            0 => { // ENABLED
+            0 => {
+                // ENABLED
                 if input_state.left || input_state.right {
                     config.retroachievements.enabled = !config.retroachievements.enabled;
                     config.save();
                     sound_effects.play_cursor_move(config);
                 }
             }
-            1 => { // USERNAME
+            1 => {
+                // USERNAME
                 if input_state.select {
                     ra_state.editing_username = true;
                     sound_effects.play_select(config);
                 }
             }
-            2 => { // API KEY
+            2 => {
+                // API KEY
                 if input_state.select {
                     ra_state.editing_api_key = true;
                     sound_effects.play_select(config);
                 }
             }
-            3 => { // HARDCORE MODE
+            3 => {
+                // HARDCORE MODE
                 if input_state.left || input_state.right {
-                    config.retroachievements.hardcore_mode = !config.retroachievements.hardcore_mode;
+                    config.retroachievements.hardcore_mode =
+                        !config.retroachievements.hardcore_mode;
                     config.save();
                     // Also update kazeta-ra if logged in
                     if ra_state.is_logged_in {
                         let _ = Command::new("kazeta-ra")
                             .arg("set-hardcore")
                             .arg("--enabled")
-                            .arg(if config.retroachievements.hardcore_mode { "true" } else { "false" })
+                            .arg(if config.retroachievements.hardcore_mode {
+                                "true"
+                            } else {
+                                "false"
+                            })
                             .output();
                     }
                     sound_effects.play_cursor_move(config);
                 }
             }
-            4 => { // SHOW NOTIFICATIONS
+            4 => {
+                // SHOW NOTIFICATIONS
                 if input_state.left || input_state.right {
-                    config.retroachievements.show_notifications = !config.retroachievements.show_notifications;
+                    config.retroachievements.show_notifications =
+                        !config.retroachievements.show_notifications;
                     config.save();
                     sound_effects.play_cursor_move(config);
                 }
             }
-            5 => { // LOGIN / TEST
+            5 => {
+                // LOGIN / TEST
                 if input_state.select {
                     sound_effects.play_select(config);
                     ra_state.attempt_login(config);
                 }
             }
-            6 => { // LOGOUT
+            6 => {
+                // LOGOUT
                 if input_state.select {
                     sound_effects.play_select(config);
                     ra_state.logout(config);
@@ -313,9 +327,23 @@ pub fn draw(
     render_background(background_cache, video_cache, config, background_state);
 
     // Dim the background for easier legibility
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.6));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.6),
+    );
 
-    render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
     let large_font_size = (FONT_SIZE as f32 * scale_factor * 1.5) as u16;
@@ -331,15 +359,34 @@ pub fn draw(
     text_with_config_color(font_cache, config, title, title_x, title_y, large_font_size);
 
     // Login status
-    let status_text = if ra_state.is_logged_in {
-        format!("Logged in as: {}", ra_state.logged_in_user.as_deref().unwrap_or("Unknown"))
+    let status_text = if ra_state.is_local_mode {
+        "Local mode (offline) — no account needed".to_string()
+    } else if ra_state.is_logged_in {
+        format!(
+            "Logged in as: {}",
+            ra_state.logged_in_user.as_deref().unwrap_or("Unknown")
+        )
     } else {
         "Not logged in".to_string()
     };
-    let status_color = if ra_state.is_logged_in { GREEN } else { Color::new(0.7, 0.7, 0.7, 1.0) };
+    let status_color = if ra_state.is_local_mode {
+        Color::new(0.3, 0.8, 0.4, 1.0)
+    } else if ra_state.is_logged_in {
+        GREEN
+    } else {
+        Color::new(0.7, 0.7, 0.7, 1.0)
+    };
     let status_dims = measure_text(&status_text, Some(current_font), font_size, 1.0);
     let status_x = screen_width() / 2.0 - status_dims.width / 2.0;
-    text_with_color(font_cache, config, &status_text, status_x, title_y + 25.0 * scale_factor, font_size, status_color);
+    text_with_color(
+        font_cache,
+        config,
+        &status_text,
+        status_x,
+        title_y + 25.0 * scale_factor,
+        font_size,
+        status_color,
+    );
 
     // Menu options
     let start_y = 100.0 * scale_factor;
@@ -371,7 +418,14 @@ pub fn draw(
             let rect_x = value_x - menu_padding;
             let rect_y = y_pos + (menu_option_height / 2.0) - (base_height / 2.0);
 
-            draw_rectangle_lines(rect_x - offset_x, rect_y - offset_y, scaled_width, scaled_height, 4.0 * scale_factor, cursor_color);
+            draw_rectangle_lines(
+                rect_x - offset_x,
+                rect_y - offset_y,
+                scaled_width,
+                scaled_height,
+                4.0 * scale_factor,
+                cursor_color,
+            );
         }
 
         // Draw label
@@ -380,7 +434,15 @@ pub fn draw(
         // Draw value (with cursor color if selected and TEXT style)
         if is_selected && config.cursor_style == "TEXT" {
             let highlight_color = animation_state.get_cursor_color(config);
-            text_with_color(font_cache, config, &value, value_x, text_y, font_size, highlight_color);
+            text_with_color(
+                font_cache,
+                config,
+                &value,
+                value_x,
+                text_y,
+                font_size,
+                highlight_color,
+            );
         } else {
             text_with_config_color(font_cache, config, &value, value_x, text_y, font_size);
         }
@@ -391,7 +453,14 @@ pub fn draw(
             if blink {
                 let cursor_text = "_";
                 let cursor_x = value_x + value_dims.width;
-                text_with_config_color(font_cache, config, cursor_text, cursor_x, text_y, font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    cursor_text,
+                    cursor_x,
+                    text_y,
+                    font_size,
+                );
             }
         }
     }
@@ -414,19 +483,34 @@ pub fn draw(
     // Instructions
     let instructions = if ra_state.editing_username || ra_state.editing_api_key {
         "Type to enter text, ENTER/B to confirm"
+    } else if ra_state.is_local_mode {
+        "Achievements are baked into the cartridge — no login required"
     } else {
         "Get your API key from retroachievements.org > Settings > Keys"
     };
     let inst_dims = measure_text(instructions, Some(current_font), font_size, 1.0);
     let inst_x = screen_width() / 2.0 - inst_dims.width / 2.0;
     let inst_y = screen_height() - 20.0 * scale_factor;
-    text_with_color(font_cache, config, instructions, inst_x, inst_y, font_size, Color::new(0.5, 0.5, 0.5, 1.0));
+    text_with_color(
+        font_cache,
+        config,
+        instructions,
+        inst_x,
+        inst_y,
+        font_size,
+        Color::new(0.5, 0.5, 0.5, 1.0),
+    );
 }
 
 /// Get the display value for each option
 fn get_option_value(index: usize, ra_state: &RASettingsState, config: &Config) -> String {
     match index {
-        0 => if config.retroachievements.enabled { "ON" } else { "OFF" }.to_string(),
+        0 => if config.retroachievements.enabled {
+            "ON"
+        } else {
+            "OFF"
+        }
+        .to_string(),
         1 => {
             if ra_state.editing_username {
                 ra_state.username_input.clone()
@@ -453,11 +537,25 @@ fn get_option_value(index: usize, ra_state: &RASettingsState, config: &Config) -
                 "[ENTER]".to_string()
             }
         }
-        3 => if config.retroachievements.hardcore_mode { "ON" } else { "OFF" }.to_string(),
-        4 => if config.retroachievements.show_notifications { "ON" } else { "OFF" }.to_string(),
-        5 => if ra_state.is_logged_in { "TEST" } else { "LOGIN" }.to_string(),
+        3 => if config.retroachievements.hardcore_mode {
+            "ON"
+        } else {
+            "OFF"
+        }
+        .to_string(),
+        4 => if config.retroachievements.show_notifications {
+            "ON"
+        } else {
+            "OFF"
+        }
+        .to_string(),
+        5 => if ra_state.is_logged_in {
+            "TEST"
+        } else {
+            "LOGIN"
+        }
+        .to_string(),
         6 => "CONFIRM".to_string(),
         _ => "".to_string(),
     }
 }
-

@@ -1,17 +1,19 @@
 use crate::{
     audio::SoundEffects,
-    config::{Config, get_user_data_dir},
-    FONT_SIZE, Screen, BackgroundState, render_background, get_current_font, text_with_config_color, InputState, wrap_text, DEV_MODE, VideoPlayer,
+    config::{get_user_data_dir, Config},
+    get_current_font, render_background, text_with_config_color, wrap_text, BackgroundState,
+    InputState, Screen, VideoPlayer, DEV_MODE, FONT_SIZE,
 };
 use macroquad::prelude::*;
 use serde::Deserialize;
 use std::{
-    fs, thread,
     collections::{HashMap, HashSet},
+    fs,
     io::{self, Read, Write},
     path::PathBuf,
     process::Command,
     sync::mpsc::{channel, Receiver, Sender},
+    thread,
     time::{Duration, Instant},
 };
 use tempfile::{Builder, NamedTempFile};
@@ -31,13 +33,13 @@ pub enum RuntimeSource {
 
 #[derive(Debug, Clone)]
 pub struct RemoteRuntime {
-    pub name: String,         // Display name, e.g., "psx.kzr" or "pcengine.zip"
-    pub file_name: String,    // The file to download, e.g., "psx.kzr" or "pcengine.zip"
+    pub name: String,      // Display name, e.g., "psx.kzr" or "pcengine.zip"
+    pub file_name: String, // The file to download, e.g., "psx.kzr" or "pcengine.zip"
     pub description: String,
     pub download_url: String,
     pub source: RuntimeSource,
     pub is_installed: bool,
-    pub is_zip: bool,         // True if this is a zip archive that needs extraction
+    pub is_zip: bool, // True if this is a zip archive that needs extraction
     pub size_mb: Option<f32>,
 }
 
@@ -58,7 +60,7 @@ pub enum DownloaderState {
     },
     ConfirmRedownload {
         runtime: RemoteRuntime,
-        selection: usize,       // 0=Yes, 1=No
+        selection: usize, // 0=Yes, 1=No
     },
 }
 
@@ -118,7 +120,9 @@ impl RuntimeDownloaderState {
 fn get_runtime_dir() -> PathBuf {
     if DEV_MODE {
         // Dev path: ~/.local/share/kazeta-plus/runtimes/
-        get_user_data_dir().unwrap_or_else(|| PathBuf::from(".")).join("runtimes")
+        get_user_data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("runtimes")
     } else {
         // Prod path: /usr/share/kazeta/runtimes/
         PathBuf::from("/usr/share/kazeta/runtimes")
@@ -129,21 +133,21 @@ fn get_runtime_dir() -> PathBuf {
 fn get_installed_runtime_files() -> HashSet<String> {
     let runtimes_dir = get_runtime_dir();
     if let Ok(entries) = fs::read_dir(runtimes_dir) {
-        return entries.flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            // Check for both files (e.g., "psx.kzr") and directories (e.g., "pcengine")
-            if path.is_file() || path.is_dir() {
-                entry.file_name().into_string().ok()
-            } else {
-                None
-            }
-        })
-        .collect();
+        return entries
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                // Check for both files (e.g., "psx.kzr") and directories (e.g., "pcengine")
+                if path.is_file() || path.is_dir() {
+                    entry.file_name().into_string().ok()
+                } else {
+                    None
+                }
+            })
+            .collect();
     }
     HashSet::new()
 }
-
 
 pub fn update(
     state: &mut RuntimeDownloaderState,
@@ -166,7 +170,8 @@ pub fn update(
                 state.screen_state = DownloaderState::Idle; // Go to Idle to force a list refresh
                 *current_screen = Screen::Extras;
             }
-            _ => { // For any sub-menu, go back to the list
+            _ => {
+                // For any sub-menu, go back to the list
                 state.screen_state = DownloaderState::DisplayingList;
                 // Restore current page based on selection
                 state.current_page = state.selected_index / ITEMS_PER_PAGE;
@@ -184,15 +189,24 @@ pub fn update(
             DownloaderMessage::RuntimeList(Err(e)) => {
                 state.screen_state = DownloaderState::Error(e);
             }
-            DownloaderMessage::DownloadProgress { progress, received_mb } => {
+            DownloaderMessage::DownloadProgress {
+                progress,
+                received_mb,
+            } => {
                 // Only update if we are still in the Downloading state
-                if let DownloaderState::Downloading { progress: p, received_mb: mb, .. } = &mut state.screen_state {
+                if let DownloaderState::Downloading {
+                    progress: p,
+                    received_mb: mb,
+                    ..
+                } = &mut state.screen_state
+                {
                     *p = progress;
                     *mb = received_mb;
                 }
             }
             DownloaderMessage::InstallResult(Ok(runtime_name)) => {
-                state.screen_state = DownloaderState::Success(format!("'{}' installed!", runtime_name));
+                state.screen_state =
+                    DownloaderState::Success(format!("'{}' installed!", runtime_name));
                 // Set to Idle to trigger a re-fetch, which will update the [INSTALLED] status
                 state.screen_state = DownloaderState::Idle;
             }
@@ -218,7 +232,9 @@ pub fn update(
     match &mut state.screen_state {
         DownloaderState::DisplayingList => {
             let total_options = state.runtimes.len();
-            if total_options == 0 { return; }
+            if total_options == 0 {
+                return;
+            }
 
             let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
 
@@ -293,10 +309,14 @@ pub fn update(
             }
         }
         DownloaderState::ConfirmDelete { runtime, selection } => {
-            if input_state.left || input_state.right { *selection = 1 - *selection; sound_effects.play_cursor_move(config); }
+            if input_state.left || input_state.right {
+                *selection = 1 - *selection;
+                sound_effects.play_cursor_move(config);
+            }
             if input_state.select {
                 sound_effects.play_select(config);
-                if *selection == 0 { // YES
+                if *selection == 0 {
+                    // YES
                     let runtime_to_delete = runtime.clone();
                     state.screen_state = DownloaderState::Downloading {
                         name: format!("Deleting {}...", runtime_to_delete.name),
@@ -304,7 +324,8 @@ pub fn update(
                         received_mb: 0.0,
                     };
                     delete_runtime(runtime_to_delete, state.tx.clone());
-                } else { // NO
+                } else {
+                    // NO
                     state.screen_state = DownloaderState::DisplayingList;
                 }
             }
@@ -316,7 +337,8 @@ pub fn update(
             }
             if input_state.select {
                 sound_effects.play_select(config);
-                if *selection == 0 { // User selected YES
+                if *selection == 0 {
+                    // User selected YES
                     let runtime_to_download = runtime.clone();
                     state.screen_state = DownloaderState::Downloading {
                         name: runtime_to_download.name.clone(),
@@ -324,7 +346,8 @@ pub fn update(
                         received_mb: 0.0,
                     };
                     download_and_install_runtime(runtime_to_download, state.tx.clone());
-                } else { // User selected NO
+                } else {
+                    // User selected NO
                     state.screen_state = DownloaderState::DisplayingList;
                 }
             }
@@ -366,7 +389,13 @@ pub fn draw(
 
     // Don't draw container if downloading, it's a full-screen message
     if !matches!(state.screen_state, DownloaderState::Downloading { .. }) {
-        draw_rectangle(container_x, container_y, container_w, container_h, Color::new(0.0, 0.0, 0.0, 0.75));
+        draw_rectangle(
+            container_x,
+            container_y,
+            container_w,
+            container_h,
+            Color::new(0.0, 0.0, 0.0, 0.75),
+        );
     }
 
     let text_x = container_x + 30.0 * scale_factor;
@@ -379,17 +408,38 @@ pub fn draw(
         DownloaderState::Idle => {
             let text = "Connecting to runtime repositories...";
             let text_dims = measure_text(text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         DownloaderState::FetchingList => {
             let text = "Fetching runtime list from GitHub...";
             let text_dims = measure_text(text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         DownloaderState::DisplayingList => {
             let total_options = state.runtimes.len();
             if total_options == 0 {
-                text_with_config_color(font_cache, config, "No runtimes found.", text_x, text_y_start, font_size);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    "No runtimes found.",
+                    text_x,
+                    text_y_start,
+                    font_size,
+                );
                 return;
             }
             let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
@@ -403,11 +453,21 @@ pub fn draw(
 
                 if i == state.selected_index {
                     let cursor_color = animation_state.get_cursor_color(config);
-                    draw_rectangle(container_x, y_pos - font_size as f32 - 5.0, container_w, line_height, Color::new(cursor_color.r, cursor_color.g, cursor_color.b, 0.3));
+                    draw_rectangle(
+                        container_x,
+                        y_pos - font_size as f32 - 5.0,
+                        container_w,
+                        line_height,
+                        Color::new(cursor_color.r, cursor_color.g, cursor_color.b, 0.3),
+                    );
                 }
 
                 let runtime = &state.runtimes[i];
-                let installed_flag = if runtime.is_installed { " [INSTALLED]" } else { "" };
+                let installed_flag = if runtime.is_installed {
+                    " [INSTALLED]"
+                } else {
+                    ""
+                };
 
                 // Add a prefix based on the source
                 let source_prefix = match runtime.source {
@@ -417,17 +477,29 @@ pub fn draw(
                 };
 
                 // Format the size string
-                let size_str = runtime.size_mb
-                .map(|mb| format!(" ({:.1} MB)", mb)) // e.g., " (4.2 MB)"
-                .unwrap_or_else(|| "".to_string()); // Show nothing if size is unknown
+                let size_str = runtime
+                    .size_mb
+                    .map(|mb| format!(" ({:.1} MB)", mb)) // e.g., " (4.2 MB)"
+                    .unwrap_or_else(|| "".to_string()); // Show nothing if size is unknown
 
-                let display_text = format!("{} {}{}{}", source_prefix, runtime.name, installed_flag, size_str);
+                let display_text = format!(
+                    "{} {}{}{}",
+                    source_prefix, runtime.name, installed_flag, size_str
+                );
                 text_with_config_color(font_cache, config, &display_text, text_x, y_pos, font_size);
             }
 
             // Draw description panel
-            let separator_y = text_y_start + (ITEMS_PER_PAGE as f32 * line_height) + (line_height / 2.0);
-            draw_line(container_x, separator_y, container_x + container_w, separator_y, 2.0, Color::new(1.0, 1.0, 1.0, 0.2));
+            let separator_y =
+                text_y_start + (ITEMS_PER_PAGE as f32 * line_height) + (line_height / 2.0);
+            draw_line(
+                container_x,
+                separator_y,
+                container_x + container_w,
+                separator_y,
+                2.0,
+                Color::new(1.0, 1.0, 1.0, 0.2),
+            );
 
             let description_text = if state.selected_index < state.runtimes.len() {
                 state.runtimes[state.selected_index].description.clone()
@@ -439,22 +511,51 @@ pub fn draw(
             let description_line_height = description_font_size as f32 * 1.5;
             let wrap_width = container_w - 60.0 * scale_factor;
 
-            let wrapped_lines = wrap_text(description_text.trim(), font.clone(), description_font_size, wrap_width);
+            let wrapped_lines = wrap_text(
+                description_text.trim(),
+                font.clone(),
+                description_font_size,
+                wrap_width,
+            );
             for (i, line) in wrapped_lines.iter().enumerate() {
-                let y_pos = separator_y + 40.0 * scale_factor + (i as f32 * description_line_height);
-                text_with_config_color(font_cache, config, line, text_x, y_pos, description_font_size);
+                let y_pos =
+                    separator_y + 40.0 * scale_factor + (i as f32 * description_line_height);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    line,
+                    text_x,
+                    y_pos,
+                    description_font_size,
+                );
             }
 
             // Draw pagination controls and hint text
             let hint_y = container_y + container_h - 20.0;
             let hint_text = "Press [SOUTH] to Download, [WEST] to Delete";
-            let hint_dims = measure_text(hint_text, Some(font), (font_size as f32 * 0.8) as u16, 1.0);
-            text_with_config_color(font_cache, config, hint_text, screen_width() / 2.0 - hint_dims.width / 2.0, hint_y, (font_size as f32 * 0.8) as u16);
+            let hint_dims =
+                measure_text(hint_text, Some(font), (font_size as f32 * 0.8) as u16, 1.0);
+            text_with_config_color(
+                font_cache,
+                config,
+                hint_text,
+                screen_width() / 2.0 - hint_dims.width / 2.0,
+                hint_y,
+                (font_size as f32 * 0.8) as u16,
+            );
 
             if total_pages > 1 {
                 let page_text = format!("Page {} / {}", state.current_page + 1, total_pages);
-                let page_dims = measure_text(&page_text, Some(font), (font_size as f32 * 0.8) as u16, 1.0);
-                text_with_config_color(font_cache, config, &page_text, screen_width() / 2.0 - page_dims.width / 2.0, text_y_start - (line_height * 0.8), (font_size as f32 * 0.8) as u16);
+                let page_dims =
+                    measure_text(&page_text, Some(font), (font_size as f32 * 0.8) as u16, 1.0);
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    &page_text,
+                    screen_width() / 2.0 - page_dims.width / 2.0,
+                    text_y_start - (line_height * 0.8),
+                    (font_size as f32 * 0.8) as u16,
+                );
             }
         }
         DownloaderState::ConfirmDelete { runtime, selection } => {
@@ -462,12 +563,25 @@ pub fn draw(
             let dialog_h = 150.0 * scale_factor;
             let dialog_x = screen_width() / 2.0 - dialog_w / 2.0;
             let dialog_y = screen_height() / 2.0 - dialog_h / 2.0;
-            draw_rectangle(dialog_x, dialog_y, dialog_w, dialog_h, Color::new(0.1, 0.1, 0.1, 0.9));
+            draw_rectangle(
+                dialog_x,
+                dialog_y,
+                dialog_w,
+                dialog_h,
+                Color::new(0.1, 0.1, 0.1, 0.9),
+            );
             draw_rectangle_lines(dialog_x, dialog_y, dialog_w, dialog_h, 3.0, WHITE);
 
             let question = format!("Delete '{}'?", runtime.name);
             let question_dims = measure_text(&question, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &question, screen_width() / 2.0 - question_dims.width / 2.0, dialog_y + 40.0 * scale_factor, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &question,
+                screen_width() / 2.0 - question_dims.width / 2.0,
+                dialog_y + 40.0 * scale_factor,
+                font_size,
+            );
 
             let yes_text = "YES";
             let no_text = "NO";
@@ -480,25 +594,56 @@ pub fn draw(
             text_with_config_color(font_cache, config, no_text, no_x, options_y, font_size);
 
             let cursor_x = if *selection == 0 { yes_x } else { no_x };
-            let cursor_w = if *selection == 0 { yes_dims.width } else { no_dims.width };
+            let cursor_w = if *selection == 0 {
+                yes_dims.width
+            } else {
+                no_dims.width
+            };
             let cursor_color = animation_state.get_cursor_color(config);
-            draw_rectangle_lines(cursor_x - 5.0, options_y - font_size as f32, cursor_w + 10.0, line_height, 3.0, cursor_color);
+            draw_rectangle_lines(
+                cursor_x - 5.0,
+                options_y - font_size as f32,
+                cursor_w + 10.0,
+                line_height,
+                3.0,
+                cursor_color,
+            );
         }
         DownloaderState::ConfirmRedownload { runtime, selection } => {
             let dialog_w = 500.0 * scale_factor;
             let dialog_h = 170.0 * scale_factor;
             let dialog_x = screen_width() / 2.0 - dialog_w / 2.0;
             let dialog_y = screen_height() / 2.0 - dialog_h / 2.0;
-            draw_rectangle(dialog_x, dialog_y, dialog_w, dialog_h, Color::new(0.1, 0.1, 0.1, 0.9));
+            draw_rectangle(
+                dialog_x,
+                dialog_y,
+                dialog_w,
+                dialog_h,
+                Color::new(0.1, 0.1, 0.1, 0.9),
+            );
             draw_rectangle_lines(dialog_x, dialog_y, dialog_w, dialog_h, 3.0, WHITE);
 
             let question = format!("'{}' is already installed.", runtime.name);
             let question_dims = measure_text(&question, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &question, screen_width() / 2.0 - question_dims.width / 2.0, dialog_y + 40.0 * scale_factor, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &question,
+                screen_width() / 2.0 - question_dims.width / 2.0,
+                dialog_y + 40.0 * scale_factor,
+                font_size,
+            );
 
             let question2 = "Re-download and overwrite?";
             let question_dims2 = measure_text(question2, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, question2, screen_width() / 2.0 - question_dims2.width / 2.0, dialog_y + 40.0 * scale_factor + line_height, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                question2,
+                screen_width() / 2.0 - question_dims2.width / 2.0,
+                dialog_y + 40.0 * scale_factor + line_height,
+                font_size,
+            );
 
             let yes_text = "YES";
             let no_text = "NO";
@@ -511,15 +656,37 @@ pub fn draw(
             text_with_config_color(font_cache, config, no_text, no_x, options_y, font_size);
 
             let cursor_x = if *selection == 0 { yes_x } else { no_x };
-            let cursor_w = if *selection == 0 { yes_dims.width } else { no_dims.width };
+            let cursor_w = if *selection == 0 {
+                yes_dims.width
+            } else {
+                no_dims.width
+            };
             let cursor_color = animation_state.get_cursor_color(config);
-            draw_rectangle_lines(cursor_x - 5.0, options_y - font_size as f32, cursor_w + 10.0, line_height, 3.0, cursor_color);
+            draw_rectangle_lines(
+                cursor_x - 5.0,
+                options_y - font_size as f32,
+                cursor_w + 10.0,
+                line_height,
+                3.0,
+                cursor_color,
+            );
         }
-        DownloaderState::Downloading { name, progress, received_mb } => {
+        DownloaderState::Downloading {
+            name,
+            progress,
+            received_mb,
+        } => {
             // 1. Draw title text
             let text = format!("Downloading {}...", name);
             let text_dims = measure_text(&text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &text, center_x - text_dims.width / 2.0, center_y - 60.0 * scale_factor, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &text,
+                center_x - text_dims.width / 2.0,
+                center_y - 60.0 * scale_factor,
+                font_size,
+            );
 
             // 2. Define bar dimensions
             let bar_w = screen_width() * 0.6;
@@ -549,15 +716,36 @@ pub fn draw(
 
             // Draw the progress text below the bar
             let text_dims = measure_text(&progress_text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, &progress_text, center_x - text_dims.width / 2.0, bar_y + bar_h + 40.0 * scale_factor, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &progress_text,
+                center_x - text_dims.width / 2.0,
+                bar_y + bar_h + 40.0 * scale_factor,
+                font_size,
+            );
         }
         DownloaderState::Success(msg) | DownloaderState::Error(msg) => {
             let text_dims = measure_text(msg, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, msg, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                msg,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
 
             let continue_text = "Press [SOUTH] to continue";
             let continue_dims = measure_text(continue_text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, continue_text, screen_width() / 2.0 - continue_dims.width / 2.0, screen_height() / 2.0 + line_height * 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                continue_text,
+                screen_width() / 2.0 - continue_dims.width / 2.0,
+                screen_height() / 2.0 + line_height * 2.0,
+                font_size,
+            );
         }
     }
 }
@@ -569,16 +757,21 @@ fn get_remote_file_size(client: &reqwest::blocking::Client, url: &str) -> Option
     match client.head(url).send() {
         Ok(response) => {
             if response.status().is_success() {
-                response.headers()
-                .get(reqwest::header::CONTENT_LENGTH)
-                .and_then(|val| val.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .map(|bytes| bytes as f32 / 1024.0 / 1024.0) // Convert bytes to MB
+                response
+                    .headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|val| val.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(|bytes| bytes as f32 / 1024.0 / 1024.0) // Convert bytes to MB
             } else {
-                eprintln!("[FileSize] HEAD request failed for {}: {}", url, response.status());
+                eprintln!(
+                    "[FileSize] HEAD request failed for {}: {}",
+                    url,
+                    response.status()
+                );
                 None
             }
-        },
+        }
         Err(e) => {
             eprintln!("[FileSize] HEAD request error for {}: {}", url, e);
             None
@@ -588,10 +781,10 @@ fn get_remote_file_size(client: &reqwest::blocking::Client, url: &str) -> Option
 
 fn get_zip_extracted_files(zip_name: &str) -> Vec<&str> {
     match zip_name {
-        "pcengine-1.0.zip"    => vec!["pcengine-1.0.kzr", "pcengine-info.txt"],
+        "pcengine-1.0.zip" => vec!["pcengine-1.0.kzr", "pcengine-info.txt"],
         "playstation-1.01.zip" => vec!["playstation-1.01.kzr", "playstation-info.txt"],
-        "saturn-1.0.zip"      => vec!["saturn-1.0.kzr", "saturn-info.txt"],
-        "segacd-1.0.zip"      => vec!["segacd-1.0.kzr", "segacd-info.txt"],
+        "saturn-1.0.zip" => vec!["saturn-1.0.kzr", "saturn-info.txt"],
+        "segacd-1.0.zip" => vec!["segacd-1.0.kzr", "segacd-info.txt"],
         _ => vec![], // Unknown zip
     }
 }
@@ -600,15 +793,22 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
     thread::spawn(move || {
         let mut all_runtimes: Vec<RemoteRuntime> = Vec::new();
         let client = reqwest::blocking::Client::builder()
-        .user_agent("KazetaPlus-Runtime-Downloader")
-        .build()
-        .unwrap();
+            .user_agent("KazetaPlus-Runtime-Downloader")
+            .build()
+            .unwrap();
 
         // --- 1. Fetch Official Runtimes ---
         // From: https://github.com/kazetaos/kazeta/wiki/Runtimes
         // These are on the "latest" release page of the main repo.
         let official_base_url = "https://runtimes.kazeta.org/";
-        let official_files = ["linux-1.0.kzr", "windows-1.0.kzr", "megadrive-1.1.kzr", "snes-1.0.kzr", "nes-1.0.kzr", "nintendo64-1.0.kzr"];
+        let official_files = [
+            "linux-1.0.kzr",
+            "windows-1.0.kzr",
+            "megadrive-1.1.kzr",
+            "snes-1.0.kzr",
+            "nes-1.0.kzr",
+            "nintendo64-1.0.kzr",
+        ];
 
         for filename in official_files {
             let download_url = format!("{}{}", official_base_url, filename);
@@ -629,11 +829,21 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
 
         // --- 2. Fetch Outcaster & Third-Party Runtimes ---
         // From: https://github.com/the-outcaster/kazeta-plus/releases/tag/runtimes
-        let outcaster_files = ["dolphin-1.0.kzr", "linux-1.1.kzr", "windows-1.1.kzr", "windows-1.2-experimental.kzr"];
-        let third_party_files = ["pcengine-1.0.zip", "playstation-1.01.zip", "saturn-1.0.zip", "segacd-1.0.zip"];
+        let outcaster_files = [
+            "dolphin-1.0.kzr",
+            "linux-1.1.kzr",
+            "windows-1.1.kzr",
+            "windows-1.2-experimental.kzr",
+        ];
+        let third_party_files = [
+            "pcengine-1.0.zip",
+            "playstation-1.01.zip",
+            "saturn-1.0.zip",
+            "segacd-1.0.zip",
+        ];
         let response_plus = client
-        .get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases/tags/runtimes")
-        .send();
+            .get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases/tags/runtimes")
+            .send();
 
         if let Ok(resp) = response_plus {
             if let Ok(release) = resp.json::<GithubRelease>() {
@@ -656,7 +866,8 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
                         all_runtimes.push(RemoteRuntime {
                             name: asset.name.clone(),
                             file_name: asset.name.clone(),
-                            description: "Third-party runtime pack. This will be extracted.".to_string(),
+                            description: "Third-party runtime pack. This will be extracted."
+                                .to_string(),
                             download_url: asset.browser_download_url,
                             source: RuntimeSource::ThirdParty,
                             is_installed: false,
@@ -709,12 +920,16 @@ fn download_and_install_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMes
             // --- Download Phase (Same for Dev and Prod) ---
             // This part streams the download into memory without writing to disk yet.
             let client = reqwest::blocking::Client::new();
-            let mut response = client.get(&runtime.download_url)
-            .send()
-            .map_err(|e| format!("Download failed: {}", e))?;
+            let mut response = client
+                .get(&runtime.download_url)
+                .send()
+                .map_err(|e| format!("Download failed: {}", e))?;
 
             if !response.status().is_success() {
-                return Err(format!("Download failed: Server returned {}", response.status()));
+                return Err(format!(
+                    "Download failed: Server returned {}",
+                    response.status()
+                ));
             }
             let total_size = response.content_length();
             let mut received_bytes: u64 = 0;
@@ -724,78 +939,99 @@ fn download_and_install_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMes
             let update_interval = Duration::from_millis(50);
 
             loop {
-                let bytes_read = response.read(&mut buffer)
-                .map_err(|e| format!("Failed to read download stream: {}", e))?;
-                if bytes_read == 0 { break; }
+                let bytes_read = response
+                    .read(&mut buffer)
+                    .map_err(|e| format!("Failed to read download stream: {}", e))?;
+                if bytes_read == 0 {
+                    break;
+                }
 
-                response_bytes.write_all(&buffer[..bytes_read])
-                .map_err(|e| format!("Failed to write to in-memory buffer: {}", e))?;
+                response_bytes
+                    .write_all(&buffer[..bytes_read])
+                    .map_err(|e| format!("Failed to write to in-memory buffer: {}", e))?;
                 received_bytes += bytes_read as u64;
 
                 if last_update.elapsed() >= update_interval {
                     let progress = total_size.map(|total| received_bytes as f32 / total as f32);
                     let received_mb = received_bytes as f32 / 1024.0 / 1024.0;
-                    if tx.send(DownloaderMessage::DownloadProgress { progress, received_mb }).is_err() {
+                    if tx
+                        .send(DownloaderMessage::DownloadProgress {
+                            progress,
+                            received_mb,
+                        })
+                        .is_err()
+                    {
                         return Err("Download cancelled: UI closed".to_string());
                     }
                     last_update = Instant::now();
                 }
             }
             let received_mb = received_bytes as f32 / 1024.0 / 1024.0;
-            tx.send(DownloaderMessage::DownloadProgress { progress: Some(1.0), received_mb }).ok();
+            tx.send(DownloaderMessage::DownloadProgress {
+                progress: Some(1.0),
+                received_mb,
+            })
+            .ok();
             // --- End Download Phase ---
-
 
             // --- Installation Phase (Split Logic) ---
             if DEV_MODE {
                 // --- DEV MODE: Write directly to local folder ---
                 fs::create_dir_all(&runtimes_dir)
-                .map_err(|e| format!("Failed to create dev runtime dir: {}", e))?;
+                    .map_err(|e| format!("Failed to create dev runtime dir: {}", e))?;
 
                 if runtime.is_zip {
                     let reader = io::Cursor::new(response_bytes);
                     let mut archive = zip::ZipArchive::new(reader)
-                    .map_err(|e| format!("Invalid zip file: {}", e))?;
-                    archive.extract(&runtimes_dir)
-                    .map_err(|e| format!("Failed to extract zip: {}", e))?;
+                        .map_err(|e| format!("Invalid zip file: {}", e))?;
+                    archive
+                        .extract(&runtimes_dir)
+                        .map_err(|e| format!("Failed to extract zip: {}", e))?;
                 } else {
                     let target_path = runtimes_dir.join(&runtime.file_name);
                     fs::write(target_path, response_bytes)
-                    .map_err(|e| format!("Failed to save file: {}", e))?;
+                        .map_err(|e| format!("Failed to save file: {}", e))?;
                 }
             } else {
                 // --- PROD MODE: Use sudo helper script ---
                 if runtime.is_zip {
                     // 1. Extract zip to a temporary directory
                     let temp_dir = Builder::new()
-                    .prefix("kazeta-zip-")
-                    .tempdir()
-                    .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                        .prefix("kazeta-zip-")
+                        .tempdir()
+                        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
                     let reader = io::Cursor::new(response_bytes);
                     let mut archive = zip::ZipArchive::new(reader)
-                    .map_err(|e| format!("Invalid zip file: {}", e))?;
-                    archive.extract(temp_dir.path())
-                    .map_err(|e| format!("Failed to extract zip to temp: {}", e))?;
+                        .map_err(|e| format!("Invalid zip file: {}", e))?;
+                    archive
+                        .extract(temp_dir.path())
+                        .map_err(|e| format!("Failed to extract zip to temp: {}", e))?;
 
                     // 2. Iterate the temp dir and "install" (move) each file
-                    for entry in fs::read_dir(temp_dir.path()).map_err(|e| format!("Failed to read temp dir: {}", e))? {
-                        let entry = entry.map_err(|e| format!("Failed to read temp entry: {}", e))?;
+                    for entry in fs::read_dir(temp_dir.path())
+                        .map_err(|e| format!("Failed to read temp dir: {}", e))?
+                    {
+                        let entry =
+                            entry.map_err(|e| format!("Failed to read temp entry: {}", e))?;
                         let temp_source_path = entry.path();
 
                         // Ensure we're only moving files
                         if temp_source_path.is_file() {
                             let target_file_name = entry.file_name().to_string_lossy().to_string();
                             let status = Command::new("sudo")
-                            .arg("/usr/bin/kazeta-runtime-helper")
-                            .arg("install")
-                            .arg(&temp_source_path)  // Source: /tmp/kazeta-zip-XXXX/psx.kzr
-                            .arg(&target_file_name)  // Target: psx.kzr
-                            .status()
-                            .map_err(|e| format!("Failed to run helper: {}", e))?;
+                                .arg("/usr/bin/kazeta-runtime-helper")
+                                .arg("install")
+                                .arg(&temp_source_path) // Source: /tmp/kazeta-zip-XXXX/psx.kzr
+                                .arg(&target_file_name) // Target: psx.kzr
+                                .status()
+                                .map_err(|e| format!("Failed to run helper: {}", e))?;
 
                             if !status.success() {
-                                return Err(format!("Helper failed to install {}", target_file_name));
+                                return Err(format!(
+                                    "Helper failed to install {}",
+                                    target_file_name
+                                ));
                             }
                         }
                     }
@@ -803,19 +1039,20 @@ fn download_and_install_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMes
                 } else {
                     // .kzr file: Write to a temp file, then "install" (move) it
                     let mut temp_file = NamedTempFile::new()
-                    .map_err(|e| format!("Failed to create temp file: {}", e))?;
-                    temp_file.write_all(&response_bytes)
-                    .map_err(|e| format!("Failed to write to temp file: {}", e))?;
+                        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+                    temp_file
+                        .write_all(&response_bytes)
+                        .map_err(|e| format!("Failed to write to temp file: {}", e))?;
 
                     let temp_path = temp_file.path().to_path_buf(); // Keep the file alive
 
                     let status = Command::new("sudo")
-                    .arg("/usr/bin/kazeta-runtime-helper")
-                    .arg("install")
-                    .arg(&temp_path)            // Source: /tmp/tmp.XXXX
-                    .arg(&runtime.file_name)    // Target: linux-1.0.kzr
-                    .status()
-                    .map_err(|e| format!("Failed to run helper: {}", e))?;
+                        .arg("/usr/bin/kazeta-runtime-helper")
+                        .arg("install")
+                        .arg(&temp_path) // Source: /tmp/tmp.XXXX
+                        .arg(&runtime.file_name) // Target: linux-1.0.kzr
+                        .status()
+                        .map_err(|e| format!("Failed to run helper: {}", e))?;
 
                     if !status.success() {
                         return Err(format!("Helper failed to install {}", runtime.file_name));
@@ -827,7 +1064,8 @@ fn download_and_install_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMes
             Ok(runtime.name)
         })();
 
-        tx.send(DownloaderMessage::InstallResult(result)).unwrap_or_default();
+        tx.send(DownloaderMessage::InstallResult(result))
+            .unwrap_or_default();
     });
 }
 
@@ -840,7 +1078,9 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
                 // --- DEV MODE: Delete directly from local folder ---
                 if runtime.is_zip {
                     let files_to_delete = get_zip_extracted_files(&runtime.file_name);
-                    if files_to_delete.is_empty() { return Err(format!("Unknown zip: {}", runtime.name)); }
+                    if files_to_delete.is_empty() {
+                        return Err(format!("Unknown zip: {}", runtime.name));
+                    }
 
                     let mut deleted_count = 0;
                     let mut last_error = Ok(());
@@ -861,7 +1101,10 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
                         match last_error {
                             Ok(_) => {
                                 // No errors, but no files deleted.
-                                return Err(format!("Extracted files for {} not found.", runtime.name));
+                                return Err(format!(
+                                    "Extracted files for {} not found.",
+                                    runtime.name
+                                ));
                             }
                             Err(e) => {
                                 // An error occurred during the loop. Return that error.
@@ -871,25 +1114,30 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
                     }
                 } else {
                     let target_path = runtimes_dir.join(&runtime.file_name);
-                    if !target_path.is_file() { return Err(format!("File {} not found.", runtime.file_name)); }
-                    fs::remove_file(target_path).map_err(|e| format!("Failed to delete file: {}", e))?;
+                    if !target_path.is_file() {
+                        return Err(format!("File {} not found.", runtime.file_name));
+                    }
+                    fs::remove_file(target_path)
+                        .map_err(|e| format!("Failed to delete file: {}", e))?;
                 }
             } else {
                 // --- PROD MODE: Use sudo helper script ---
                 if runtime.is_zip {
                     let files_to_delete = get_zip_extracted_files(&runtime.file_name);
-                    if files_to_delete.is_empty() { return Err(format!("Unknown zip: {}", runtime.name)); }
+                    if files_to_delete.is_empty() {
+                        return Err(format!("Unknown zip: {}", runtime.name));
+                    }
 
                     let mut deleted_count = 0;
                     let mut last_error = Ok(());
 
                     for file_name in files_to_delete {
                         let status = Command::new("sudo")
-                        .arg("/usr/bin/kazeta-runtime-helper")
-                        .arg("delete")
-                        .arg(file_name) // The helper will sanitize this name
-                        .status()
-                        .map_err(|e| format!("Failed to run helper: {}", e))?;
+                            .arg("/usr/bin/kazeta-runtime-helper")
+                            .arg("delete")
+                            .arg(file_name) // The helper will sanitize this name
+                            .status()
+                            .map_err(|e| format!("Failed to run helper: {}", e))?;
 
                         if !status.success() {
                             last_error = Err(format!("Helper failed to delete {}", file_name));
@@ -902,7 +1150,10 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
                         match last_error {
                             Ok(_) => {
                                 // No errors, but no files deleted.
-                                return Err(format!("Extracted files for {} not found.", runtime.name));
+                                return Err(format!(
+                                    "Extracted files for {} not found.",
+                                    runtime.name
+                                ));
                             }
                             Err(e) => {
                                 // An error occurred during the loop. Return that error.
@@ -912,11 +1163,11 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
                     }
                 } else {
                     let status = Command::new("sudo")
-                    .arg("/usr/bin/kazeta-runtime-helper")
-                    .arg("delete")
-                    .arg(&runtime.file_name)
-                    .status()
-                    .map_err(|e| format!("Failed to run helper: {}", e))?;
+                        .arg("/usr/bin/kazeta-runtime-helper")
+                        .arg("delete")
+                        .arg(&runtime.file_name)
+                        .status()
+                        .map_err(|e| format!("Failed to run helper: {}", e))?;
 
                     if !status.success() {
                         return Err(format!("Helper failed to delete {}", runtime.file_name));
@@ -926,6 +1177,7 @@ fn delete_runtime(runtime: RemoteRuntime, tx: Sender<DownloaderMessage>) {
 
             Ok(runtime.name)
         })();
-        tx.send(DownloaderMessage::DeleteResult(result)).unwrap_or_default();
+        tx.send(DownloaderMessage::DeleteResult(result))
+            .unwrap_or_default();
     });
 }

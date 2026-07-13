@@ -2,17 +2,18 @@ use crate::{
     audio::SoundEffects,
     cd_player_backend::{CdPlayerBackend, PlayerStatus},
     config::Config,
+    get_current_font, measure_text, render_background, text_with_config_color,
     types::{AnimationState, BackgroundState, Screen},
     ui::text_with_color,
-    render_background, get_current_font, measure_text, text_with_config_color, InputState, VideoPlayer,
+    InputState, VideoPlayer,
 };
 use macroquad::prelude::*;
 use rodio::Sink;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
     thread,
+    time::Duration,
 };
 
 const TRACK_FONT_SIZE: u16 = 16;
@@ -76,10 +77,7 @@ pub fn update(
                     // Drop the lock so the 'play' thread can grab it
                     drop(backend);
 
-                    CdPlayerBackend::play(
-                        ui_state.backend.clone(),
-                                          next_track_index
-                    );
+                    CdPlayerBackend::play(ui_state.backend.clone(), next_track_index);
                 } else {
                     // --- End of disc ---
                     // Last track finished. Stop.
@@ -136,18 +134,22 @@ pub fn update(
             let mut new_track = current_track;
 
             if input_state.up {
-                if current_track == 0 { // At top of left col
+                if current_track == 0 {
+                    // At top of left col
                     new_track = num_tracks - 1; // Wrap to end
-                } else if current_track == col_split_point { // At top of right col
+                } else if current_track == col_split_point {
+                    // At top of right col
                     new_track = col_split_point - 1; // Wrap to bottom of left
                 } else {
                     new_track -= 1;
                 }
             }
             if input_state.down {
-                if current_track == num_tracks - 1 { // At end of right col
+                if current_track == num_tracks - 1 {
+                    // At end of right col
                     new_track = 0; // Wrap to start
-                } else if current_track == col_split_point - 1 { // At bottom of left col
+                } else if current_track == col_split_point - 1 {
+                    // At bottom of left col
                     new_track = col_split_point; // Wrap to top of right
                 } else {
                     new_track += 1;
@@ -177,10 +179,12 @@ pub fn update(
 
             // seek
             let seek_duration = Duration::from_secs(15);
-            if input_state.next { // 'next' for fast-forward
+            if input_state.next {
+                // 'next' for fast-forward
                 backend.seek(seek_duration, true);
             }
-            if input_state.prev { // 'prev' for rewind
+            if input_state.prev {
+                // 'prev' for rewind
                 backend.seek(seek_duration, false);
             }
 
@@ -189,21 +193,18 @@ pub fn update(
                     PlayerStatus::Playing if backend.current_track == ui_state.selected_track => {
                         // It's playing and we're on the same track, so pause it.
                         backend.pause();
-                    },
+                    }
                     PlayerStatus::Paused if backend.current_track == ui_state.selected_track => {
                         // It's paused and we're on the same track, so resume it.
                         backend.resume();
-                    },
+                    }
                     _ => {
                         // It's stopped, or we're selecting a *different* track.
                         // We must drop the lock *before* calling play, as play spawns
                         // a thread that will also need to lock the backend.
                         drop(backend);
 
-                        CdPlayerBackend::play(
-                            ui_state.backend.clone(),
-                            ui_state.selected_track
-                        );
+                        CdPlayerBackend::play(ui_state.backend.clone(), ui_state.selected_track);
                         sound_effects.play_select(config);
                     }
                 }
@@ -232,14 +233,27 @@ pub fn draw(
 
     // --- Common UI ---
     render_background(background_cache, video_cache, config, background_state);
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
 
     let mut y_pos = 50.0 * scale_factor;
 
     // --- Draw Title ---
     let title = "MUSIC CD PLAYER";
     let title_dims = measure_text(title, Some(current_font), font_size, 1.0);
-    text_with_config_color(font_cache, config, title, (screen_width() - title_dims.width) / 2.0, y_pos, font_size);
+    text_with_config_color(
+        font_cache,
+        config,
+        title,
+        (screen_width() - title_dims.width) / 2.0,
+        y_pos,
+        font_size,
+    );
     y_pos += title_dims.height + (30.0 * scale_factor);
 
     // --- Draw based on Status ---
@@ -247,24 +261,53 @@ pub fn draw(
         PlayerStatus::Scanning => {
             let text = "SCANNING DISC...";
             let dims = measure_text(text, Some(current_font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, (screen_width() - dims.width) / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                (screen_width() - dims.width) / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         PlayerStatus::Loading => {
             let text = "LOADING TRACK...";
             let dims = measure_text(text, Some(current_font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, (screen_width() - dims.width) / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                (screen_width() - dims.width) / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         PlayerStatus::NoDisc => {
             let text = "NO DISC DETECTED";
             let dims = measure_text(text, Some(current_font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, (screen_width() - dims.width) / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                (screen_width() - dims.width) / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         PlayerStatus::DataDisc => {
             let text = "GAME DISC INSERTED (Not an Audio CD)";
             let dims = measure_text(text, Some(current_font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, (screen_width() - dims.width) / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                (screen_width() - dims.width) / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
-        _ => { // Stopped, Playing, Paused
+        _ => {
+            // Stopped, Playing, Paused
             // --- Draw Track List (Two Column) ---
             if let Some(toc) = &backend.toc {
                 let num_tracks = toc.tracks.len();
@@ -282,7 +325,10 @@ pub fn draw(
 
                     for (i, track) in toc.tracks.iter().enumerate() {
                         let (x, y);
-                        let text = format!("Track {:02} ({:02}:{:02})", track.number, track.start_msf.0, track.start_msf.1);
+                        let text = format!(
+                            "Track {:02} ({:02}:{:02})",
+                            track.number, track.start_msf.0, track.start_msf.1
+                        );
                         let text_dims = measure_text(&text, Some(current_font), font_size, 1.0);
 
                         if i < col_split_point {
@@ -315,7 +361,15 @@ pub fn draw(
                         if is_selected && config.cursor_style == "TEXT" {
                             // [!] TEXT Highlight Style
                             let highlight_color = animation_state.get_cursor_color(config);
-                            text_with_color(font_cache, config, &text, x, y, font_size, highlight_color);
+                            text_with_color(
+                                font_cache,
+                                config,
+                                &text,
+                                x,
+                                y,
+                                font_size,
+                                highlight_color,
+                            );
                         } else {
                             // Standard Text
                             text_with_config_color(font_cache, config, &text, x, y, font_size);
@@ -337,7 +391,14 @@ pub fn draw(
                 _ => "".to_string(),
             };
 
-            text_with_config_color(font_cache, config, &status_text, status_x, status_y, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &status_text,
+                status_x,
+                status_y,
+                font_size,
+            );
 
             // --- Draw Timeline ---
             let mut elapsed_time = Duration::ZERO;
@@ -357,7 +418,8 @@ pub fn draw(
             // Prevent divide by zero and clamp progress
             let mut progress = 0.0;
             if total_duration > Duration::ZERO {
-                progress = (elapsed_time.as_secs_f32() / total_duration.as_secs_f32()).clamp(0.0, 1.0);
+                progress =
+                    (elapsed_time.as_secs_f32() / total_duration.as_secs_f32()).clamp(0.0, 1.0);
             }
 
             // Draw the timeline bar
@@ -367,9 +429,21 @@ pub fn draw(
             let bar_y = status_y + (font_size as f32 / 2.0) - (bar_height / 2.0); // Align with status text
 
             // Draw background
-            draw_rectangle(bar_x, bar_y, bar_width, bar_height, Color::new(0.1, 0.1, 0.1, 0.8));
+            draw_rectangle(
+                bar_x,
+                bar_y,
+                bar_width,
+                bar_height,
+                Color::new(0.1, 0.1, 0.1, 0.8),
+            );
             // Draw progress
-            draw_rectangle(bar_x, bar_y, bar_width * progress, bar_height, animation_state.get_cursor_color(config));
+            draw_rectangle(
+                bar_x,
+                bar_y,
+                bar_width * progress,
+                bar_height,
+                animation_state.get_cursor_color(config),
+            );
 
             // Draw Time
             let time_text = format!(
@@ -385,6 +459,18 @@ pub fn draw(
 
     // --- Draw Controls Help ---
     let help_text = "[SOUTH] PLAY/PAUSE | [EAST] BACK | [LB/RB] SEEK 15 SECONDS";
-    let help_dims = measure_text(help_text, Some(current_font), (12.0 * scale_factor) as u16, 1.0);
-    text_with_config_color(font_cache, config, help_text, (screen_width() - help_dims.width) / 2.0, screen_height() - (20.0 * scale_factor), (12.0 * scale_factor) as u16);
+    let help_dims = measure_text(
+        help_text,
+        Some(current_font),
+        (12.0 * scale_factor) as u16,
+        1.0,
+    );
+    text_with_config_color(
+        font_cache,
+        config,
+        help_text,
+        (screen_width() - help_dims.width) / 2.0,
+        screen_height() - (20.0 * scale_factor),
+        (12.0 * scale_factor) as u16,
+    );
 }

@@ -1,10 +1,17 @@
-use crate::{Memory, StorageMedia, save, CopyOperationState, PlaytimeCache, SizeCache};
-use std::sync::{Arc, Mutex, atomic::{AtomicU16, Ordering}};
-use std::{thread, time};
+use crate::{save, CopyOperationState, Memory, PlaytimeCache, SizeCache, StorageMedia};
+use macroquad::prelude::*;
 use std::collections::HashMap;
-use macroquad::prelude::*; // For Texture2D if needed by structs
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc, Mutex,
+};
+use std::{thread, time}; // For Texture2D if needed by structs
 
-pub async fn load_memories(media: &StorageMedia, cache: &mut HashMap<String, Texture2D>, queue: &mut Vec<(String, String)>) -> Vec<Memory> {
+pub async fn load_memories(
+    media: &StorageMedia,
+    cache: &mut HashMap<String, Texture2D>,
+    queue: &mut Vec<(String, String)>,
+) -> Vec<Memory> {
     let mut memories = Vec::new();
 
     if let Ok(details) = save::get_save_details(&media.id) {
@@ -25,12 +32,22 @@ pub async fn load_memories(media: &StorageMedia, cache: &mut HashMap<String, Tex
     memories
 }
 
-pub async fn check_save_exists(memory: &Memory, target_media: &StorageMedia, icon_cache: &mut HashMap<String, Texture2D>, icon_queue: &mut Vec<(String, String)>) -> bool {
+pub async fn check_save_exists(
+    memory: &Memory,
+    target_media: &StorageMedia,
+    icon_cache: &mut HashMap<String, Texture2D>,
+    icon_queue: &mut Vec<(String, String)>,
+) -> bool {
     let target_memories = load_memories(target_media, icon_cache, icon_queue).await;
     target_memories.iter().any(|m| m.id == memory.id)
 }
 
-pub fn copy_memory(memory: &Memory, from_media: &StorageMedia, to_media: &StorageMedia, state: Arc<Mutex<CopyOperationState>>) {
+pub fn copy_memory(
+    memory: &Memory,
+    from_media: &StorageMedia,
+    to_media: &StorageMedia,
+    state: Arc<Mutex<CopyOperationState>>,
+) {
     // Initialize the copy operation state
     if let Ok(mut copy_state) = state.lock() {
         copy_state.progress = 0;
@@ -93,7 +110,7 @@ pub fn copy_memory(memory: &Memory, from_media: &StorageMedia, to_media: &Storag
 
             // Wait for the monitoring thread to finish
             monitor_handle.join().ok();
-        },
+        }
         Err(e) => {
             // Handle error case (this will also stop the monitoring thread)
             if let Ok(mut copy_state) = state.lock() {

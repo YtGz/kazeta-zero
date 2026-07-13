@@ -1,19 +1,20 @@
 use crate::{
-    audio::SoundEffects,
-    config::Config,
-    FONT_SIZE, VERSION_NUMBER, Screen, BackgroundState, render_background, get_current_font, text_with_config_color, InputState, wrap_text, VideoPlayer,
+    audio::SoundEffects, config::Config, get_current_font, render_background,
+    text_with_config_color, wrap_text, BackgroundState, InputState, Screen, VideoPlayer, FONT_SIZE,
+    VERSION_NUMBER,
 };
 use macroquad::prelude::*;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    fs, thread,
     collections::HashMap,
+    fs,
     io::{self, Write},
     os::unix::fs::PermissionsExt,
     path::Path,
-    process::{Command, exit},
+    process::{exit, Command},
     sync::mpsc::{channel, Receiver, Sender},
+    thread,
 };
 
 // --- State Management & Structs ---
@@ -24,7 +25,7 @@ pub enum UpdateCheckerScreenState {
     UpToDate,
     UpdateAvailable(GithubRelease),
     InProgress(String), // carries status message
-    UpdateComplete, // final screen before shutdown
+    UpdateComplete,     // final screen before shutdown
     Error(String),
 }
 
@@ -38,7 +39,6 @@ enum UpdateProgressMessage {
     Complete,
     Error(String),
 }
-
 
 enum UpdateCheckResult {
     UpToDate,
@@ -108,10 +108,16 @@ pub fn update(
     if let Ok(msg) = state.rx_check.try_recv() {
         match msg {
             CheckerMessage::CheckComplete(Ok(result)) => match result {
-                UpdateCheckResult::UpToDate => state.screen_state = UpdateCheckerScreenState::UpToDate,
-                UpdateCheckResult::UpdateAvailable(release) => state.screen_state = UpdateCheckerScreenState::UpdateAvailable(release),
+                UpdateCheckResult::UpToDate => {
+                    state.screen_state = UpdateCheckerScreenState::UpToDate
+                }
+                UpdateCheckResult::UpdateAvailable(release) => {
+                    state.screen_state = UpdateCheckerScreenState::UpdateAvailable(release)
+                }
             },
-            CheckerMessage::CheckComplete(Err(e)) => state.screen_state = UpdateCheckerScreenState::Error(e),
+            CheckerMessage::CheckComplete(Err(e)) => {
+                state.screen_state = UpdateCheckerScreenState::Error(e)
+            }
         }
     }
 
@@ -162,7 +168,11 @@ pub fn update(
             // SOUTH button for shutdown
             if input_state.select {
                 sound_effects.play_select(config);
-                Command::new("sudo").arg("shutdown").arg("now").status().ok();
+                Command::new("sudo")
+                    .arg("shutdown")
+                    .arg("now")
+                    .status()
+                    .ok();
                 exit(0); // Fallback in case shutdown command fails
             }
             // WEST button for reboot
@@ -195,7 +205,9 @@ pub fn update(
             // If it fails, we send the error string back to the UI.
             if let Err(e) = perform_update_logic(release, tx_progress.clone()) {
                 // Use unwrap_or_default() in case the UI is already closed
-                tx_progress.send(UpdateProgressMessage::Error(e)).unwrap_or_default();
+                tx_progress
+                    .send(UpdateProgressMessage::Error(e))
+                    .unwrap_or_default();
             }
         });
     }
@@ -218,7 +230,13 @@ pub fn draw(
     let container_h = screen_height() * 0.8;
     let container_x = (screen_width() - container_w) / 2.0;
     let container_y = (screen_height() - container_h) / 2.0;
-    draw_rectangle(container_x, container_y, container_w, container_h, Color::new(0.0, 0.0, 0.0, 0.75));
+    draw_rectangle(
+        container_x,
+        container_y,
+        container_w,
+        container_h,
+        Color::new(0.0, 0.0, 0.0, 0.75),
+    );
     let text_x = container_x + 30.0 * scale_factor;
     let text_y_start = container_y + 40.0 * scale_factor;
 
@@ -226,24 +244,80 @@ pub fn draw(
         UpdateCheckerScreenState::Idle => {
             let text = "Connecting to update server...";
             let text_dims = measure_text(text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::Checking => {
             let text = "Checking for updates...";
             let text_dims = measure_text(text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, text, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                text,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::UpToDate => {
-            text_with_config_color(font_cache, config, "You are running the latest version.", text_x, text_y_start, font_size);
-            text_with_config_color(font_cache, config, &format!("Current version: {}", VERSION_NUMBER), text_x, text_y_start + line_height, font_size);
-            text_with_config_color(font_cache, config, "Press [SOUTH] or [EAST] to return.", text_x, text_y_start + line_height * 3.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                "You are running the latest version.",
+                text_x,
+                text_y_start,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                &format!("Current version: {}", VERSION_NUMBER),
+                text_x,
+                text_y_start + line_height,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                "Press [SOUTH] or [EAST] to return.",
+                text_x,
+                text_y_start + line_height * 3.0,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::UpdateAvailable(release) => {
-            text_with_config_color(font_cache, config, &format!("New version available: {}", release.tag_name), text_x, text_y_start, font_size);
-            text_with_config_color(font_cache, config, &format!("Current version: {}", VERSION_NUMBER), text_x, text_y_start + line_height, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                &format!("New version available: {}", release.tag_name),
+                text_x,
+                text_y_start,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                &format!("Current version: {}", VERSION_NUMBER),
+                text_x,
+                text_y_start + line_height,
+                font_size,
+            );
 
             let separator_y = text_y_start + line_height * 2.5;
-            draw_line(container_x, separator_y, container_x + container_w, separator_y, 2.0, Color::new(1.0, 1.0, 1.0, 0.2));
+            draw_line(
+                container_x,
+                separator_y,
+                container_x + container_w,
+                separator_y,
+                2.0,
+                Color::new(1.0, 1.0, 1.0, 0.2),
+            );
 
             // -- CHANGED -- Implemented scrolling logic
             let img_tag_regex = Regex::new(r"<img[^>]*>").unwrap();
@@ -257,18 +331,36 @@ pub fn draw(
 
             let description_area_top = separator_y + 30.0 * scale_factor;
             let description_area_bottom = container_y + container_h - 30.0 * scale_factor;
-            let visible_lines = ((description_area_bottom - description_area_top) / line_height).floor() as usize;
+            let visible_lines =
+                ((description_area_bottom - description_area_top) / line_height).floor() as usize;
 
-            let max_scroll_offset = if wrapped_lines.len() > visible_lines { wrapped_lines.len() - visible_lines } else { 0 };
+            let max_scroll_offset = if wrapped_lines.len() > visible_lines {
+                wrapped_lines.len() - visible_lines
+            } else {
+                0
+            };
 
             // Clamp the scroll offset to prevent scrolling past the end
-            state.description_scroll_offset = state.description_scroll_offset.min(max_scroll_offset);
+            state.description_scroll_offset =
+                state.description_scroll_offset.min(max_scroll_offset);
 
             state.max_description_scroll = max_scroll_offset;
 
             // Draw the visible lines of text
-            for (i, line) in wrapped_lines.iter().skip(state.description_scroll_offset).take(visible_lines).enumerate() {
-                text_with_config_color(font_cache, config, line, text_x, description_area_top + (i as f32 * line_height), font_size);
+            for (i, line) in wrapped_lines
+                .iter()
+                .skip(state.description_scroll_offset)
+                .take(visible_lines)
+                .enumerate()
+            {
+                text_with_config_color(
+                    font_cache,
+                    config,
+                    line,
+                    text_x,
+                    description_area_top + (i as f32 * line_height),
+                    font_size,
+                );
             }
 
             // Draw scroll indicators if needed
@@ -286,7 +378,7 @@ pub fn draw(
                         vec2(indicator_x, first_line_center_y - arrow_size),
                         vec2(indicator_x - arrow_size, first_line_center_y + arrow_size),
                         vec2(indicator_x + arrow_size, first_line_center_y + arrow_size),
-                        WHITE
+                        WHITE,
                     );
                 }
                 // Down arrow - Aligned with the last line of text
@@ -295,18 +387,32 @@ pub fn draw(
                         vec2(indicator_x, last_line_center_y + arrow_size),
                         vec2(indicator_x - arrow_size, last_line_center_y - arrow_size),
                         vec2(indicator_x + arrow_size, last_line_center_y - arrow_size),
-                        WHITE
+                        WHITE,
                     );
                 }
             }
 
             let continue_text = "Press [SOUTH] to Install Update";
             let continue_dims = measure_text(continue_text, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, continue_text, screen_width() / 2.0 - continue_dims.width / 2.0, container_y + container_h - 20.0 * scale_factor, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                continue_text,
+                screen_width() / 2.0 - continue_dims.width / 2.0,
+                container_y + container_h - 20.0 * scale_factor,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::InProgress(message) => {
             let text_dims = measure_text(message, Some(font), font_size, 1.0);
-            text_with_config_color(font_cache, config, message, screen_width() / 2.0 - text_dims.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                message,
+                screen_width() / 2.0 - text_dims.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::UpdateComplete => {
             let line1 = "Update Complete!";
@@ -315,13 +421,48 @@ pub fn draw(
             let dims1 = measure_text(line1, Some(font), font_size, 1.0);
             let dims2 = measure_text(line2, Some(font), font_size, 1.0);
 
-            text_with_config_color(font_cache, config, line1, screen_width() / 2.0 - dims1.width / 2.0, screen_height() / 2.0 - line_height, font_size);
-            text_with_config_color(font_cache, config, line2, screen_width() / 2.0 - dims2.width / 2.0, screen_height() / 2.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                line1,
+                screen_width() / 2.0 - dims1.width / 2.0,
+                screen_height() / 2.0 - line_height,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                line2,
+                screen_width() / 2.0 - dims2.width / 2.0,
+                screen_height() / 2.0,
+                font_size,
+            );
         }
         UpdateCheckerScreenState::Error(msg) => {
-            text_with_config_color(font_cache, config, "An error occurred:", text_x, text_y_start, font_size);
-            text_with_config_color(font_cache, config, msg, text_x, text_y_start + line_height, font_size);
-            text_with_config_color(font_cache, config, "Press [SOUTH] or [EAST] to return.", text_x, text_y_start + line_height * 3.0, font_size);
+            text_with_config_color(
+                font_cache,
+                config,
+                "An error occurred:",
+                text_x,
+                text_y_start,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                msg,
+                text_x,
+                text_y_start + line_height,
+                font_size,
+            );
+            text_with_config_color(
+                font_cache,
+                config,
+                "Press [SOUTH] or [EAST] to return.",
+                text_x,
+                text_y_start + line_height * 3.0,
+                font_size,
+            );
         }
     }
 }
@@ -330,32 +471,44 @@ pub fn draw(
 
 fn check_for_updates(tx: Sender<CheckerMessage>) {
     thread::spawn(move || {
-        let client = match reqwest::blocking::Client::builder().user_agent("KazetaPlus-Updater").build() {
+        let client = match reqwest::blocking::Client::builder()
+            .user_agent("KazetaPlus-Updater")
+            .build()
+        {
             Ok(c) => c,
-                  Err(e) => { tx.send(CheckerMessage::CheckComplete(Err(e.to_string()))).unwrap(); return; }
+            Err(e) => {
+                tx.send(CheckerMessage::CheckComplete(Err(e.to_string())))
+                    .unwrap();
+                return;
+            }
         };
 
-        let response = client.get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases").send();
+        let response = client
+            .get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases")
+            .send();
 
         let result = match response {
-            Ok(resp) => if resp.status().is_success() {
-                match resp.json::<Vec<GithubRelease>>() {
-                    Ok(releases) => {
-                        if let Some(latest_release) = releases.get(0) { // No need for mut here
-                            if latest_release.tag_name != VERSION_NUMBER {
-                                Ok(UpdateCheckResult::UpdateAvailable(latest_release.clone()))
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    match resp.json::<Vec<GithubRelease>>() {
+                        Ok(releases) => {
+                            if let Some(latest_release) = releases.get(0) {
+                                // No need for mut here
+                                if latest_release.tag_name != VERSION_NUMBER {
+                                    Ok(UpdateCheckResult::UpdateAvailable(latest_release.clone()))
+                                } else {
+                                    Ok(UpdateCheckResult::UpToDate)
+                                }
                             } else {
                                 Ok(UpdateCheckResult::UpToDate)
                             }
-                        } else {
-                            Ok(UpdateCheckResult::UpToDate)
                         }
+                        Err(e) => Err(format!("Failed to parse response: {}", e)),
                     }
-                    Err(e) => Err(format!("Failed to parse response: {}", e)),
+                } else {
+                    Err(format!("GitHub API Error: {}", resp.status()))
                 }
-            } else {
-                Err(format!("GitHub API Error: {}", resp.status()))
-            },
+            }
             Err(e) => Err(format!("Failed to fetch from GitHub: {}", e)),
         };
         tx.send(CheckerMessage::CheckComplete(result)).unwrap();
@@ -363,39 +516,58 @@ fn check_for_updates(tx: Sender<CheckerMessage>) {
 }
 
 // This function now returns a Result, so we can catch all errors
-fn perform_update_logic(release_info: GithubRelease, tx: Sender<UpdateProgressMessage>) -> Result<(), String> {
-    let update_asset = match release_info.assets.iter().find(|asset| asset.name.ends_with(".zip")) {
+fn perform_update_logic(
+    release_info: GithubRelease,
+    tx: Sender<UpdateProgressMessage>,
+) -> Result<(), String> {
+    let update_asset = match release_info
+        .assets
+        .iter()
+        .find(|asset| asset.name.ends_with(".zip"))
+    {
         Some(asset) => asset,
         None => return Err("No .zip asset found in the release.".to_string()),
     };
 
-    tx.send(UpdateProgressMessage::Status("Downloading update...".to_string())).map_err(|e| e.to_string())?;
+    tx.send(UpdateProgressMessage::Status(
+        "Downloading update...".to_string(),
+    ))
+    .map_err(|e| e.to_string())?;
 
     // download
     let tmp_zip_path = Path::new("/tmp/kazeta-update.zip");
 
     let response = reqwest::blocking::get(&update_asset.browser_download_url)
-    .map_err(|e| format!("Download failed: {}", e))?;
-    let response_bytes = response.bytes().map_err(|e| format!("Failed to read bytes: {}", e))?;
+        .map_err(|e| format!("Download failed: {}", e))?;
+    let response_bytes = response
+        .bytes()
+        .map_err(|e| format!("Failed to read bytes: {}", e))?;
 
     let mut tmp_file = fs::File::create(&tmp_zip_path)
-    .map_err(|e| format!("Failed to create temp file: {}", e))?;
-    tmp_file.write_all(&response_bytes)
-    .map_err(|e| format!("Failed to save update file: {}", e))?;
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    tmp_file
+        .write_all(&response_bytes)
+        .map_err(|e| format!("Failed to save update file: {}", e))?;
 
     // extraction
-    tx.send(UpdateProgressMessage::Status("Extracting archive...".to_string())).map_err(|e| e.to_string())?;
+    tx.send(UpdateProgressMessage::Status(
+        "Extracting archive...".to_string(),
+    ))
+    .map_err(|e| e.to_string())?;
 
     let tmp_extract_dir = Path::new("/tmp/");
 
     // Get the expected kit directory name from the asset name
-    let root_dir_name = update_asset.name.strip_suffix(".zip").unwrap_or(&update_asset.name);
+    let root_dir_name = update_asset
+        .name
+        .strip_suffix(".zip")
+        .unwrap_or(&update_asset.name);
     let kit_path = tmp_extract_dir.join(root_dir_name); // e.g., /tmp/kazeta-plus-upgrade-kit-1.34
 
     // Clean up previous attempt if it exists (run before extraction)
     if kit_path.exists() {
         fs::remove_dir_all(&kit_path)
-        .map_err(|e| format!("Failed to remove old kit dir: {}", e))?;
+            .map_err(|e| format!("Failed to remove old kit dir: {}", e))?;
     }
 
     // Extract the archive (which creates the kit_path directory)
@@ -405,7 +577,10 @@ fn perform_update_logic(release_info: GithubRelease, tx: Sender<UpdateProgressMe
     let script_path = kit_path.join("upgrade-to-plus.sh"); // e.g., /tmp/kazeta-plus-upgrade-kit-1.34/upgrade-to-plus.sh
 
     // Add a log to see the exact path being checked
-    println!("[UPDATE_AGENT] Checking for script at: {}", script_path.display());
+    println!(
+        "[UPDATE_AGENT] Checking for script at: {}",
+        script_path.display()
+    );
 
     // Send an error instead of silently returning
     if !script_path.exists() {
@@ -418,42 +593,46 @@ fn perform_update_logic(release_info: GithubRelease, tx: Sender<UpdateProgressMe
     println!("[UPDATE_AGENT] Setting executable permission on upgrade script...");
 
     // Check metadata and set permissions safely
-    let metadata = fs::metadata(&script_path)
-    .map_err(|e| format!("Failed to read script metadata: {}", e))?;
+    let metadata =
+        fs::metadata(&script_path).map_err(|e| format!("Failed to read script metadata: {}", e))?;
     let mut perms = metadata.permissions();
 
     // Set permissions to rwxr-xr-x (0755)
     perms.set_mode(0o755);
     fs::set_permissions(&script_path, perms)
-    .map_err(|e| format!("Failed to set permissions: {}", e))?;
+        .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
     println!("[UPDATE_AGENT] Permissions set. Executing script...");
-    tx.send(UpdateProgressMessage::Status("Applying update... Do not turn off.".to_string())).map_err(|e| e.to_string())?;
+    tx.send(UpdateProgressMessage::Status(
+        "Applying update... Do not turn off.".to_string(),
+    ))
+    .map_err(|e| e.to_string())?;
 
     let status = Command::new("sudo")
-    .arg(script_path)
-    .status()
-    .map_err(|e| format!("Failed to run upgrade script: {}", e))?;
+        .arg(script_path)
+        .status()
+        .map_err(|e| format!("Failed to run upgrade script: {}", e))?;
 
     if !status.success() {
         return Err(format!("Upgrade script failed with status: {}", status));
     }
 
     // Send "Complete" message and let the thread finish
-    tx.send(UpdateProgressMessage::Complete).map_err(|e| e.to_string())?;
+    tx.send(UpdateProgressMessage::Complete)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), String> {
-    let file = fs::File::open(archive_path)
-    .map_err(|e| format!("Failed to open zip: {}", e))?;
-    let mut archive = zip::ZipArchive::new(file)
-    .map_err(|e| format!("Failed to read zip: {}", e))?;
+    let file = fs::File::open(archive_path).map_err(|e| format!("Failed to open zip: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {}", e))?;
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
-        .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry {}: {}", i, e))?;
 
         let outpath = match file.enclosed_name() {
             Some(path) => destination.join(path),
@@ -461,19 +640,18 @@ fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), String
         };
 
         if (*file.name()).ends_with('/') {
-            fs::create_dir_all(&outpath)
-            .map_err(|e| format!("Failed to create dir: {}", e))?;
+            fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create dir: {}", e))?;
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
                     fs::create_dir_all(&p)
-                    .map_err(|e| format!("Failed to create parent dir: {}", e))?;
+                        .map_err(|e| format!("Failed to create parent dir: {}", e))?;
                 }
             }
-            let mut outfile = fs::File::create(&outpath)
-            .map_err(|e| format!("Failed to create file: {}", e))?;
+            let mut outfile =
+                fs::File::create(&outpath).map_err(|e| format!("Failed to create file: {}", e))?;
             io::copy(&mut file, &mut outfile)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+                .map_err(|e| format!("Failed to write file: {}", e))?;
         }
     }
     Ok(())

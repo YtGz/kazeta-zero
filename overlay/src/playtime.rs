@@ -10,7 +10,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub struct PlaytimeEntry {
     pub cart_id: String,
     pub total_seconds: u64,
-    pub last_played: Option<u64>,  // Unix timestamp
+    pub last_played: Option<u64>, // Unix timestamp
     pub play_count: u32,
 }
 
@@ -62,7 +62,10 @@ impl PlaytimeTracker {
     pub fn end_session(&mut self) {
         if let Some(session) = self.current_session.take() {
             let elapsed_secs = session.start_time.elapsed().as_secs();
-            println!("[Playtime] Ending session for {}: {} seconds", session.cart_id, elapsed_secs);
+            println!(
+                "[Playtime] Ending session for {}: {} seconds",
+                session.cart_id, elapsed_secs
+            );
 
             self.add_playtime(&session.cart_id, elapsed_secs);
             if let Err(e) = self.save_database() {
@@ -78,7 +81,9 @@ impl PlaytimeTracker {
 
     /// Get the duration of the current session
     pub fn get_current_session_duration(&self) -> Option<Duration> {
-        self.current_session.as_ref().map(|s| s.start_time.elapsed())
+        self.current_session
+            .as_ref()
+            .map(|s| s.start_time.elapsed())
     }
 
     /// Update current session (called from main loop)
@@ -89,7 +94,9 @@ impl PlaytimeTracker {
 
     /// Add playtime to a game
     fn add_playtime(&mut self, cart_id: &str, seconds: u64) {
-        let entry = self.database.entries
+        let entry = self
+            .database
+            .entries
             .entry(cart_id.to_string())
             .or_insert_with(|| PlaytimeEntry {
                 cart_id: cart_id.to_string(),
@@ -102,23 +109,31 @@ impl PlaytimeTracker {
         entry.last_played = Some(current_timestamp());
         entry.play_count += 1;
 
-        println!("[Playtime] Updated {}: total={}s, plays={}", cart_id, entry.total_seconds, entry.play_count);
+        println!(
+            "[Playtime] Updated {}: total={}s, plays={}",
+            cart_id, entry.total_seconds, entry.play_count
+        );
     }
 
     /// Load database from disk
     fn load_database(path: &PathBuf) -> Result<PlaytimeDatabase> {
         if !path.exists() {
-            println!("[Playtime] No existing database at {:?}, creating new", path);
+            println!(
+                "[Playtime] No existing database at {:?}, creating new",
+                path
+            );
             return Ok(PlaytimeDatabase::default());
         }
 
-        let json = fs::read_to_string(path)
-            .context("Failed to read playtime database")?;
+        let json = fs::read_to_string(path).context("Failed to read playtime database")?;
 
-        let db: PlaytimeDatabase = serde_json::from_str(&json)
-            .context("Failed to parse playtime database")?;
+        let db: PlaytimeDatabase =
+            serde_json::from_str(&json).context("Failed to parse playtime database")?;
 
-        println!("[Playtime] Loaded database with {} entries", db.entries.len());
+        println!(
+            "[Playtime] Loaded database with {} entries",
+            db.entries.len()
+        );
         Ok(db)
     }
 
@@ -127,8 +142,7 @@ impl PlaytimeTracker {
         let json = serde_json::to_string_pretty(&self.database)
             .context("Failed to serialize playtime database")?;
 
-        fs::write(&self.db_path, json)
-            .context("Failed to write playtime database")?;
+        fs::write(&self.db_path, json).context("Failed to write playtime database")?;
 
         println!("[Playtime] Saved database to {:?}", self.db_path);
         Ok(())
@@ -148,8 +162,7 @@ fn get_playtime_db_path() -> Result<PathBuf> {
         .context("No home directory found")?
         .join(".local/share/kazeta-plus/overlay");
 
-    fs::create_dir_all(&overlay_dir)
-        .context("Failed to create overlay directory")?;
+    fs::create_dir_all(&overlay_dir).context("Failed to create overlay directory")?;
 
     Ok(overlay_dir.join("playtime.json"))
 }

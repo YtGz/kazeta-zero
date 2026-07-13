@@ -98,7 +98,11 @@ impl BladesAnimationState {
 
     pub fn get_eased_progress(&self) -> f32 {
         let t = self.blade_transition_progress;
-        if t < 0.5 { 4.0 * t * t * t } else { 1.0 - (-2.0 * t + 2.0).powi(3) / 2.0 }
+        if t < 0.5 {
+            4.0 * t * t * t
+        } else {
+            1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+        }
     }
 }
 
@@ -109,33 +113,72 @@ impl BladesState {
             blade_type: BladeType::GamesAndApps,
             name: "GAMES & APPS".to_string(),
             tabs: vec![
-                BladeTab { name: "LIBRARY".to_string(), icon: None },
-                BladeTab { name: "RECENTLY PLAYED".to_string(), icon: None },
-                BladeTab { name: "INSTALLED APPS".to_string(), icon: None },
+                BladeTab {
+                    name: "LIBRARY".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "RECENTLY PLAYED".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "INSTALLED APPS".to_string(),
+                    icon: None,
+                },
             ],
-            selected_tab: 0, scroll_offset: 0, gradient_color: WHITE,
+            selected_tab: 0,
+            scroll_offset: 0,
+            gradient_color: WHITE,
         });
         blades.push(Blade {
             blade_type: BladeType::SystemSettings,
             name: "SYSTEM SETTINGS".to_string(),
             tabs: vec![
-                BladeTab { name: "GENERAL".to_string(), icon: None },
-                BladeTab { name: "AUDIO".to_string(), icon: None },
-                BladeTab { name: "GUI".to_string(), icon: None },
-                BladeTab { name: "NETWORK".to_string(), icon: None },
-                BladeTab { name: "ASSETS".to_string(), icon: None },
+                BladeTab {
+                    name: "GENERAL".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "AUDIO".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "GUI".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "NETWORK".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "ASSETS".to_string(),
+                    icon: None,
+                },
             ],
-            selected_tab: 0, scroll_offset: 0, gradient_color: WHITE,
+            selected_tab: 0,
+            scroll_offset: 0,
+            gradient_color: WHITE,
         });
         blades.push(Blade {
             blade_type: BladeType::SaveDataAndMemory,
             name: "SAVE DATA & MEMORY".to_string(),
             tabs: vec![
-                BladeTab { name: "INTERNAL STORAGE".to_string(), icon: None },
-                BladeTab { name: "EXTERNAL STORAGE".to_string(), icon: None },
-                BladeTab { name: "MANAGE SAVES".to_string(), icon: None },
+                BladeTab {
+                    name: "INTERNAL STORAGE".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "EXTERNAL STORAGE".to_string(),
+                    icon: None,
+                },
+                BladeTab {
+                    name: "MANAGE SAVES".to_string(),
+                    icon: None,
+                },
             ],
-            selected_tab: 0, scroll_offset: 0, gradient_color: WHITE,
+            selected_tab: 0,
+            scroll_offset: 0,
+            gradient_color: WHITE,
         });
 
         BladesState {
@@ -194,18 +237,22 @@ pub fn update(
     if input_state.right && blades_state.current_blade < num_blades - 1 {
         let source = blades_state.current_blade;
         blades_state.current_blade += 1;
-        blades_state.animation.trigger_blade_transition(source, blades_state.current_blade);
+        blades_state
+            .animation
+            .trigger_blade_transition(source, blades_state.current_blade);
         sound_effects.play_cursor_move(config);
     }
     if input_state.left && blades_state.current_blade > 0 {
         let source = blades_state.current_blade;
         blades_state.current_blade -= 1;
-        blades_state.animation.trigger_blade_transition(source, blades_state.current_blade);
+        blades_state
+            .animation
+            .trigger_blade_transition(source, blades_state.current_blade);
         sound_effects.play_cursor_move(config);
     }
 
     let current_blade = &mut blades_state.blades[blades_state.current_blade];
-    
+
     let mut switched_tabs = false;
     if input_state.up {
         if current_blade.blade_type == BladeType::GamesAndApps && current_blade.selected_tab == 0 {
@@ -238,8 +285,12 @@ pub fn update(
         sound_effects.play_select(config);
         match current_blade.blade_type {
             BladeType::GamesAndApps => {
-                if current_blade.selected_tab == 0 { // Library
-                    if let Some(game) = blades_state.games_list.get(blades_state.game_list_selection) {
+                if current_blade.selected_tab == 0 {
+                    // Library
+                    if let Some(game) = blades_state
+                        .games_list
+                        .get(blades_state.game_list_selection)
+                    {
                         return BladeAction::LaunchGame(game.clone());
                     }
                 }
@@ -266,20 +317,33 @@ pub fn update(
         blades_state.enabled = false;
         return BladeAction::GoToScreen(Screen::MainMenu);
     }
-    
+
     BladeAction::None
 }
 
-pub fn draw(blades_state: &BladesState, font_cache: &HashMap<String, Font>, config: &Config, _frame_t: f64) {
+pub fn draw(
+    blades_state: &BladesState,
+    font_cache: &HashMap<String, Font>,
+    config: &Config,
+    _frame_t: f64,
+) {
     clear_background(BLACK);
 
     let scale_factor = screen_height() / 360.0;
 
     let blade_indices: Vec<usize> = (0..blades_state.blades.len()).collect();
-    let mut blade_render_infos: Vec<_> = blade_indices.iter().map(|&i| {
-        let info = calculate_blade_offset(i, &blades_state.animation, scale_factor, blades_state.blades.len());
-        (i, info)
-    }).collect();
+    let mut blade_render_infos: Vec<_> = blade_indices
+        .iter()
+        .map(|&i| {
+            let info = calculate_blade_offset(
+                i,
+                &blades_state.animation,
+                scale_factor,
+                blades_state.blades.len(),
+            );
+            (i, info)
+        })
+        .collect();
 
     blade_render_infos.sort_by(|(a_idx, _), (b_idx, _)| {
         let dist_a = (*a_idx as i32 - blades_state.current_blade as i32).abs();
@@ -288,7 +352,15 @@ pub fn draw(blades_state: &BladesState, font_cache: &HashMap<String, Font>, conf
     });
 
     for (i, render_info) in blade_render_infos {
-        render_blade(&blades_state.blades[i], blades_state, &render_info, &blades_state.animation, font_cache, config, scale_factor);
+        render_blade(
+            &blades_state.blades[i],
+            blades_state,
+            &render_info,
+            &blades_state.animation,
+            font_cache,
+            config,
+            scale_factor,
+        );
     }
 }
 
@@ -305,22 +377,39 @@ fn calculate_blade_offset(
     let screen_center = screen_width() / 2.0;
     let blade_width = screen_width() * BLADE_WIDTH_RATIO * scale_factor;
     let overlap_width = blade_width * BLADE_OVERLAP_RATIO;
-    
+
     let eased_progress = animation.get_eased_progress();
-    let effective_blade_pos = lerp(animation.source_blade as f32, animation.target_blade as f32, eased_progress);
-    
+    let effective_blade_pos = lerp(
+        animation.source_blade as f32,
+        animation.target_blade as f32,
+        eased_progress,
+    );
+
     let position_delta = blade_index as f32 - effective_blade_pos;
-    
-    let base_x = screen_center - (blade_width / 2.0) + (position_delta * (blade_width - overlap_width));
-    
+
+    let base_x =
+        screen_center - (blade_width / 2.0) + (position_delta * (blade_width - overlap_width));
+
     let alpha = 1.0 - (position_delta.abs() / (num_blades as f32 / 2.0)).powf(2.0);
 
-    BladeRenderInfo { x: base_x, width: blade_width, alpha }
+    BladeRenderInfo {
+        x: base_x,
+        width: blade_width,
+        alpha,
+    }
 }
 
 use crate::utils::string_to_color;
 
-fn render_blade(blade: &Blade, blades_state: &BladesState, render_info: &BladeRenderInfo, animation: &BladesAnimationState, font_cache: &HashMap<String, Font>, config: &Config, scale_factor: f32) {
+fn render_blade(
+    blade: &Blade,
+    blades_state: &BladesState,
+    render_info: &BladeRenderInfo,
+    animation: &BladesAnimationState,
+    font_cache: &HashMap<String, Font>,
+    config: &Config,
+    scale_factor: f32,
+) {
     // Metallic base with per-blade accent strip (pulled from config colors)
     let accent_color = match blade.blade_type {
         BladeType::GamesAndApps => string_to_color(&config.blade_games_color),
@@ -332,7 +421,12 @@ fn render_blade(blade: &Blade, blades_state: &BladesState, render_info: &BladeRe
     base_top.a *= config.blade_transparency;
     base_bottom.a *= config.blade_transparency;
 
-    let is_active = blades_state.current_blade == blades_state.blades.iter().position(|b| b.blade_type == blade.blade_type).unwrap();
+    let is_active = blades_state.current_blade
+        == blades_state
+            .blades
+            .iter()
+            .position(|b| b.blade_type == blade.blade_type)
+            .unwrap();
     draw_blade_panel(
         render_info.x,
         render_info.width,
@@ -343,19 +437,49 @@ fn render_blade(blade: &Blade, blades_state: &BladesState, render_info: &BladeRe
         is_active,
         accent_color,
     );
-    
-    render_blade_tabs(blade, render_info, animation, font_cache, config, scale_factor, accent_color);
-    render_blade_title(blade, render_info, font_cache, config, scale_factor, accent_color);
+
+    render_blade_tabs(
+        blade,
+        render_info,
+        animation,
+        font_cache,
+        config,
+        scale_factor,
+        accent_color,
+    );
+    render_blade_title(
+        blade,
+        render_info,
+        font_cache,
+        config,
+        scale_factor,
+        accent_color,
+    );
 
     if is_active {
         if blade.blade_type == BladeType::GamesAndApps && blade.selected_tab == 0 {
             // Only show the game library on the Games & Apps blade, Library tab
-            render_games_blade_content(blades_state, render_info, font_cache, config, scale_factor, accent_color);
+            render_games_blade_content(
+                blades_state,
+                render_info,
+                font_cache,
+                config,
+                scale_factor,
+                accent_color,
+            );
         }
     }
 }
 
-fn render_blade_tabs(blade: &Blade, render_info: &BladeRenderInfo, animation: &BladesAnimationState, font_cache: &HashMap<String, Font>, config: &Config, scale_factor: f32, _accent: Color) {
+fn render_blade_tabs(
+    blade: &Blade,
+    render_info: &BladeRenderInfo,
+    animation: &BladesAnimationState,
+    font_cache: &HashMap<String, Font>,
+    config: &Config,
+    scale_factor: f32,
+    _accent: Color,
+) {
     let font = get_current_font(font_cache, config);
     let font_size = (20.0 * scale_factor) as u16;
     let mut y_pos = 110.0 * scale_factor;
@@ -368,25 +492,39 @@ fn render_blade_tabs(blade: &Blade, render_info: &BladeRenderInfo, animation: &B
             &tab.name,
             render_info.x + (TAB_PADDING * scale_factor),
             y_pos,
-            TextParams { font: Some(font), font_size, color: text_color, ..Default::default() }
+            TextParams {
+                font: Some(font),
+                font_size,
+                color: text_color,
+                ..Default::default()
+            },
         );
-        
+
         if is_selected {
             let glow_alpha = animation.get_tab_glow_alpha();
             let mut glow_color = WHITE;
             glow_color.a = glow_alpha;
             draw_line(
-                render_info.x, y_pos + (5.0 * scale_factor),
-                render_info.x + render_info.width, y_pos + (5.0 * scale_factor),
+                render_info.x,
+                y_pos + (5.0 * scale_factor),
+                render_info.x + render_info.width,
+                y_pos + (5.0 * scale_factor),
                 GLOW_THICKNESS * scale_factor,
-                glow_color
+                glow_color,
             );
         }
         y_pos += TAB_HEIGHT * scale_factor;
     }
 }
 
-fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRenderInfo, font_cache: &HashMap<String, Font>, config: &Config, scale_factor: f32, accent: Color) {
+fn render_games_blade_content(
+    blades_state: &BladesState,
+    render_info: &BladeRenderInfo,
+    font_cache: &HashMap<String, Font>,
+    config: &Config,
+    scale_factor: f32,
+    accent: Color,
+) {
     let font = get_current_font(font_cache, config);
     let font_size = (18.0 * scale_factor) as u16;
     let row_height = 34.0 * scale_factor;
@@ -407,7 +545,13 @@ fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRen
     // Container
     draw_rectangle(container_x, container_y, container_w, container_h, panel_bg);
     draw_rectangle(container_x, container_y, container_w, header_h, header_bg);
-    draw_rectangle(container_x, container_y + header_h - (3.0 * scale_factor), container_w, 3.0 * scale_factor, accent_line);
+    draw_rectangle(
+        container_x,
+        container_y + header_h - (3.0 * scale_factor),
+        container_w,
+        3.0 * scale_factor,
+        accent_line,
+    );
 
     // Header title
     let header_label = "Game Library";
@@ -416,7 +560,12 @@ fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRen
         header_label,
         container_x + (12.0 * scale_factor),
         container_y + header_h / 2.0 + label_dims.height / 2.5,
-        TextParams { font: Some(font), font_size, color: WHITE, ..Default::default() }
+        TextParams {
+            font: Some(font),
+            font_size,
+            color: WHITE,
+            ..Default::default()
+        },
     );
 
     let y_pos = container_y + header_h + (8.0 * scale_factor);
@@ -428,7 +577,12 @@ fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRen
             message,
             container_x + (12.0 * scale_factor),
             y_pos + dims.height,
-            TextParams { font: Some(font), font_size, color: GRAY, ..Default::default() },
+            TextParams {
+                font: Some(font),
+                font_size,
+                color: GRAY,
+                ..Default::default()
+            },
         );
         return;
     }
@@ -442,12 +596,24 @@ fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRen
         if is_selected {
             bg.a = 0.45 * render_info.alpha;
         }
-        draw_rectangle(content_left, row_y, row_width, row_height - (6.0 * scale_factor), bg);
+        draw_rectangle(
+            content_left,
+            row_y,
+            row_width,
+            row_height - (6.0 * scale_factor),
+            bg,
+        );
 
         // Accent strip for selection
         if is_selected {
             let strip_width = 4.0 * scale_factor;
-            draw_rectangle(content_left, row_y, strip_width, row_height - (6.0 * scale_factor), accent);
+            draw_rectangle(
+                content_left,
+                row_y,
+                strip_width,
+                row_height - (6.0 * scale_factor),
+                accent,
+            );
         }
 
         let text_color = if is_selected { WHITE } else { GRAY };
@@ -458,12 +624,26 @@ fn render_games_blade_content(blades_state: &BladesState, render_info: &BladeRen
             game_name,
             content_left + (12.0 * scale_factor),
             text_y,
-            TextParams { font: Some(font), font_size, color: text_color, ..Default::default() }
+            TextParams {
+                font: Some(font),
+                font_size,
+                color: text_color,
+                ..Default::default()
+            },
         );
     }
 }
 
-fn draw_blade_panel(x: f32, width: f32, height: f32, top: Color, bottom: Color, scale_factor: f32, is_active: bool, accent_color: Color) {
+fn draw_blade_panel(
+    x: f32,
+    width: f32,
+    height: f32,
+    top: Color,
+    bottom: Color,
+    scale_factor: f32,
+    is_active: bool,
+    accent_color: Color,
+) {
     // Flat metallic panel with subtle vertical gradient, no curvature for now.
     let step = (3.0 * scale_factor).max(1.0);
     let accent_strip = 8.0 * scale_factor;
@@ -486,23 +666,28 @@ fn draw_blade_panel(x: f32, width: f32, height: f32, top: Color, bottom: Color, 
         0.0,
         accent_strip,
         height,
-        Color::new(accent_color.r, accent_color.g, accent_color.b, bottom.a * 0.8),
+        Color::new(
+            accent_color.r,
+            accent_color.g,
+            accent_color.b,
+            bottom.a * 0.8,
+        ),
     );
 
     // Highlight rim on active blade
     if is_active {
-        draw_rectangle_lines(
-            x,
-            0.0,
-            width,
-            height,
-            3.0 * scale_factor,
-            rim_color,
-        );
+        draw_rectangle_lines(x, 0.0, width, height, 3.0 * scale_factor, rim_color);
     }
 }
 
-fn render_blade_title(blade: &Blade, render_info: &BladeRenderInfo, font_cache: &HashMap<String, Font>, config: &Config, scale_factor: f32, accent: Color) {
+fn render_blade_title(
+    blade: &Blade,
+    render_info: &BladeRenderInfo,
+    font_cache: &HashMap<String, Font>,
+    config: &Config,
+    scale_factor: f32,
+    accent: Color,
+) {
     let font = get_current_font(font_cache, config);
     let font_size = (28.0 * scale_factor) as u16;
     let title = &blade.name;
@@ -537,7 +722,12 @@ fn render_blade_title(blade: &Blade, render_info: &BladeRenderInfo, font_cache: 
         title,
         x,
         y,
-        TextParams { font: Some(font), font_size, color: title_color, ..Default::default() }
+        TextParams {
+            font: Some(font),
+            font_size,
+            color: title_color,
+            ..Default::default()
+        },
     );
 }
 

@@ -1,19 +1,16 @@
 use crate::{
-    AnimationState, AudioSink, BackgroundState, BatteryInfo, InputState, Screen,
-    render_background, render_ui_overlay, get_current_font, measure_text,
-    text_with_config_color, DEV_MODE, theme, text_with_color, VideoPlayer,
-    audio::{SoundEffects, play_new_bgm},
+    audio::{play_new_bgm, SoundEffects},
     config::Config,
-    system::{adjust_system_volume, get_system_volume, set_brightness, get_current_brightness},
+    get_current_font, measure_text, render_background, render_ui_overlay,
+    system::{adjust_system_volume, get_current_brightness, get_system_volume, set_brightness},
+    text_with_color, text_with_config_color, theme,
     utils::{apply_resolution, trim_extension},
+    AnimationState, AudioSink, BackgroundState, BatteryInfo, InputState, Screen, VideoPlayer,
+    DEV_MODE,
 };
 use macroquad::prelude::*;
 use rodio::{buffer::SamplesBuffer, Sink};
-use std::{
-    collections::HashMap,
-    process::Command,
-    thread,
-};
+use std::{collections::HashMap, process::Command, thread};
 
 const FONT_SIZE: u16 = 10;
 const MENU_PADDING: f32 = 6.0;
@@ -82,23 +79,15 @@ pub const CUSTOM_ASSET_SETTINGS: &[&str] = &[
 ];
 
 pub const COLORS: &[&str] = &[
-    "WHITE",
-    "BLACK",
-    "PINK",
-    "RED",
-    "ORANGE",
-    "YELLOW",
-    "GREEN",
-    "BLUE",
-    "PURPLE",
+    "WHITE", "BLACK", "PINK", "RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "PURPLE",
 ];
 
 pub const RESOLUTIONS: &[&str] = &[
     "320x240",
     "640x360",
-    "640x480",   // [!] 4:3 (Classic VGA)
-    "800x600",   // [!] 4:3
-    "1024x768",  // [!] 4:3
+    "640x480",  // [!] 4:3 (Classic VGA)
+    "800x600",  // [!] 4:3
+    "1024x768", // [!] 4:3
     "1280x720",
     "1280x800",  // Steam Deck (16:10)
     "1280x960",  // [!] 4:3 (2x integer scale of 480p)
@@ -109,28 +98,29 @@ pub const RESOLUTIONS: &[&str] = &[
     "3840x2160",
 ];
 
-pub const ASPECT_RATIOS: &[&str] = &[
-    "4:3",
-    "16:9",
-    "16:10",
-];
+pub const ASPECT_RATIOS: &[&str] = &["4:3", "16:9", "16:10"];
 
 pub const CURSOR_STYLES: &[&str] = &["BOX", "TEXT"];
 
 pub const SPEEDS: &[&str] = &["OFF", "SLOW", "NORMAL", "FAST"];
 
 pub const TIMEZONES: [&str; 25] = [
-    "UTC-12", "UTC-11", "UTC-10", "UTC-9", "UTC-8", "UTC-7", "UTC-6",
-    "UTC-5", "UTC-4", "UTC-3", "UTC-2", "UTC-1", "UTC", "UTC+1",
-    "UTC+2", "UTC+3", "UTC+4", "UTC+5", "UTC+6", "UTC+7", "UTC+8",
-    "UTC+9", "UTC+10", "UTC+11", "UTC+12",
+    "UTC-12", "UTC-11", "UTC-10", "UTC-9", "UTC-8", "UTC-7", "UTC-6", "UTC-5", "UTC-4", "UTC-3",
+    "UTC-2", "UTC-1", "UTC", "UTC+1", "UTC+2", "UTC+3", "UTC+4", "UTC+5", "UTC+6", "UTC+7",
+    "UTC+8", "UTC+9", "UTC+10", "UTC+11", "UTC+12",
 ];
 
 // Helper to check if a resolution string belongs to an aspect ratio
 fn matches_aspect_ratio(res: &str, ratio: &str) -> bool {
     match ratio {
-        "4:3" => matches!(res, "320x240" | "640x480" | "800x600" | "1024x768" | "1280x960" | "1440x1080"),
-        "16:9" => matches!(res, "640x360" | "1280x720" | "1920x1080" | "2560x1440" | "3840x2160"),
+        "4:3" => matches!(
+            res,
+            "320x240" | "640x480" | "800x600" | "1024x768" | "1280x960" | "1440x1080"
+        ),
+        "16:9" => matches!(
+            res,
+            "640x360" | "1280x720" | "1920x1080" | "2560x1440" | "3840x2160"
+        ),
         "16:10" => matches!(res, "1280x800" | "1920x1200"),
         _ => true, // Unknown ratio, allow all
     }
@@ -169,16 +159,35 @@ pub fn render_settings_page(
     render_background(background_cache, video_cache, config, background_state);
 
     // dim the background for easier legibility
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
 
-    render_ui_overlay(logo_cache, font_cache, config, battery_info, current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     // Loop through and draw all settings options
     for (i, label_text) in options.iter().enumerate() {
         let y_pos_base = settings_start_y + (i as f32 * settings_option_height);
 
         let value_text = get_settings_value(page_number, i, config, system_volume, brightness);
-        let value_dims = measure_text(&value_text.to_uppercase(), Some(current_font), font_size, 1.0);
+        let value_dims = measure_text(
+            &value_text.to_uppercase(),
+            Some(current_font),
+            font_size,
+            1.0,
+        );
         let value_x = screen_width() - value_dims.width - right_margin;
         let text_y = y_pos_base + (settings_option_height / 2.0) + (value_dims.offset_y * 0.5);
 
@@ -199,17 +208,39 @@ pub fn render_settings_page(
             let rect_x = value_x - menu_padding;
             let rect_y = y_pos_base + (settings_option_height / 2.0) - (base_height / 2.0);
 
-            draw_rectangle_lines(rect_x - offset_x, rect_y - offset_y, scaled_width, scaled_height, 4.0 * scale_factor, cursor_color);
+            draw_rectangle_lines(
+                rect_x - offset_x,
+                rect_y - offset_y,
+                scaled_width,
+                scaled_height,
+                4.0 * scale_factor,
+                cursor_color,
+            );
         }
 
         // 2. Draw Label (Standard)
-        text_with_config_color(font_cache, config, label_text, left_margin, text_y, font_size);
+        text_with_config_color(
+            font_cache,
+            config,
+            label_text,
+            left_margin,
+            text_y,
+            font_size,
+        );
 
         // 3. Draw Value (Conditional Color)
         if is_selected && config.cursor_style == "TEXT" {
             // If selected and style is TEXT, use the animated cursor color
             let highlight_color = animation_state.get_cursor_color(config);
-            text_with_color(font_cache, config, &value_text, value_x, text_y, font_size, highlight_color);
+            text_with_color(
+                font_cache,
+                config,
+                &value_text,
+                value_x,
+                text_y,
+                font_size,
+                highlight_color,
+            );
         } else {
             // Otherwise use standard config color
             text_with_config_color(font_cache, config, &value_text, value_x, text_y, font_size);
@@ -248,14 +279,25 @@ pub fn render_settings_page(
 
 // SETTINGS VALUE
 // Text for the settings on the RIGHT side
-pub fn get_settings_value(page: usize, index: usize, config: &Config, system_volume: f32, brightness: f32) -> String {
+pub fn get_settings_value(
+    page: usize,
+    index: usize,
+    config: &Config,
+    system_volume: f32,
+    brightness: f32,
+) -> String {
     match page {
         // GENERAL SETTINGS
         1 => match index {
-            0 => "CONFIRM".to_string(), // RESET SETTINGS
-            1 => config.resolution.clone(), // RESOLUTION
+            0 => "CONFIRM".to_string(),       // RESET SETTINGS
+            1 => config.resolution.clone(),   // RESOLUTION
             2 => config.aspect_ratio.clone(), // ASPECT RATIO
-            3 => if config.show_splash_screen { "ON" } else { "OFF" }.to_string(), // SPLASH SCREEN TOGGLE
+            3 => if config.show_splash_screen {
+                "ON"
+            } else {
+                "OFF"
+            }
+            .to_string(), // SPLASH SCREEN TOGGLE
             4 => config.timezone.clone().to_uppercase(), // TIME ZONE
             5 => format!("{:.0}%", brightness * 100.0), // BRIGHTNESS
             6 => if config.wifi { "ON" } else { "OFF" }.to_string(), // WI-FI
@@ -288,13 +330,13 @@ pub fn get_settings_value(page: usize, index: usize, config: &Config, system_vol
         // GUI CUSTOMIZATION
         3 => match index {
             0 => config.theme.clone().replace('_', " ").to_uppercase(), // THEME SELECTION
-            1 => format!("{:?}", config.menu_position).to_uppercase(), // MENU POSITION
-            2 => config.font_color.clone(), // FONT COLOR
-            3 => config.cursor_color.clone(), // CURSOR COLOR
-            4 => config.cursor_style.clone(), // CURSOR STYLE
-            5 => config.cursor_blink_speed.clone(), // CURSOR BLINK SPEED
-            6 => config.cursor_transition_speed.clone(), // CURSOR TRANSITION SPEED
-            7 => config.background_scroll_speed.clone(), // BACKGROUND SCROLL SPEED
+            1 => format!("{:?}", config.menu_position).to_uppercase(),  // MENU POSITION
+            2 => config.font_color.clone(),                             // FONT COLOR
+            3 => config.cursor_color.clone(),                           // CURSOR COLOR
+            4 => config.cursor_style.clone(),                           // CURSOR STYLE
+            5 => config.cursor_blink_speed.clone(),                     // CURSOR BLINK SPEED
+            6 => config.cursor_transition_speed.clone(),                // CURSOR TRANSITION SPEED
+            7 => config.background_scroll_speed.clone(),                // BACKGROUND SCROLL SPEED
             8 => config.color_shift_speed.clone(), // COLOR SHIFTING GRADIENT SPEED
             9 => "<-".to_string(),
             10 => "->".to_string(),
@@ -302,27 +344,38 @@ pub fn get_settings_value(page: usize, index: usize, config: &Config, system_vol
         },
         // CUSTOM ASSETS
         4 => match index {
-            0 => { // BGM SELECTION
+            0 => {
+                // BGM SELECTION
                 // Always show the current track or "OFF"
                 let track = config.bgm_track.clone().unwrap_or("OFF".to_string());
                 trim_extension(&track).replace('_', " ").to_uppercase()
-            },
-            1 => { // SOUND PACK
+            }
+            1 => {
+                // SOUND PACK
                 // Always show the currently selected sound pack
                 config.sfx_pack.clone().replace('_', " ").to_uppercase()
-            },
-            2 => { // LOGO
+            }
+            2 => {
+                // LOGO
                 // Always show the currently selected logo
-                trim_extension(&config.logo_selection).replace('_', " ").to_uppercase()
-            },
-            3 => { // BACKGROUND
+                trim_extension(&config.logo_selection)
+                    .replace('_', " ")
+                    .to_uppercase()
+            }
+            3 => {
+                // BACKGROUND
                 // Always show the currently selected background
-                trim_extension(&config.background_selection).replace('_', " ").to_uppercase()
-            },
-            4 => { // FONT TYPE
+                trim_extension(&config.background_selection)
+                    .replace('_', " ")
+                    .to_uppercase()
+            }
+            4 => {
+                // FONT TYPE
                 // Always show the currently selected font
-                trim_extension(&config.font_selection).replace('_', " ").to_uppercase()
-            },
+                trim_extension(&config.font_selection)
+                    .replace('_', " ")
+                    .to_uppercase()
+            }
             5 => "<-".to_string(),
             _ => "".to_string(),
         },
@@ -364,7 +417,11 @@ pub fn update(
 
     // INPUT HANDLING
     if input_state.up {
-        *settings_menu_selection = if *settings_menu_selection == 0 { options.len() - 1 } else { *settings_menu_selection - 1 };
+        *settings_menu_selection = if *settings_menu_selection == 0 {
+            options.len() - 1
+        } else {
+            *settings_menu_selection - 1
+        };
         sound_effects.play_cursor_move(&config);
     }
     if input_state.down {
@@ -406,32 +463,40 @@ pub fn update(
     match page_number {
         // GENERAL OPTIONS
         1 => match settings_menu_selection {
-            0 => { // RESET SETTINGS
+            0 => {
+                // RESET SETTINGS
                 if input_state.select {
                     sound_effects.play_select(&config);
                     *confirm_selection = 1; // Default to "NO"
                     *current_screen = Screen::ConfirmReset;
                 }
-            },
-            1 => { // RESOLUTION
+            }
+            1 => {
+                // RESOLUTION
                 if input_state.left || input_state.right {
                     // 1. Filter the resolutions list based on the CURRENT aspect ratio
                     let filtered_resolutions: Vec<&str> = RESOLUTIONS
-                    .iter()
-                    .filter(|&&r| matches_aspect_ratio(r, &config.aspect_ratio))
-                    .cloned()
-                    .collect();
+                        .iter()
+                        .filter(|&&r| matches_aspect_ratio(r, &config.aspect_ratio))
+                        .cloned()
+                        .collect();
 
-                    if filtered_resolutions.is_empty() { return; } // Safety check
+                    if filtered_resolutions.is_empty() {
+                        return;
+                    } // Safety check
 
                     // 2. Find current index in the FILTERED list
-                    let current_index = filtered_resolutions.iter().position(|&r| r == config.resolution).unwrap_or(0);
+                    let current_index = filtered_resolutions
+                        .iter()
+                        .position(|&r| r == config.resolution)
+                        .unwrap_or(0);
 
                     // 3. Calculate new index
                     let new_index = if input_state.right {
                         (current_index + 1) % filtered_resolutions.len()
                     } else {
-                        (current_index + filtered_resolutions.len() - 1) % filtered_resolutions.len()
+                        (current_index + filtered_resolutions.len() - 1)
+                            % filtered_resolutions.len()
                     };
 
                     // 4. Apply
@@ -440,10 +505,14 @@ pub fn update(
                     apply_resolution(&config.resolution);
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            2 => { // ASPECT RATIO
+            }
+            2 => {
+                // ASPECT RATIO
                 if input_state.left || input_state.right {
-                    let current_index = ASPECT_RATIOS.iter().position(|&r| r == config.aspect_ratio).unwrap_or(1); // Default 16:9
+                    let current_index = ASPECT_RATIOS
+                        .iter()
+                        .position(|&r| r == config.aspect_ratio)
+                        .unwrap_or(1); // Default 16:9
                     let new_index = if input_state.right {
                         (current_index + 1) % ASPECT_RATIOS.len()
                     } else {
@@ -455,7 +524,10 @@ pub fn update(
                     // [!] AUTO-SWITCH RESOLUTION
                     // When ratio changes, switch to the "Best" (first) resolution for that ratio
                     // to prevent invalid states (like 4:3 ratio but 1920x1080 resolution).
-                    if let Some(new_res) = RESOLUTIONS.iter().find(|&&r| matches_aspect_ratio(r, &config.aspect_ratio)) {
+                    if let Some(new_res) = RESOLUTIONS
+                        .iter()
+                        .find(|&&r| matches_aspect_ratio(r, &config.aspect_ratio))
+                    {
                         config.resolution = new_res.to_string();
                         apply_resolution(&config.resolution);
                     }
@@ -463,19 +535,22 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            3 => { // SPLASH SCREEN
+            }
+            3 => {
+                // SPLASH SCREEN
                 if input_state.left || input_state.right {
                     config.show_splash_screen = !config.show_splash_screen;
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            4 => { // TIME ZONE
+            }
+            4 => {
+                // TIME ZONE
                 let mut change_occurred = false;
 
                 // Find the current index of the timezone in our array
-                if let Some(current_index) = TIMEZONES.iter().position(|&tz| tz == config.timezone) {
+                if let Some(current_index) = TIMEZONES.iter().position(|&tz| tz == config.timezone)
+                {
                     if input_state.left {
                         // Decrement and wrap around if we go below zero
                         let new_index = (current_index + TIMEZONES.len() - 1) % TIMEZONES.len();
@@ -494,8 +569,9 @@ pub fn update(
                     sound_effects.play_cursor_move(&config);
                     config.save();
                 }
-            },
-            5 => { // BRIGHTNESS
+            }
+            5 => {
+                // BRIGHTNESS
                 if input_state.left {
                     set_brightness(*brightness - 0.1); // Decrease by 10%
                     *brightness = get_current_brightness().unwrap_or(*brightness); // Refresh the value
@@ -506,8 +582,9 @@ pub fn update(
                     *brightness = get_current_brightness().unwrap_or(*brightness); // Refresh the value
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            6 => { // WI-FI
+            }
+            6 => {
+                // WI-FI
                 if input_state.left || input_state.right {
                     // Toggle the state optimistically and save immediately.
                     config.wifi = !config.wifi;
@@ -521,10 +598,10 @@ pub fn update(
 
                         thread::spawn(move || {
                             let output = Command::new("sudo")
-                            .arg("nmcli")
-                            .arg("networking")
-                            .arg(action)
-                            .output();
+                                .arg("nmcli")
+                                .arg("networking")
+                                .arg(action)
+                                .output();
 
                             match output {
                                 Ok(out) => {
@@ -542,12 +619,16 @@ pub fn update(
                             }
                         });
                     } else {
-                        println!("[DEV_MODE] Skipping sudo command to turn networking {}.", action);
+                        println!(
+                            "[DEV_MODE] Skipping sudo command to turn networking {}.",
+                            action
+                        );
                     }
                 }
-            },
+            }
             #[cfg(target_os = "linux")]
-            7 => { // BLUETOOTH
+            7 => {
+                // BLUETOOTH
                 if input_state.left || input_state.right {
                     config.bluetooth = !config.bluetooth;
                     config.save();
@@ -559,10 +640,10 @@ pub fn update(
                         println!("[INFO] Spawning thread to {} Bluetooth", action);
                         thread::spawn(move || {
                             let output = Command::new("sudo")
-                            .arg("rfkill")
-                            .arg(action)
-                            .arg("bluetooth")
-                            .output();
+                                .arg("rfkill")
+                                .arg(action)
+                                .arg("bluetooth")
+                                .output();
 
                             match output {
                                 Ok(out) => {
@@ -583,61 +664,68 @@ pub fn update(
                         println!("[DEV_MODE] Skipping sudo command to {} Bluetooth.", action);
                     }
                 }
-            },
+            }
             #[cfg(not(target_os = "linux"))]
-            7 => { // AUTOBOOT (shifted from 8 on Linux)
+            7 => {
+                // AUTOBOOT (shifted from 8 on Linux)
                 if input_state.left || input_state.right {
                     config.autoboot = !config.autoboot;
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
+            }
             #[cfg(target_os = "linux")]
-            8 => { // AUTOBOOT
+            8 => {
+                // AUTOBOOT
                 if input_state.left || input_state.right {
                     config.autoboot = !config.autoboot;
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
+            }
             #[cfg(target_os = "linux")]
-            9 => { // RETROACHIEVEMENTS
+            9 => {
+                // RETROACHIEVEMENTS
                 if input_state.select {
                     *current_screen = Screen::RetroAchievements;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             #[cfg(target_os = "linux")]
-            10 => { // GO TO AUDIO SETTINGS
+            10 => {
+                // GO TO AUDIO SETTINGS
                 if input_state.select {
                     *current_screen = Screen::AudioSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             #[cfg(not(target_os = "linux"))]
-            8 => { // RETROACHIEVEMENTS
+            8 => {
+                // RETROACHIEVEMENTS
                 if input_state.select {
                     *current_screen = Screen::RetroAchievements;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             #[cfg(not(target_os = "linux"))]
-            9 => { // GO TO AUDIO SETTINGS
+            9 => {
+                // GO TO AUDIO SETTINGS
                 if input_state.select {
                     *current_screen = Screen::AudioSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             _ => {}
         },
 
         // AUDIO SETTINGS
         2 => match settings_menu_selection {
-            0 => { // MASTER VOLUME
+            0 => {
+                // MASTER VOLUME
                 if input_state.left {
                     adjust_system_volume("10%-"); // Decrease by 10%
                     *system_volume = get_system_volume().unwrap_or(*system_volume); // Refresh the value
@@ -648,8 +736,9 @@ pub fn update(
                     *system_volume = get_system_volume().unwrap_or(*system_volume); // Refresh the value
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            1 => { // BGM VOLUME
+            }
+            1 => {
+                // BGM VOLUME
                 if input_state.left || input_state.right {
                     if input_state.left {
                         config.bgm_volume = (config.bgm_volume - 0.1).max(0.0);
@@ -666,8 +755,9 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            2 => { // SFX Volume
+            }
+            2 => {
+                // SFX Volume
                 if input_state.left || input_state.right {
                     if input_state.left {
                         config.sfx_volume = (config.sfx_volume - 0.1).max(0.0);
@@ -678,16 +768,21 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config); // Test the new volume
                 }
-            },
-            3 => { // AUDIO OUTPUT
+            }
+            3 => {
+                // AUDIO OUTPUT
                 // Only run this logic if we actually found sinks
                 if !available_sinks.is_empty() {
                     // Find the index of the current sink in our discovered list
-                    let current_index = available_sinks.iter().position(|s| s.name == config.audio_output).unwrap_or(0);
+                    let current_index = available_sinks
+                        .iter()
+                        .position(|s| s.name == config.audio_output)
+                        .unwrap_or(0);
 
                     let mut new_index = current_index;
                     if input_state.left {
-                        new_index = (current_index + available_sinks.len() - 1) % available_sinks.len();
+                        new_index =
+                            (current_index + available_sinks.len() - 1) % available_sinks.len();
                     }
                     if input_state.right {
                         new_index = (current_index + 1) % available_sinks.len();
@@ -698,7 +793,10 @@ pub fn update(
                         config.audio_output = new_sink.name.clone();
 
                         // Apply the change immediately
-                        let _ = Command::new("wpctl").arg("set-default").arg(new_sink.id.to_string()).status();
+                        let _ = Command::new("wpctl")
+                            .arg("set-default")
+                            .arg(new_sink.id.to_string())
+                            .status();
 
                         // Create a sentinel file to make the choice persistent
                         let state_dir = std::path::Path::new("/var/kazeta/state");
@@ -709,36 +807,44 @@ pub fn update(
                         sound_effects.play_cursor_move(&config);
                     }
                 }
-            },
-            4 => { // GO TO GENERAL SETTINGS
+            }
+            4 => {
+                // GO TO GENERAL SETTINGS
                 if input_state.select {
                     *current_screen = Screen::GeneralSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
-            5 => { // GO TO GUI CUSTOMIZATION
+            }
+            5 => {
+                // GO TO GUI CUSTOMIZATION
                 if input_state.select {
                     *current_screen = Screen::GuiSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             _ => {}
         },
 
         // GUI CUSTOMIZATION OPTIONS
         3 => match settings_menu_selection {
-            0 => { // THEME SELECTION
+            0 => {
+                // THEME SELECTION
                 if input_state.left || input_state.right {
-                    if loaded_themes.is_empty() { return; } // Prevent panic if no themes are loaded
+                    if loaded_themes.is_empty() {
+                        return;
+                    } // Prevent panic if no themes are loaded
 
                     // 1. Get a fresh, sorted list of theme names directly from the live data.
                     let mut theme_names: Vec<_> = loaded_themes.keys().cloned().collect();
                     theme_names.sort();
 
                     // Now, use this up-to-date 'theme_names' vector for the rest of the logic
-                    let current_index = theme_names.iter().position(|t| *t == config.theme).unwrap_or(0);
+                    let current_index = theme_names
+                        .iter()
+                        .position(|t| *t == config.theme)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % theme_names.len()
                     } else {
@@ -784,13 +890,37 @@ pub fn update(
                             if let Some(theme) = loaded_themes.get(&new_theme_name) {
                                 println!("[INFO] Switched to '{}' theme.", new_theme_name);
                                 *sound_effects = theme.sounds.clone();
-                                config.sfx_pack = theme.config.sfx_pack.clone().unwrap_or_else(|| "Default".to_string());
+                                config.sfx_pack = theme
+                                    .config
+                                    .sfx_pack
+                                    .clone()
+                                    .unwrap_or_else(|| "Default".to_string());
                                 config.bgm_track = theme.config.bgm_track.clone();
-                                config.logo_selection = theme.config.logo_selection.clone().unwrap_or_else(|| "Kazeta+ (Default)".to_string());
-                                config.background_selection = theme.config.background_selection.clone().unwrap_or_else(|| "Default".to_string());
-                                config.font_selection = theme.config.font_selection.clone().unwrap_or_else(|| "Default".to_string());
-                                config.splash_video = theme.config.splash_video.clone().unwrap_or_else(|| "Default".to_string());
-                                config.splash_audio = theme.config.splash_audio.clone().unwrap_or_else(|| "Default".to_string());
+                                config.logo_selection = theme
+                                    .config
+                                    .logo_selection
+                                    .clone()
+                                    .unwrap_or_else(|| "Kazeta+ (Default)".to_string());
+                                config.background_selection = theme
+                                    .config
+                                    .background_selection
+                                    .clone()
+                                    .unwrap_or_else(|| "Default".to_string());
+                                config.font_selection = theme
+                                    .config
+                                    .font_selection
+                                    .clone()
+                                    .unwrap_or_else(|| "Default".to_string());
+                                config.splash_video = theme
+                                    .config
+                                    .splash_video
+                                    .clone()
+                                    .unwrap_or_else(|| "Default".to_string());
+                                config.splash_audio = theme
+                                    .config
+                                    .splash_audio
+                                    .clone()
+                                    .unwrap_or_else(|| "Default".to_string());
 
                                 // Apply custom loading messages if theme provides them
                                 if let Some(messages) = &theme.config.loading_messages {
@@ -799,28 +929,59 @@ pub fn update(
                                     config.loading_messages = Vec::new(); // Empty means use defaults
                                 }
 
-                                if let Some(val) = &theme.config.menu_position { config.menu_position = val.parse().unwrap_or_default(); }
-                                if let Some(val) = &theme.config.font_color { config.font_color = val.clone(); }
-                                if let Some(val) = &theme.config.cursor_color { config.cursor_color = val.clone(); }
-                                if let Some(val) = &theme.config.cursor_style { config.cursor_style = val.clone(); }
-                                if let Some(val) = &theme.config.cursor_blink_speed { config.cursor_blink_speed = val.clone(); }
-                                if let Some(val) = &theme.config.cursor_transition_speed { config.cursor_transition_speed = val.clone(); }
-                                if let Some(val) = &theme.config.background_scroll_speed { config.background_scroll_speed = val.clone(); }
-                                if let Some(val) = &theme.config.color_shift_speed { config.color_shift_speed = val.clone(); }
+                                if let Some(val) = &theme.config.menu_position {
+                                    config.menu_position = val.parse().unwrap_or_default();
+                                }
+                                if let Some(val) = &theme.config.font_color {
+                                    config.font_color = val.clone();
+                                }
+                                if let Some(val) = &theme.config.cursor_color {
+                                    config.cursor_color = val.clone();
+                                }
+                                if let Some(val) = &theme.config.cursor_style {
+                                    config.cursor_style = val.clone();
+                                }
+                                if let Some(val) = &theme.config.cursor_blink_speed {
+                                    config.cursor_blink_speed = val.clone();
+                                }
+                                if let Some(val) = &theme.config.cursor_transition_speed {
+                                    config.cursor_transition_speed = val.clone();
+                                }
+                                if let Some(val) = &theme.config.background_scroll_speed {
+                                    config.background_scroll_speed = val.clone();
+                                }
+                                if let Some(val) = &theme.config.color_shift_speed {
+                                    config.color_shift_speed = val.clone();
+                                }
 
                                 if let Some(blades_config) = &theme.config.blades {
-                                    if let Some(val) = blades_config.enabled { config.blades_enabled = val; }
-                                    if let Some(val) = &blades_config.games_color { config.blade_games_color = val.clone(); }
-                                    if let Some(val) = &blades_config.settings_color { config.blade_settings_color = val.clone(); }
-                                    if let Some(val) = &blades_config.saves_color { config.blade_saves_color = val.clone(); }
-                                    if let Some(val) = blades_config.transparency { config.blade_transparency = val; }
-                                    if let Some(val) = blades_config.blur_enabled { config.blade_blur_enabled = val; }
+                                    if let Some(val) = blades_config.enabled {
+                                        config.blades_enabled = val;
+                                    }
+                                    if let Some(val) = &blades_config.games_color {
+                                        config.blade_games_color = val.clone();
+                                    }
+                                    if let Some(val) = &blades_config.settings_color {
+                                        config.blade_settings_color = val.clone();
+                                    }
+                                    if let Some(val) = &blades_config.saves_color {
+                                        config.blade_saves_color = val.clone();
+                                    }
+                                    if let Some(val) = blades_config.transparency {
+                                        config.blade_transparency = val;
+                                    }
+                                    if let Some(val) = blades_config.blur_enabled {
+                                        config.blade_blur_enabled = val;
+                                    }
                                 }
                             }
                         }
 
                         play_new_bgm(
-                            &config.bgm_track.clone().unwrap_or_else(|| "OFF".to_string()),
+                            &config
+                                .bgm_track
+                                .clone()
+                                .unwrap_or_else(|| "OFF".to_string()),
                             config.bgm_volume,
                             music_cache,
                             current_bgm,
@@ -830,8 +991,9 @@ pub fn update(
                         config.save();
                     }
                 }
-            },
-            1 => { // MENU POSITION
+            }
+            1 => {
+                // MENU POSITION
                 if input_state.left {
                     config.menu_position = config.menu_position.prev();
                     config.save();
@@ -842,11 +1004,15 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(config);
                 }
-            },
-            2 => { // FONT COLOR
+            }
+            2 => {
+                // FONT COLOR
                 if input_state.left || input_state.right {
                     // Find current color's index in our list
-                    let current_index = COLORS.iter().position(|&c| c == config.font_color).unwrap_or(0);
+                    let current_index = COLORS
+                        .iter()
+                        .position(|&c| c == config.font_color)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % COLORS.len()
                     } else {
@@ -857,10 +1023,14 @@ pub fn update(
                     sound_effects.play_cursor_move(&config);
                 }
             }
-            3 => { // CURSOR COLOR
+            3 => {
+                // CURSOR COLOR
                 if input_state.left || input_state.right {
                     // We can reuse the COLORS constant for this
-                    let current_index = COLORS.iter().position(|&c| c == config.cursor_color).unwrap_or(0);
+                    let current_index = COLORS
+                        .iter()
+                        .position(|&c| c == config.cursor_color)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % COLORS.len()
                     } else {
@@ -871,10 +1041,14 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            4 => { // CURSOR STYLE
+            }
+            4 => {
+                // CURSOR STYLE
                 if input_state.left || input_state.right {
-                    let current_index = CURSOR_STYLES.iter().position(|&s| s == config.cursor_style).unwrap_or(0);
+                    let current_index = CURSOR_STYLES
+                        .iter()
+                        .position(|&s| s == config.cursor_style)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % CURSOR_STYLES.len()
                     } else {
@@ -884,10 +1058,14 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            5 => { // CURSOR BLINK SPEED
+            }
+            5 => {
+                // CURSOR BLINK SPEED
                 if input_state.left || input_state.right {
-                    let current_index = SPEEDS.iter().position(|&s| s == config.cursor_blink_speed).unwrap_or(0);
+                    let current_index = SPEEDS
+                        .iter()
+                        .position(|&s| s == config.cursor_blink_speed)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % SPEEDS.len()
                     } else {
@@ -898,10 +1076,14 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            6 => { // TRANSITION ANIMATION
+            }
+            6 => {
+                // TRANSITION ANIMATION
                 if input_state.left || input_state.right {
-                    let current_index = SPEEDS.iter().position(|&s| s == config.cursor_transition_speed).unwrap_or(2); // Default to NORMAL (index 2)
+                    let current_index = SPEEDS
+                        .iter()
+                        .position(|&s| s == config.cursor_transition_speed)
+                        .unwrap_or(2); // Default to NORMAL (index 2)
                     let new_index = if input_state.right {
                         (current_index + 1) % SPEEDS.len()
                     } else {
@@ -914,10 +1096,14 @@ pub fn update(
                     animation_state.trigger_transition(&config.cursor_transition_speed);
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            7 => { // BACKGROUND SCROLLING
+            }
+            7 => {
+                // BACKGROUND SCROLLING
                 if input_state.left || input_state.right {
-                    let current_index = SPEEDS.iter().position(|&s| s == config.background_scroll_speed).unwrap_or(0);
+                    let current_index = SPEEDS
+                        .iter()
+                        .position(|&s| s == config.background_scroll_speed)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % SPEEDS.len()
                     } else {
@@ -928,10 +1114,14 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            8 => { // COLOR GRADIENT SHIFTING
+            }
+            8 => {
+                // COLOR GRADIENT SHIFTING
                 if input_state.left || input_state.right {
-                    let current_index = SPEEDS.iter().position(|&s| s == config.color_shift_speed).unwrap_or(0);
+                    let current_index = SPEEDS
+                        .iter()
+                        .position(|&s| s == config.color_shift_speed)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % SPEEDS.len()
                     } else {
@@ -942,33 +1132,43 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            9 => { // GO TO AUDIO SETTINGS
+            }
+            9 => {
+                // GO TO AUDIO SETTINGS
                 if input_state.select {
                     *current_screen = Screen::AudioSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
-            10 => { // GO TO CUSTOM ASSETS
+            }
+            10 => {
+                // GO TO CUSTOM ASSETS
                 if input_state.select {
                     *current_screen = Screen::AssetSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             _ => {}
         },
         // CUSTOM ASSETS
         4 => match settings_menu_selection {
-            0 => { // BGM SELECTION
+            0 => {
+                // BGM SELECTION
                 if input_state.left || input_state.right {
                     // Find the current track's position in our list of choices
-                    let current_index = bgm_choices.iter().position(|t| *t == config.bgm_track.clone().unwrap_or("OFF".to_string())).unwrap_or(0);
+                    let current_index = bgm_choices
+                        .iter()
+                        .position(|t| *t == config.bgm_track.clone().unwrap_or("OFF".to_string()))
+                        .unwrap_or(0);
                     let mut new_index = current_index;
 
                     if input_state.left {
-                        new_index = if current_index == 0 { bgm_choices.len() - 1 } else { current_index - 1 };
+                        new_index = if current_index == 0 {
+                            bgm_choices.len() - 1
+                        } else {
+                            current_index - 1
+                        };
                     }
                     if input_state.right {
                         new_index = (current_index + 1) % bgm_choices.len();
@@ -987,11 +1187,15 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            1 => { // SOUND PACK
+            }
+            1 => {
+                // SOUND PACK
                 if input_state.left || input_state.right {
                     // `sound_pack_choices` is the Vec<String> of available packs
-                    let current_index = sound_pack_choices.iter().position(|p| *p == config.sfx_pack).unwrap_or(0);
+                    let current_index = sound_pack_choices
+                        .iter()
+                        .position(|p| *p == config.sfx_pack)
+                        .unwrap_or(0);
 
                     let new_index = if input_state.right {
                         (current_index + 1) % sound_pack_choices.len()
@@ -1012,15 +1216,23 @@ pub fn update(
                         config.save();
                     }
                 }
-            },
-            2 => { // LOGO selection
+            }
+            2 => {
+                // LOGO selection
                 if input_state.left || input_state.right {
                     // Find the current logo's position in our list of choices
-                    let current_index = logo_choices.iter().position(|l| *l == config.logo_selection).unwrap_or(0);
+                    let current_index = logo_choices
+                        .iter()
+                        .position(|l| *l == config.logo_selection)
+                        .unwrap_or(0);
                     let mut new_index = current_index;
 
                     if input_state.left {
-                        new_index = if current_index == 0 { logo_choices.len() - 1 } else { current_index - 1 };
+                        new_index = if current_index == 0 {
+                            logo_choices.len() - 1
+                        } else {
+                            current_index - 1
+                        };
                     }
                     if input_state.right {
                         new_index = (current_index + 1) % logo_choices.len();
@@ -1032,15 +1244,23 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            3 => { // BACKGROUND SELECTION
+            }
+            3 => {
+                // BACKGROUND SELECTION
                 if input_state.left || input_state.right {
                     // Find the current background's position in our list of choices
-                    let current_index = background_choices.iter().position(|b| *b == config.background_selection).unwrap_or(0);
+                    let current_index = background_choices
+                        .iter()
+                        .position(|b| *b == config.background_selection)
+                        .unwrap_or(0);
                     let mut new_index = current_index;
 
                     if input_state.left {
-                        new_index = if current_index == 0 { background_choices.len() - 1 } else { current_index - 1 };
+                        new_index = if current_index == 0 {
+                            background_choices.len() - 1
+                        } else {
+                            current_index - 1
+                        };
                     }
                     if input_state.right {
                         new_index = (current_index + 1) % background_choices.len();
@@ -1052,10 +1272,14 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            4 => { // FONT TYPE
+            }
+            4 => {
+                // FONT TYPE
                 if input_state.left || input_state.right {
-                    let current_index = font_choices.iter().position(|name| name == &config.font_selection).unwrap_or(0);
+                    let current_index = font_choices
+                        .iter()
+                        .position(|name| name == &config.font_selection)
+                        .unwrap_or(0);
                     let new_index = if input_state.right {
                         (current_index + 1) % font_choices.len()
                     } else {
@@ -1066,14 +1290,15 @@ pub fn update(
                     config.save();
                     sound_effects.play_cursor_move(&config);
                 }
-            },
-            5 => { // GO TO GUI CUSTOMIZATION SETTINGS
+            }
+            5 => {
+                // GO TO GUI CUSTOMIZATION SETTINGS
                 if input_state.select {
                     *current_screen = Screen::GuiSettings;
                     *settings_menu_selection = 0;
                     sound_effects.play_select(&config);
                 }
-            },
+            }
             _ => {}
         },
         _ => {}

@@ -1,22 +1,18 @@
-use walkdir;
 use chrono::DateTime;
 use std::{
-    fs, fmt,
     collections::VecDeque,
-    io::{self, BufRead, Write, Read},
+    fmt, fs,
+    io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Child, Stdio},
-    sync::Arc,
+    process::{Child, Command, Stdio},
     sync::atomic::{AtomicU16, Ordering},
+    sync::Arc,
 };
 use sysinfo::Disks;
-use tar::{Builder, Archive};
+use tar::{Archive, Builder};
+use walkdir;
 
-use crate::{
-    DEV_MODE,
-    config::get_user_data_dir,
-    types::StorageMedia,
-};
+use crate::{config::get_user_data_dir, types::StorageMedia, DEV_MODE};
 
 // ===================================
 // CONSTANTS
@@ -29,7 +25,7 @@ const EXCLUDED_DIRS: &[&str] = &[
     ".kazeta/share",
     ".kazeta/var/prefix/dosdevices",
     ".kazeta/var/prefix/drive_c/windows",
-    ".kazeta/var/prefix/pfx"
+    ".kazeta/var/prefix/pfx",
 ];
 
 // ===================================
@@ -57,8 +53,8 @@ pub struct CartInfo {
 #[derive(Clone, Debug)]
 pub struct StorageMediaState {
     pub all_media: Vec<StorageMedia>, // all storage media, including disabled media
-    pub media: Vec<StorageMedia>,    // media that can actually be used
-    pub selected: usize,    // the index of selection in 'media'
+    pub media: Vec<StorageMedia>,     // media that can actually be used
+    pub selected: usize,              // the index of selection in 'media'
     pub needs_memory_refresh: bool,
 }
 
@@ -70,7 +66,7 @@ pub struct StorageMediaState {
 pub enum SaveError {
     Io(io::Error),
     Message(String),
-    Walkdir(walkdir::Error), // Add this variant
+    Walkdir(walkdir::Error),                  // Add this variant
     StripPrefix(std::path::StripPrefixError), // Add this variant
 }
 
@@ -93,46 +89,47 @@ impl StorageMediaState {
 
         if let Ok(devices) = list_devices() {
             for (id, free) in devices {
-                all_new_media.push(StorageMedia {
-                    id,
-                    free,
-                });
+                all_new_media.push(StorageMedia { id, free });
             }
         }
 
         // Done if media list has not changed
-        if self.all_media.len() == all_new_media.len() &&
-            !self.all_media.iter().zip(all_new_media.iter()).any(|(a, b)| a.id != b.id) {
-
-                //  update free space
-                self.all_media = all_new_media;
-                for media in &mut self.media {
-                    if let Some(pos) = self.all_media.iter().position(|m| m.id == media.id) {
-                        media.free = self.all_media.get(pos).unwrap().free
-                    }
+        if self.all_media.len() == all_new_media.len()
+            && !self
+                .all_media
+                .iter()
+                .zip(all_new_media.iter())
+                .any(|(a, b)| a.id != b.id)
+        {
+            //  update free space
+            self.all_media = all_new_media;
+            for media in &mut self.media {
+                if let Some(pos) = self.all_media.iter().position(|m| m.id == media.id) {
+                    media.free = self.all_media.get(pos).unwrap().free
                 }
-
-                return;
             }
 
-            let new_media: Vec<StorageMedia> = all_new_media
+            return;
+        }
+
+        let new_media: Vec<StorageMedia> = all_new_media
             .clone()
             .into_iter()
             .filter(|m| has_save_dir(&m.id) && !is_cart(&m.id))
             .collect();
 
-            // Try to keep the same device selected if it still exists
-            let mut new_pos = 0;
-            if let Some(old_selected_media) = self.media.get(self.selected) {
-                if let Some(pos) = new_media.iter().position(|m| m.id == old_selected_media.id) {
-                    new_pos = pos;
-                }
+        // Try to keep the same device selected if it still exists
+        let mut new_pos = 0;
+        if let Some(old_selected_media) = self.media.get(self.selected) {
+            if let Some(pos) = new_media.iter().position(|m| m.id == old_selected_media.id) {
+                new_pos = pos;
             }
+        }
 
-            self.all_media = all_new_media;
-            self.media = new_media;
-            self.selected = new_pos;
-            self.needs_memory_refresh = true;
+        self.all_media = all_new_media;
+        self.media = new_media;
+        self.selected = new_pos;
+        self.needs_memory_refresh = true;
     }
 }
 
@@ -149,10 +146,26 @@ impl fmt::Display for SaveError {
 }
 impl std::error::Error for SaveError {}
 
-impl From<io::Error> for SaveError { fn from(err: io::Error) -> Self { SaveError::Io(err) } }
-impl From<String> for SaveError { fn from(msg: String) -> Self { SaveError::Message(msg) } }
-impl From<walkdir::Error> for SaveError { fn from(err: walkdir::Error) -> Self { SaveError::Walkdir(err) } }
-impl From<std::path::StripPrefixError> for SaveError { fn from(err: std::path::StripPrefixError) -> Self { SaveError::StripPrefix(err) } }
+impl From<io::Error> for SaveError {
+    fn from(err: io::Error) -> Self {
+        SaveError::Io(err)
+    }
+}
+impl From<String> for SaveError {
+    fn from(msg: String) -> Self {
+        SaveError::Message(msg)
+    }
+}
+impl From<walkdir::Error> for SaveError {
+    fn from(err: walkdir::Error) -> Self {
+        SaveError::Walkdir(err)
+    }
+}
+impl From<std::path::StripPrefixError> for SaveError {
+    fn from(err: std::path::StripPrefixError) -> Self {
+        SaveError::StripPrefix(err)
+    }
+}
 
 // ===================================
 // FUNCTIONS
@@ -160,7 +173,9 @@ impl From<std::path::StripPrefixError> for SaveError { fn from(err: std::path::S
 
 fn should_exclude_path(path: &Path) -> bool {
     let path_str = path.to_str().unwrap_or("");
-    EXCLUDED_DIRS.iter().any(|&excluded| path_str.contains(excluded))
+    EXCLUDED_DIRS
+        .iter()
+        .any(|&excluded| path_str.contains(excluded))
 }
 
 // [UPDATED] Accept a slice of extensions instead of a single &str
@@ -287,7 +302,12 @@ fn calculate_playtime_from_tar(tar_path: &Path, _cart_id: &str) -> f32 {
         }
     }
 
-    parse_playtime_content(&format!("{}\n{} {}", content.trim(), start_content.trim(), end_content.trim()))
+    parse_playtime_content(&format!(
+        "{}\n{} {}",
+        content.trim(),
+        start_content.trim(),
+        end_content.trim()
+    ))
 }
 
 /// Calculate playtime from a directory (internal drives)
@@ -311,7 +331,12 @@ fn calculate_playtime_from_dir(dir_path: &Path, _cart_id: &str) -> f32 {
         Err(_) => "".to_string(),
     };
 
-    return parse_playtime_content(&format!("{}\n{} {}", content.trim(), start_content.trim(), end_content.trim()));
+    return parse_playtime_content(&format!(
+        "{}\n{} {}",
+        content.trim(),
+        start_content.trim(),
+        end_content.trim()
+    ));
 }
 
 /// Parse playtime content from a string (common logic for both tar and directory)
@@ -370,25 +395,25 @@ fn calculate_size_from_dir(dir_path: &Path) -> u64 {
         .filter(|e| {
             let path = e.path();
             // Skip excluded directories and their contents
-            !should_exclude_path(path) &&
-            path.is_file()
-        }) {
-            if let Ok(metadata) = entry.metadata() {
-                total_size += metadata.len();
-            }
+            !should_exclude_path(path) && path.is_file()
+        })
+    {
+        if let Ok(metadata) = entry.metadata() {
+            total_size += metadata.len();
         }
-        total_size
+    }
+    total_size
 }
 
 fn sync_to_disk() {
     if let Ok(output) = Command::new("sync")
         .output()
-        .map_err(|e| format!("Failed to execute sync command: {}", e)) {
-
-            if !output.status.success() {
-                println!("Sync command failed with status: {}", output.status);
-            }
+        .map_err(|e| format!("Failed to execute sync command: {}", e))
+    {
+        if !output.status.success() {
+            println!("Sync command failed with status: {}", output.status);
         }
+    }
 }
 
 /// Returns the correct directory for state files based on the environment.
@@ -443,18 +468,27 @@ pub fn find_all_game_files() -> Result<(Vec<PathBuf>, Vec<String>), SaveError> {
     };
 
     let mount_dir = if let Some(dev_dir) = dev_games_dir {
-        debug_log.push(format!("[Debug] Using development games directory: {}", dev_dir.display()));
+        debug_log.push(format!(
+            "[Debug] Using development games directory: {}",
+            dev_dir.display()
+        ));
         dev_dir.to_string_lossy().to_string()
     } else {
         "/run/media/".to_string()
     };
 
-    debug_log.push(format!("[Debug] Searching for .kzi and .kzp files in '{}' (max depth: 2)...", mount_dir));
+    debug_log.push(format!(
+        "[Debug] Searching for .kzi and .kzp files in '{}' (max depth: 2)...",
+        mount_dir
+    ));
 
     // Search for both extensions
     match find_files_by_extension(&mount_dir, &["kzi", "kzp"], 2, false) {
         Ok(files) => {
-            debug_log.push(format!("[Debug] Found {} potential game file(s).", files.len()));
+            debug_log.push(format!(
+                "[Debug] Found {} potential game file(s).",
+                files.len()
+            ));
             for (i, path) in files.iter().enumerate() {
                 debug_log.push(format!("[Debug]    {}: {}", i + 1, path.display()));
             }
@@ -551,8 +585,8 @@ pub fn parse_kzi_file(kzi_path: &Path) -> Result<CartInfo, SaveError> {
 /// Options for launching an mGBA game with multiplayer and save slot selection
 #[derive(Clone, Debug, Default)]
 pub struct MgbaLaunchOptions {
-    pub player_count: u8,           // 1-4 players
-    pub save_slots: Vec<String>,    // Save slot for each player (e.g., ["p1", "p2"])
+    pub player_count: u8,        // 1-4 players
+    pub save_slots: Vec<String>, // Save slot for each player (e.g., ["p1", "p2"])
 }
 
 // for debug game launch
@@ -572,8 +606,14 @@ pub fn launch_game_with_options(
     // Setup RetroAchievements if enabled (for dev mode)
     setup_retroachievements_for_launch(cart_info, kzi_path);
     // Check if this is a compressed package (.kzp)
-    if kzi_path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("kzp")) {
-        println!("[Debug] Launching compressed package directly via kazeta wrapper: {}", kzi_path.display());
+    if kzi_path
+        .extension()
+        .map_or(false, |ext| ext.eq_ignore_ascii_case("kzp"))
+    {
+        println!(
+            "[Debug] Launching compressed package directly via kazeta wrapper: {}",
+            kzi_path.display()
+        );
 
         // We cannot use standard 'Exec' logic because the exec path is inside the image.
         // We just tell the wrapper script to handle this package.
@@ -587,12 +627,18 @@ pub fn launch_game_with_options(
                 command.env("MGBA_PLAYERS", opts.player_count.to_string());
                 // Pass save slots as comma-separated list
                 command.env("MGBA_SAVE_SLOTS", opts.save_slots.join(","));
-                println!("[Debug] Multiplayer enabled - {} players, slots: {:?}", opts.player_count, opts.save_slots);
+                println!(
+                    "[Debug] Multiplayer enabled - {} players, slots: {:?}",
+                    opts.player_count, opts.save_slots
+                );
             } else {
                 // Single player with selected save slot
                 if !opts.save_slots.is_empty() {
                     command.env("MGBA_SAVE_SLOT", &opts.save_slots[0]);
-                    println!("[Debug] Single player with save slot: {}", opts.save_slots[0]);
+                    println!(
+                        "[Debug] Single player with save slot: {}",
+                        opts.save_slots[0]
+                    );
                 }
             }
             if let Some(max_players) = cart_info.max_players {
@@ -615,9 +661,9 @@ pub fn launch_game_with_options(
         }
 
         return command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn();
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn();
     }
 
     // --- Standard Folder-Based Launch Logic (.kzi metadata) ---
@@ -650,15 +696,18 @@ pub fn launch_game_with_options(
 
             // Try absolute path based on common dev setup
             if let Some(home) = dirs::home_dir() {
-                possible_paths.push(home.join("sandbox/kazeta-plus/runtimes/gba/vba-run-wrapper.sh"));
+                possible_paths
+                    .push(home.join("sandbox/kazeta-plus/runtimes/gba/vba-run-wrapper.sh"));
             }
 
             // Check environment variable for project root
             if let Ok(project_root) = std::env::var("KAZETA_PROJECT_ROOT") {
-                possible_paths.push(PathBuf::from(project_root).join("runtimes/gba/vba-run-wrapper.sh"));
+                possible_paths
+                    .push(PathBuf::from(project_root).join("runtimes/gba/vba-run-wrapper.sh"));
             }
 
-            let wrapper_path = possible_paths.iter()
+            let wrapper_path = possible_paths
+                .iter()
                 .find(|p| p.exists())
                 .cloned()
                 .unwrap_or_else(|| {
@@ -667,13 +716,15 @@ pub fn launch_game_with_options(
                 });
 
             // Canonicalize to absolute path to avoid issues when changing working directory
-            let wrapper_path = wrapper_path.canonicalize()
-                .unwrap_or_else(|e| {
-                    eprintln!("[Warning] Failed to canonicalize wrapper path: {}", e);
-                    wrapper_path.clone()
-                });
+            let wrapper_path = wrapper_path.canonicalize().unwrap_or_else(|e| {
+                eprintln!("[Warning] Failed to canonicalize wrapper path: {}", e);
+                wrapper_path.clone()
+            });
 
-            println!("[Debug] Using VBA-M wrapper script: {}", wrapper_path.display());
+            println!(
+                "[Debug] Using VBA-M wrapper script: {}",
+                wrapper_path.display()
+            );
 
             let rom_path = game_root.join(&cart_info.exec);
             let mut command = Command::new("bash");
@@ -687,12 +738,18 @@ pub fn launch_game_with_options(
                     command.env("VBA_MULTIPLAYER", "true");
                     command.env("VBA_PLAYERS", opts.player_count.to_string());
                     command.env("VBA_SAVE_SLOTS", opts.save_slots.join(","));
-                    println!("[Debug] VBA-M Multiplayer enabled - {} players, slots: {:?}", opts.player_count, opts.save_slots);
+                    println!(
+                        "[Debug] VBA-M Multiplayer enabled - {} players, slots: {:?}",
+                        opts.player_count, opts.save_slots
+                    );
                 } else {
                     // Single player with selected save slot
                     if !opts.save_slots.is_empty() {
                         command.env("VBA_SAVE_SLOT", &opts.save_slots[0]);
-                        println!("[Debug] VBA-M Single player with save slot: {}", opts.save_slots[0]);
+                        println!(
+                            "[Debug] VBA-M Single player with save slot: {}",
+                            opts.save_slots[0]
+                        );
                     }
                 }
                 if let Some(max_players) = cart_info.max_players {
@@ -720,7 +777,10 @@ pub fn launch_game_with_options(
                 .spawn();
         } else {
             // In production, use the kazeta wrapper script
-            println!("[Debug] Launching .kzi with vba-m runtime via kazeta wrapper: {}", kzi_path.display());
+            println!(
+                "[Debug] Launching .kzi with vba-m runtime via kazeta wrapper: {}",
+                kzi_path.display()
+            );
 
             let mut command = Command::new("/usr/bin/kazeta");
             command.arg(kzi_path);
@@ -765,7 +825,8 @@ pub fn launch_game_with_options(
             command.arg(&cart_info.exec);
             command // Return the command builder
         }
-        _ => { // Default to "linux"
+        _ => {
+            // Default to "linux"
             let mut command = Command::new("sh");
             command.arg("-c").arg(&cart_info.exec);
             command // Return the command builder
@@ -797,14 +858,16 @@ pub fn launch_game_with_options(
 
     // Now, apply the common settings and spawn the process
     cmd.current_dir(game_root)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
 }
 
 /// Get the save directory path for a cart
 pub fn get_mgba_save_dir(cart_id: &str) -> PathBuf {
-    let base_dir = dirs::home_dir().unwrap().join(".local/share/kazeta/saves/default");
+    let base_dir = dirs::home_dir()
+        .unwrap()
+        .join(".local/share/kazeta/saves/default");
     base_dir.join(cart_id)
 }
 
@@ -819,15 +882,26 @@ pub fn get_rom_name_from_exec(exec: &str) -> String {
 
 /// Import an embedded save for a specific player (p1-p4) referenced by the .kzi metadata.
 /// Copies the provided save file into the per-game save directory if it does not already exist.
-pub fn import_embedded_save(cart_info: &CartInfo, kzi_path: &Path, player: u8) -> Result<String, SaveError> {
+pub fn import_embedded_save(
+    cart_info: &CartInfo,
+    kzi_path: &Path,
+    player: u8,
+) -> Result<String, SaveError> {
     if player == 0 || player > 4 {
-        return Err(SaveError::Message(format!("Invalid player index: {}", player)));
+        return Err(SaveError::Message(format!(
+            "Invalid player index: {}",
+            player
+        )));
     }
 
     let idx = (player - 1) as usize;
-    let save_key = cart_info.player_saves.get(idx).and_then(|s| s.as_ref()).ok_or_else(|| {
-        SaveError::Message(format!("No embedded save specified for player {}", player))
-    })?;
+    let save_key = cart_info
+        .player_saves
+        .get(idx)
+        .and_then(|s| s.as_ref())
+        .ok_or_else(|| {
+            SaveError::Message(format!("No embedded save specified for player {}", player))
+        })?;
 
     let source_path = kzi_path
         .parent()
@@ -873,7 +947,7 @@ pub fn find_files_by_extension<P: AsRef<Path>>(
     if !dir_path.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("Directory does not exist: {}", dir_path.display())
+            format!("Directory does not exist: {}", dir_path.display()),
         ));
     }
 
@@ -896,7 +970,11 @@ pub fn get_save_dir_from_drive_name(drive_name: &str) -> String {
         }
         save_dir.to_string_lossy().into_owned()
     } else {
-        let base_ext = if Path::new("/media").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true) {
+        let base_ext = if Path::new("/media")
+            .read_dir()
+            .map(|mut d| d.next().is_none())
+            .unwrap_or(true)
+        {
             if Path::new(&format!("/run/media/{}", whoami::username())).exists() {
                 format!("/run/media/{}", whoami::username())
             } else {
@@ -927,7 +1005,11 @@ pub fn get_cache_dir_from_drive_name(drive_name: &str) -> String {
         }
         cache_dir.to_string_lossy().into_owned()
     } else {
-        let base_ext = if Path::new("/media").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true) {
+        let base_ext = if Path::new("/media")
+            .read_dir()
+            .map(|mut d| d.next().is_none())
+            .unwrap_or(true)
+        {
             if Path::new(&format!("/run/media/{}", whoami::username())).exists() {
                 format!("/run/media/{}", whoami::username())
             } else {
@@ -956,18 +1038,23 @@ pub fn list_devices() -> io::Result<Vec<(String, u32)>> {
     let base_dir_str = base_dir.to_str().unwrap();
 
     // Find the disk that contains our base directory
-    let internal_disk = disks.iter()
-    .find(|disk| {
-        let mount_point = disk.mount_point().to_str().unwrap();
-        base_dir_str.starts_with(mount_point)
-    })
-    .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not find internal disk"))?;
+    let internal_disk = disks
+        .iter()
+        .find(|disk| {
+            let mount_point = disk.mount_point().to_str().unwrap();
+            base_dir_str.starts_with(mount_point)
+        })
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not find internal disk"))?;
 
     let free_space = (internal_disk.available_space() / 1024 / 1024) as u32; // Convert to MB
     devices.push(("internal".to_string(), free_space));
 
     // Add external drives
-    let base_ext = if Path::new("/media").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true) {
+    let base_ext = if Path::new("/media")
+        .read_dir()
+        .map(|mut d| d.next().is_none())
+        .unwrap_or(true)
+    {
         if Path::new(&format!("/run/media/{}", whoami::username())).exists() {
             format!("/run/media/{}", whoami::username())
         } else {
@@ -1010,7 +1097,13 @@ pub fn is_cart(drive_name: &str) -> bool {
     }
 
     let save_dir = get_save_dir_from_drive_name(drive_name);
-    let mount_point: String = Path::new(&save_dir).parent().unwrap().parent().unwrap().display().to_string();
+    let mount_point: String = Path::new(&save_dir)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .display()
+        .to_string();
 
     if let Ok(files) = find_files_by_extension(mount_point, &["kzi", "kzp"], 1, true) {
         if files.len() > 0 {
@@ -1025,7 +1118,10 @@ pub fn is_cart(drive_name: &str) -> bool {
 pub fn is_cart_connected() -> bool {
     // In dev mode, check ~/kazeta-games first
     if DEV_MODE {
-        if let Some(dev_games_dir) = dirs::home_dir().map(|h| h.join("kazeta-games")).filter(|p| p.exists()) {
+        if let Some(dev_games_dir) = dirs::home_dir()
+            .map(|h| h.join("kazeta-games"))
+            .filter(|p| p.exists())
+        {
             if let Ok(files) = find_files_by_extension(&dev_games_dir, &["kzi", "kzp"], 2, true) {
                 if files.len() > 0 {
                     return true;
@@ -1053,9 +1149,10 @@ pub fn get_save_details(drive_name: &str) -> io::Result<Vec<(String, String, Str
     for entry in fs::read_dir(save_dir)? {
         let entry = entry?;
         let path = entry.path();
-        let file_name = path.file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid filename"))?;
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid filename"))?;
 
         // Remove .tar extension if present
         let cart_id = if file_name.ends_with(".tar") {
@@ -1094,7 +1191,10 @@ pub fn delete_save(cart_id: &str, from_drive: &str) -> Result<(), SaveError> {
     let save_path_tar = Path::new(&from_dir).join(format!("{}.tar", cart_id));
     if !save_path.exists() && !save_path_tar.exists() {
         //return Err(format!("Save file for {} does not exist on '{}' drive", cart_id, from_drive));
-        return Err(SaveError::Message(format!("Save file for {} does not exist on '{}' drive", cart_id, from_drive)));
+        return Err(SaveError::Message(format!(
+            "Save file for {} does not exist on '{}' drive",
+            cart_id, from_drive
+        )));
     }
 
     // Delete save file
@@ -1116,7 +1216,12 @@ pub fn delete_save(cart_id: &str, from_drive: &str) -> Result<(), SaveError> {
     Ok(())
 }
 
-pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<AtomicU16>) -> Result<(), SaveError> {
+pub fn copy_save(
+    cart_id: &str,
+    from_drive: &str,
+    to_drive: &str,
+    progress: Arc<AtomicU16>,
+) -> Result<(), SaveError> {
     let from_dir = get_save_dir_from_drive_name(from_drive);
     let to_dir = get_save_dir_from_drive_name(to_drive);
     let from_cache = get_cache_dir_from_drive_name(from_drive);
@@ -1124,7 +1229,9 @@ pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<
 
     if from_drive == to_drive {
         //return Err("Cannot copy to same location".to_string());
-        return Err(SaveError::Message("Cannot copy to same location".to_string()));
+        return Err(SaveError::Message(
+            "Cannot copy to same location".to_string(),
+        ));
     }
 
     // Check if source save exists
@@ -1132,14 +1239,20 @@ pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<
     let from_path_tar = Path::new(&from_dir).join(format!("{}.tar", cart_id));
     if !from_path.exists() && !from_path_tar.exists() {
         //return Err(format!("Save file for {} does not exist on '{}' drive", cart_id, from_drive));
-        return Err(SaveError::Message(format!("Save file for {} does not exist on '{}' drive", cart_id, from_drive)));
+        return Err(SaveError::Message(format!(
+            "Save file for {} does not exist on '{}' drive",
+            cart_id, from_drive
+        )));
     }
 
     // Check if destination save already exists
     let to_path = Path::new(&to_dir).join(cart_id);
     let to_path_tar = Path::new(&to_dir).join(format!("{}.tar", cart_id));
     if to_path.exists() || to_path_tar.exists() {
-        return Err(SaveError::Message(format!("Save file for {} already exists on '{}'", cart_id, to_drive)));
+        return Err(SaveError::Message(format!(
+            "Save file for {} already exists on '{}'",
+            cart_id, to_drive
+        )));
     }
 
     // Create destination directories
@@ -1150,7 +1263,8 @@ pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<
     let result = if from_drive == "internal" {
         // Internal to external: create tar archive
         eprintln!("Starting internal to external copy for {}", cart_id);
-        let file = fs::File::create(&to_path_tar).map_err(|e| format!("Failed to create destination file: {}", e))?;
+        let file = fs::File::create(&to_path_tar)
+            .map_err(|e| format!("Failed to create destination file: {}", e))?;
         let mut builder = Builder::new(file);
 
         // Calculate total size for progress reporting
@@ -1161,97 +1275,129 @@ pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<
             .filter(|e| {
                 let path = e.path();
                 // Skip excluded directories and their contents
-                !should_exclude_path(path) &&
-                path.is_file()
-            }) {
-                total_size += entry.metadata().map_err(|e| format!("Failed to get metadata: {}", e))?.len();
-            }
+                !should_exclude_path(path) && path.is_file()
+            })
+        {
+            total_size += entry
+                .metadata()
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .len();
+        }
 
-            eprintln!("Total size to archive: {} bytes", total_size);
-            if total_size == 0 {
-                return Err(SaveError::Message("No files found to archive".to_string()));
-            }
+        eprintln!("Total size to archive: {} bytes", total_size);
+        if total_size == 0 {
+            return Err(SaveError::Message("No files found to archive".to_string()));
+        }
 
-            // Add the entire directory to the archive, excluding ignored directories
-            let mut current_size = 0;
-            for entry in walkdir::WalkDir::new(&from_path)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    let path = e.path();
-                    // Skip excluded directories and their contents
-                    !should_exclude_path(path) &&
-                    path.is_file()
-                }) {
-                    let path = entry.path();
-                    // Get the relative path from the source directory
-                    let name = path.strip_prefix(&from_path)
-                    .map_err(|e| format!("Failed to get relative path: {}", e))?
-                    .to_str()
-                    .ok_or_else(|| "Invalid path encoding".to_string())?;
+        // Add the entire directory to the archive, excluding ignored directories
+        let mut current_size = 0;
+        for entry in walkdir::WalkDir::new(&from_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let path = e.path();
+                // Skip excluded directories and their contents
+                !should_exclude_path(path) && path.is_file()
+            })
+        {
+            let path = entry.path();
+            // Get the relative path from the source directory
+            let name = path
+                .strip_prefix(&from_path)
+                .map_err(|e| format!("Failed to get relative path: {}", e))?
+                .to_str()
+                .ok_or_else(|| "Invalid path encoding".to_string())?;
 
-                    let file_size = entry.metadata().map_err(|e| format!("Failed to get file metadata: {}", e))?.len();
-                    eprintln!("Adding file to archive: {} ({} bytes)", name, file_size);
+            let file_size = entry
+                .metadata()
+                .map_err(|e| format!("Failed to get file metadata: {}", e))?
+                .len();
+            eprintln!("Adding file to archive: {} ({} bytes)", name, file_size);
 
-                    let mut file = fs::File::open(path).map_err(|e| format!("Failed to open source file: {}", e))?;
+            let mut file =
+                fs::File::open(path).map_err(|e| format!("Failed to open source file: {}", e))?;
 
-                    // Create a new header with the correct path
-                    let mut header = tar::Header::new_gnu();
-                    header.set_path(name).map_err(|e| format!("Failed to set path in header: {}", e))?;
-                    header.set_size(file_size);
-                    header.set_cksum();
+            // Create a new header with the correct path
+            let mut header = tar::Header::new_gnu();
+            header
+                .set_path(name)
+                .map_err(|e| format!("Failed to set path in header: {}", e))?;
+            header.set_size(file_size);
+            header.set_cksum();
 
-                    // Write the header and file contents
-                    builder.append(&header, &mut file).map_err(|e| format!("Failed to append file to archive: {}", e))?;
-                    sync_to_disk();
+            // Write the header and file contents
+            builder
+                .append(&header, &mut file)
+                .map_err(|e| format!("Failed to append file to archive: {}", e))?;
+            sync_to_disk();
 
-                    current_size += file_size;
-                    progress.store((current_size * 100 / total_size) as u16, Ordering::SeqCst);
-                }
+            current_size += file_size;
+            progress.store((current_size * 100 / total_size) as u16, Ordering::SeqCst);
+        }
 
-                eprintln!("Finished creating archive, final size: {} bytes", current_size);
-                if current_size == 0 {
-                    return Err(SaveError::Message("No files were added to the archive".to_string()));
-                }
+        eprintln!(
+            "Finished creating archive, final size: {} bytes",
+            current_size
+        );
+        if current_size == 0 {
+            return Err(SaveError::Message(
+                "No files were added to the archive".to_string(),
+            ));
+        }
 
-                builder.finish().map_err(|e| format!("Failed to finish archive: {}", e))?;
-                sync_to_disk();
+        builder
+            .finish()
+            .map_err(|e| format!("Failed to finish archive: {}", e))?;
+        sync_to_disk();
 
-                // Verify the archive was created and has content
-                let archive_size = fs::metadata(&to_path_tar).map_err(|e| format!("Failed to get archive metadata: {}", e))?.len();
-                eprintln!("Archive file size: {} bytes", archive_size);
-                if archive_size == 0 {
-                    return Err(SaveError::Message("Created archive is empty".to_string()));
-                }
+        // Verify the archive was created and has content
+        let archive_size = fs::metadata(&to_path_tar)
+            .map_err(|e| format!("Failed to get archive metadata: {}", e))?
+            .len();
+        eprintln!("Archive file size: {} bytes", archive_size);
+        if archive_size == 0 {
+            return Err(SaveError::Message("Created archive is empty".to_string()));
+        }
 
-                Ok(())
+        Ok(())
     } else if to_drive == "internal" {
         // External to internal: extract tar archive
         eprintln!("Starting external to internal copy for {}", cart_id);
-        fs::create_dir_all(&to_path).map_err(|e| format!("Failed to create destination directory: {}", e))?;
+        fs::create_dir_all(&to_path)
+            .map_err(|e| format!("Failed to create destination directory: {}", e))?;
 
-        let file = fs::File::open(&from_path_tar).map_err(|e| format!("Failed to open source archive: {}", e))?;
-        let file_size = file.metadata().map_err(|e| format!("Failed to get archive metadata: {}", e))?.len();
+        let file = fs::File::open(&from_path_tar)
+            .map_err(|e| format!("Failed to open source archive: {}", e))?;
+        let file_size = file
+            .metadata()
+            .map_err(|e| format!("Failed to get archive metadata: {}", e))?
+            .len();
         eprintln!("Archive size: {} bytes", file_size);
 
         let mut archive = Archive::new(file);
         let mut current_size = 0;
 
-        for entry in archive.entries().map_err(|e| format!("Failed to read archive entries: {}", e))? {
+        for entry in archive
+            .entries()
+            .map_err(|e| format!("Failed to read archive entries: {}", e))?
+        {
             let mut entry = entry.map_err(|e| format!("Failed to read archive entry: {}", e))?;
-            let path = entry.path().map_err(|e| format!("Failed to get entry path: {}", e))?;
+            let path = entry
+                .path()
+                .map_err(|e| format!("Failed to get entry path: {}", e))?;
             let entry_size = entry.header().size().unwrap_or(0);
             eprintln!("Extracting: {} ({} bytes)", path.display(), entry_size);
 
             // Ensure the parent directory exists
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(to_path.join(parent))
-                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
             }
 
             // Extract the file
-            entry.unpack_in(&to_path)
-            .map_err(|e| format!("Failed to extract file: {}", e))?;
+            entry
+                .unpack_in(&to_path)
+                .map_err(|e| format!("Failed to extract file: {}", e))?;
 
             current_size += entry_size;
             progress.store((current_size * 100 / file_size) as u16, Ordering::SeqCst);
@@ -1262,15 +1408,19 @@ pub fn copy_save(cart_id: &str, from_drive: &str, to_drive: &str, progress: Arc<
         for entry in walkdir::WalkDir::new(&to_path)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_file()) {
-                extracted_size += entry.metadata()
+            .filter(|e| e.path().is_file())
+        {
+            extracted_size += entry
+                .metadata()
                 .map_err(|e| format!("Failed to get extracted file metadata: {}", e))?
                 .len();
-            }
-            eprintln!("Total extracted size: {} bytes", extracted_size);
+        }
+        eprintln!("Total extracted size: {} bytes", extracted_size);
 
         if extracted_size == 0 {
-            return Err(SaveError::Message("No files were extracted from the archive".to_string()));
+            return Err(SaveError::Message(
+                "No files were extracted from the archive".to_string(),
+            ));
         }
 
         Ok(())
@@ -1413,7 +1563,10 @@ fn setup_retroachievements_for_launch(cart_info: &CartInfo, kzi_path: &Path) {
     };
 
     if rom_path.exists() {
-        println!("[RA] Setting up RetroAchievements for: {}", rom_path.display());
+        println!(
+            "[RA] Setting up RetroAchievements for: {}",
+            rom_path.display()
+        );
 
         // Call kazeta-ra game-start (run in background)
         let rom_path_str = rom_path.to_string_lossy().to_string();

@@ -4,11 +4,14 @@ use kazeta_ra::{
     api::RAClient,
     auth::{CredentialManager, Credentials},
     cache::RACache,
+    evaluation::EvaluationEngine,
     game_names::GameNameMapping,
-    hash::{hash_rom, detect_console},
+    hash::{detect_console, hash_rom},
+    local_definitions::LocalDefinitions,
     types::ConsoleId,
 };
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "kazeta-ra")]
@@ -161,22 +164,54 @@ fn main() -> Result<()> {
         Commands::SetHardcore { enabled } => cmd_set_hardcore(enabled),
         Commands::Profile => cmd_profile(),
         Commands::HashRom { path, console } => cmd_hash_rom(&path, console.as_deref()),
-        Commands::GameInfo { hash, path, console } => cmd_game_info(hash, path, console.as_deref()),
-        Commands::GameStart { hash, console, path, notify_overlay } => {
-            cmd_game_start(hash.as_deref(), console.as_deref(), path.as_ref(), notify_overlay)
-        }
+        Commands::GameInfo {
+            hash,
+            path,
+            console,
+        } => cmd_game_info(hash, path, console.as_deref()),
+        Commands::GameStart {
+            hash,
+            console,
+            path,
+            notify_overlay,
+        } => cmd_game_start(
+            hash.as_deref(),
+            console.as_deref(),
+            path.as_ref(),
+            notify_overlay,
+        ),
         Commands::NotifyAchievement { id, title } => cmd_notify_achievement(id, title),
         Commands::Status => cmd_status(),
         Commands::ClearCache => cmd_clear_cache(),
-        Commands::SendAchievementsToOverlay { hash, path, console } => {
-            cmd_send_achievements_to_overlay(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref())
-        }
-        Commands::SetGameName { hash, path, console, name } => {
-            cmd_set_game_name(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref(), &name)
-        }
-        Commands::RemoveGameName { hash, path, console } => {
-            cmd_remove_game_name(hash.as_ref().map(|s| s.as_str()), path.as_ref(), console.as_deref())
-        }
+        Commands::SendAchievementsToOverlay {
+            hash,
+            path,
+            console,
+        } => cmd_send_achievements_to_overlay(
+            hash.as_ref().map(|s| s.as_str()),
+            path.as_ref(),
+            console.as_deref(),
+        ),
+        Commands::SetGameName {
+            hash,
+            path,
+            console,
+            name,
+        } => cmd_set_game_name(
+            hash.as_ref().map(|s| s.as_str()),
+            path.as_ref(),
+            console.as_deref(),
+            &name,
+        ),
+        Commands::RemoveGameName {
+            hash,
+            path,
+            console,
+        } => cmd_remove_game_name(
+            hash.as_ref().map(|s| s.as_str()),
+            path.as_ref(),
+            console.as_deref(),
+        ),
         Commands::ListGameNames => cmd_list_game_names(),
     }
 }
@@ -195,7 +230,10 @@ fn cmd_login(username: String, api_key: String) -> Result<()> {
     cred_manager.save(&credentials)?;
 
     println!("✓ Logged in as: {}", username);
-    println!("✓ Credentials saved to: {}", cred_manager.credentials_path().display());
+    println!(
+        "✓ Credentials saved to: {}",
+        cred_manager.credentials_path().display()
+    );
     Ok(())
 }
 
@@ -208,7 +246,8 @@ fn cmd_logout() -> Result<()> {
 
 fn cmd_get_credentials(format: &str) -> Result<()> {
     let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager.load()?
+    let credentials = cred_manager
+        .load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
     match format {
@@ -221,7 +260,10 @@ fn cmd_get_credentials(format: &str) -> Result<()> {
             if let Some(token) = &credentials.token {
                 println!("RA_TOKEN={}", token);
             }
-            println!("RA_HARDCORE={}", if credentials.hardcore { "1" } else { "0" });
+            println!(
+                "RA_HARDCORE={}",
+                if credentials.hardcore { "1" } else { "0" }
+            );
         }
         _ => {
             bail!("Unknown format: {}. Use 'json' or 'env'.", format);
@@ -234,13 +276,17 @@ fn cmd_get_credentials(format: &str) -> Result<()> {
 fn cmd_set_hardcore(enabled: bool) -> Result<()> {
     let cred_manager = CredentialManager::new()?;
     cred_manager.set_hardcore(enabled)?;
-    println!("✓ Hardcore mode: {}", if enabled { "enabled" } else { "disabled" });
+    println!(
+        "✓ Hardcore mode: {}",
+        if enabled { "enabled" } else { "disabled" }
+    );
     Ok(())
 }
 
 fn cmd_profile() -> Result<()> {
     let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager.load()?
+    let credentials = cred_manager
+        .load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
     let client = RAClient::new(credentials);
@@ -251,7 +297,10 @@ fn cmd_profile() -> Result<()> {
     println!("╠════════════════════════════════════════╣");
     println!("║  User: {:<30} ║", summary.user);
     println!("║  Points: {:<28} ║", summary.total_points);
-    println!("║  Softcore Points: {:<19} ║", summary.total_softcore_points);
+    println!(
+        "║  Softcore Points: {:<19} ║",
+        summary.total_softcore_points
+    );
     println!("║  True Points: {:<23} ║", summary.total_true_points);
     if let Some(rank) = summary.rank {
         println!("║  Rank: #{:<28} ║", rank);
@@ -272,8 +321,7 @@ fn cmd_profile() -> Result<()> {
 
 fn cmd_hash_rom(path: &PathBuf, console: Option<&str>) -> Result<()> {
     let console_id = if let Some(c) = console {
-        ConsoleId::from_str(c)
-            .context(format!("Unknown console: {}", c))?
+        ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
     } else {
         // Auto-detect console from file
         detect_console(path)?
@@ -285,23 +333,15 @@ fn cmd_hash_rom(path: &PathBuf, console: Option<&str>) -> Result<()> {
 }
 
 fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&str>) -> Result<()> {
-    let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager.load()?
-        .context("No credentials stored. Run 'kazeta-ra login' first.")?;
-
     // Save path for cartridge lookup before it's moved
     let path_for_cart = path.as_ref().cloned();
 
     // Get hash either directly or by hashing the ROM
     let (rom_hash, console_id) = if let Some(h) = hash {
-        // If hash is provided, we need console for API lookup
-        // For now, default to GBA (this should be improved to store console with hash)
         (h, ConsoleId::GameBoyAdvance)
     } else if let Some(p) = path {
-        // Auto-detect console if not provided
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c)
-                .context(format!("Unknown console: {}", c))?
+            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(&p)?
         };
@@ -311,15 +351,61 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
         bail!("Either --hash or --path is required");
     };
 
-    let client = RAClient::new(credentials);
-    let cache = RACache::new()?;
-
     // Check for custom game name
     let game_name_mapping = GameNameMapping::load().ok();
-    // Try to find cartridge path from ROM path if provided
-    let cart_path = path_for_cart.as_ref().and_then(|p| find_cartridge_for_rom(p).ok());
-    let custom_name = game_name_mapping.as_ref()
+    let cart_path = path_for_cart
+        .as_ref()
+        .and_then(|p| find_cartridge_for_rom(p).ok());
+    let custom_name = game_name_mapping
+        .as_ref()
         .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
+
+    // Try local definitions first (offline mode)
+    if let Some(p) = &path_for_cart {
+        if let Some(defs) = find_local_definitions(p) {
+            let cache = RACache::new()?;
+            let unlocked_ids = cache.get_local_unlock_ids(&rom_hash).unwrap_or_default();
+
+            let display_title = custom_name.as_deref().unwrap_or(&defs.game_title);
+
+            println!("╔════════════════════════════════════════════════════════╗");
+            println!("║  {} (Local Mode)", display_title);
+            println!("╠════════════════════════════════════════════════════════╣");
+            println!("║  Console: {}", defs.console_name);
+            println!("║  Game ID: {}", defs.game_id);
+            println!("║  Hash: {}", rom_hash);
+            println!("║  Achievements: {}", defs.achievements.len());
+
+            let earned = unlocked_ids.len();
+            let total = defs.achievements.len();
+            let pct = if total > 0 { earned * 100 / total } else { 0 };
+            println!("║  Progress: {}/{} ({}%)", earned, total, pct);
+            println!("╚════════════════════════════════════════════════════════╝");
+
+            println!("\nAchievements:");
+            for ach in &defs.achievements {
+                let status = if unlocked_ids.contains(&ach.id) {
+                    "✓"
+                } else {
+                    " "
+                };
+                println!(
+                    "  [{}] {} ({} pts) - {}",
+                    status, ach.title, ach.points, ach.description
+                );
+            }
+
+            return Ok(());
+        }
+    }
+
+    // Fall back to online mode
+    let cred_manager = CredentialManager::new()?;
+    let credentials = cred_manager.load()?
+        .context("No credentials stored and no local definitions found. Run 'kazeta-ra login' or provide achievements.json.")?;
+
+    let client = RAClient::new(credentials);
+    let cache = RACache::new()?;
 
     // Try to get game ID from hash
     let game_id = match client.get_game_id(&rom_hash, console_id)? {
@@ -359,13 +445,13 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
     println!("║  Game ID: {}", info.id);
     println!("║  Hash: {}", rom_hash);
     println!("║  Achievements: {}", info.num_achievements);
-    
+
     if let Some(earned) = info.num_awarded_to_user {
         let total = info.num_achievements;
         let pct = if total > 0 { earned * 100 / total } else { 0 };
         println!("║  Progress: {}/{} ({}%)", earned, total, pct);
     }
-    
+
     println!("╚════════════════════════════════════════════════════════╝");
 
     // List achievements
@@ -392,23 +478,21 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
     Ok(())
 }
 
-fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathBuf>, notify_overlay: bool) -> Result<()> {
-    let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager.load()?
-        .context("No credentials stored. Run 'kazeta-ra login' first.")?;
-
+fn cmd_game_start(
+    hash: Option<&str>,
+    console: Option<&str>,
+    path: Option<&PathBuf>,
+    notify_overlay: bool,
+) -> Result<()> {
     // Determine hash and console
     let (rom_hash, console_id) = if let Some(h) = hash {
-        // Hash provided, console is required
-        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c)
-            .context(format!("Unknown console: {}", c))?;
+        let c =
+            console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
-        // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c)
-                .context(format!("Unknown console: {}", c))?
+            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -418,21 +502,105 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
         bail!("Either --hash or --path is required");
     };
 
-    let client = RAClient::new(credentials);
-    let cache = RACache::new()?;
-
     // Check for custom game name first
     let game_name_mapping = GameNameMapping::load().ok();
-    // Try to find cartridge path from ROM path if provided
     let cart_path = path.and_then(|p| find_cartridge_for_rom(p).ok());
-    let custom_name = game_name_mapping.as_ref()
+    let custom_name = game_name_mapping
+        .as_ref()
         .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
+
+    // Try local definitions first (offline mode)
+    if let Some(p) = path {
+        if let Some(defs) = find_local_definitions(p) {
+            let cache = RACache::new()?;
+            let earned = cache.get_local_unlock_count(&rom_hash)?;
+            let total = defs.achievements.len() as u32;
+            let game_title = custom_name.as_deref().unwrap_or(&defs.game_title);
+
+            // Cache the local definitions for later use
+            cache.cache_local_definitions(&rom_hash, &defs)?;
+
+            let output = serde_json::json!({
+                "success": true,
+                "game_id": defs.game_id,
+                "title": game_title,
+                "console": defs.console_name,
+                "achievements_total": total,
+                "achievements_earned": earned,
+                "local_mode": true,
+                "icon_url": defs.icon_url,
+            });
+            println!("{}", serde_json::to_string(&output)?);
+
+            if notify_overlay {
+                notify_overlay_game_start(defs.game_id, game_title, earned, total)?;
+                send_local_achievements_to_overlay(&rom_hash, &defs, &cache)?;
+            }
+
+            // Start the evaluation engine (reads Dolphin memory via MemoryWatcher,
+            // evaluates rcheevos conditions, records unlocks in SQLite)
+            if let Ok(engine) = EvaluationEngine::new(defs.clone(), rom_hash.clone()) {
+                let rom_hash_for_cb = rom_hash.clone();
+                engine
+                    .start(move |ach_id, ach_title| {
+                        // Notify the overlay when an achievement is unlocked
+                        let _ = notify_overlay_achievement(ach_title);
+                        eprintln!(
+                            "[kazeta-ra] Achievement unlocked: #{} {} (game: {})",
+                            ach_id, ach_title, rom_hash_for_cb
+                        );
+                    })
+                    .context("Failed to start evaluation engine")?;
+
+                // Output the start info
+                let output = serde_json::json!({
+                    "success": true,
+                    "game_id": defs.game_id,
+                    "title": game_title,
+                    "console": defs.console_name,
+                    "achievements_total": total,
+                    "achievements_earned": earned,
+                    "local_mode": true,
+                    "icon_url": defs.icon_url,
+                    "evaluation_engine": true,
+                });
+                println!("{}", serde_json::to_string(&output)?);
+
+                // Keep the process alive while the evaluation engine runs.
+                // The BIOS/runtime wrapper will kill this process when the game exits.
+                // Wait for stdin EOF or a signal.
+                let mut stdin = std::io::stdin();
+                let mut buf = [0u8; 1];
+                let _ = stdin.read(&mut buf);
+                return Ok(());
+            }
+
+            let output = serde_json::json!({
+                "success": true,
+                "game_id": defs.game_id,
+                "title": game_title,
+                "console": defs.console_name,
+                "achievements_total": total,
+                "achievements_earned": earned,
+                "local_mode": true,
+                "icon_url": defs.icon_url,
+            });
+            println!("{}", serde_json::to_string(&output)?);
+        }
+    }
+
+    // Fall back to online mode
+    let cred_manager = CredentialManager::new()?;
+    let credentials = cred_manager.load()?
+        .context("No credentials stored and no local definitions found. Run 'kazeta-ra login' or provide achievements.json.")?;
+
+    let client = RAClient::new(credentials);
+    let cache = RACache::new()?;
 
     // Get game info
     let game_id = match client.get_game_id(&rom_hash, console_id)? {
         Some(id) => id,
         None => {
-            // Game not found - use custom name if available
             if let Some(name) = custom_name {
                 let output = serde_json::json!({
                     "success": true,
@@ -445,7 +613,9 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
                 println!("{}", serde_json::to_string(&output)?);
                 return Ok(());
             } else {
-                println!("{{\"success\": false, \"error\": \"Game not found in RetroAchievements\"}}");
+                println!(
+                    "{{\"success\": false, \"error\": \"Game not found in RetroAchievements\"}}"
+                );
                 return Ok(());
             }
         }
@@ -456,11 +626,8 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
 
     let earned = info.num_awarded_to_user.unwrap_or(0);
     let total = info.num_achievements;
-
-    // Use custom name if available, otherwise use API title
     let game_title = custom_name.unwrap_or_else(|| info.title.clone());
 
-    // Output game info as JSON for runtime wrapper
     let output = serde_json::json!({
         "success": true,
         "game_id": info.id,
@@ -472,7 +639,6 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
     });
     println!("{}", serde_json::to_string(&output)?);
 
-    // Notify overlay if requested
     if notify_overlay {
         notify_overlay_game_start(info.id, &game_title, earned, total)?;
     }
@@ -483,14 +649,15 @@ fn cmd_game_start(hash: Option<&str>, console: Option<&str>, path: Option<&PathB
 fn cmd_notify_achievement(id: u32, title: Option<String>) -> Result<()> {
     let cache = RACache::new()?;
 
-    // Try to get achievement info from cache
     let achievement_title = title.unwrap_or_else(|| format!("Achievement #{}", id));
 
     // Notify overlay
     notify_overlay_achievement(&achievement_title)?;
 
-    // Mark in cache
-    let _ = cache.mark_earned(id, false);
+    // Record as local unlock (never contacts server)
+    // We don't have the game hash here, so we record with a placeholder.
+    // The evaluation engine will use the proper hash when it triggers unlocks.
+    let _ = cache.local_unlock(id, "current", false);
 
     println!("{{\"success\": true, \"achievement_id\": {}}}", id);
     Ok(())
@@ -499,24 +666,47 @@ fn cmd_notify_achievement(id: u32, title: Option<String>) -> Result<()> {
 fn cmd_status() -> Result<()> {
     let cred_manager = CredentialManager::new()?;
 
-    if !cred_manager.has_credentials() {
-        println!("{{\"enabled\": false, \"reason\": \"Not logged in\"}}");
+    // Check for online credentials
+    let has_creds = cred_manager.has_credentials();
+    let credentials = cred_manager.load().ok().flatten();
+
+    // Check for local definitions (achievements.json)
+    let local_mode = has_local_definitions_available();
+
+    if !has_creds && !local_mode {
+        println!(
+            "{{\"enabled\": false, \"reason\": \"Not logged in and no local definitions found\"}}"
+        );
         return Ok(());
     }
 
-    let credentials = cred_manager.load()?
-        .context("Failed to load credentials")?;
+    if local_mode && !has_creds {
+        // Local-only mode — no account needed
+        let output = serde_json::json!({
+            "enabled": true,
+            "local_mode": true,
+            "username": null,
+            "hardcore": false,
+            "valid_credentials": false,
+        });
+        println!("{}", serde_json::to_string(&output)?);
+        return Ok(());
+    }
 
-    let client = RAClient::new(credentials.clone());
-    let valid = client.verify_credentials().unwrap_or(false);
+    // Online mode with credentials
+    if let Some(ref creds) = credentials {
+        let client = RAClient::new(creds.clone());
+        let valid = client.verify_credentials().unwrap_or(false);
 
-    let output = serde_json::json!({
-        "enabled": valid,
-        "username": credentials.username,
-        "hardcore": credentials.hardcore,
-        "valid_credentials": valid,
-    });
-    println!("{}", serde_json::to_string(&output)?);
+        let output = serde_json::json!({
+            "enabled": valid || local_mode,
+            "local_mode": local_mode,
+            "username": creds.username,
+            "hardcore": creds.hardcore,
+            "valid_credentials": valid,
+        });
+        println!("{}", serde_json::to_string(&output)?);
+    }
 
     Ok(())
 }
@@ -538,7 +728,7 @@ fn notify_overlay_game_start(game_id: u32, title: &str, earned: u32, total: u32)
     if !std::path::Path::new(socket_path).exists() {
         return Ok(()); // Overlay not running, skip
     }
-    
+
     let message = serde_json::json!({
         "type": "ra_game_start",
         "game_title": title,
@@ -577,12 +767,17 @@ fn notify_overlay_achievement(title: &str) -> Result<()> {
     Ok(())
 }
 
-fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>) -> Result<()> {
+fn cmd_send_achievements_to_overlay(
+    hash: Option<&str>,
+    path: Option<&PathBuf>,
+    console: Option<&str>,
+) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
 
     let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager.load()?
+    let credentials = cred_manager
+        .load()?
         .context("No credentials stored. Run 'kazeta-ra login' first.")?;
 
     // Save path for cartridge lookup
@@ -591,15 +786,14 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
     // Determine hash and console
     let (rom_hash, console_id) = if let Some(h) = hash {
         // Hash provided, console is required
-        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c)
-            .context(format!("Unknown console: {}", c))?;
+        let c =
+            console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c)
-                .context(format!("Unknown console: {}", c))?
+            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -615,8 +809,11 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
     // Check for custom game name
     let game_name_mapping = GameNameMapping::load().ok();
     // Try to find cartridge path from ROM path if provided
-    let cart_path = path_for_cart.as_ref().and_then(|p| find_cartridge_for_rom(p).ok());
-    let custom_name = game_name_mapping.as_ref()
+    let cart_path = path_for_cart
+        .as_ref()
+        .and_then(|p| find_cartridge_for_rom(p).ok());
+    let custom_name = game_name_mapping
+        .as_ref()
         .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
 
     // Get game ID from hash
@@ -630,7 +827,7 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
 
     // Get full game info with achievements
     let info = client.get_game_info_and_progress(game_id)?;
-    
+
     // Cache it
     cache.cache_game(&rom_hash, &info)?;
 
@@ -638,18 +835,22 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
     let game_title = custom_name.unwrap_or_else(|| info.title.clone());
 
     // Build achievement list for overlay
-    let achievements: Vec<serde_json::Value> = info.achievements
+    let achievements: Vec<serde_json::Value> = info
+        .achievements
         .as_ref()
         .map(|achs| {
-            let mut list: Vec<_> = achs.values()
-                .map(|a| serde_json::json!({
-                    "id": a.id,
-                    "title": a.title,
-                    "description": a.description,
-                    "points": a.points,
-                    "earned": a.date_earned.is_some() || a.date_earned_hardcore.is_some(),
-                    "earned_hardcore": a.date_earned_hardcore.is_some(),
-                }))
+            let mut list: Vec<_> = achs
+                .values()
+                .map(|a| {
+                    serde_json::json!({
+                        "id": a.id,
+                        "title": a.title,
+                        "description": a.description,
+                        "points": a.points,
+                        "earned": a.date_earned.is_some() || a.date_earned_hardcore.is_some(),
+                        "earned_hardcore": a.date_earned_hardcore.is_some(),
+                    })
+                })
                 .collect();
             // Sort by display order (using id as fallback)
             list.sort_by(|a, b| {
@@ -677,9 +878,107 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
 
     if let Ok(mut stream) = UnixStream::connect(socket_path) {
         let _ = writeln!(stream, "{}", message);
-        println!("{{\"success\": true, \"achievements_sent\": {}}}", achievements.len());
+        println!(
+            "{{\"success\": true, \"achievements_sent\": {}}}",
+            achievements.len()
+        );
     } else {
         println!("{{\"success\": false, \"error\": \"Failed to connect to overlay\"}}");
+    }
+
+    Ok(())
+}
+
+/// Check if any achievements.json files exist in common cartridge locations.
+fn has_local_definitions_available() -> bool {
+    // Check cartridge directories in the standard Kazeta path
+    if let Some(home) = dirs::home_dir() {
+        let cart_base = home.join(".local/share/kazeta-plus/cartridges");
+        if cart_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&cart_base) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if path.join("achievements.json").exists() {
+                            return true;
+                        }
+                        // Check subdirectories
+                        if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                            for sub_entry in sub_entries.flatten() {
+                                if sub_entry.path().join("achievements.json").exists() {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Search for achievements.json near a ROM file.
+///
+/// Checks the ROM's directory, then walks up the directory tree looking
+/// for an `achievements.json` file (typically in the cartridge root).
+fn find_local_definitions(rom_path: &Path) -> Option<LocalDefinitions> {
+    let rom_path = rom_path.canonicalize().ok()?;
+
+    let mut current = rom_path.parent();
+    while let Some(dir) = current {
+        let defs_path = dir.join("achievements.json");
+        if defs_path.exists() {
+            if let Ok(defs) = LocalDefinitions::load(&defs_path) {
+                return Some(defs);
+            }
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+/// Send local achievement list to the overlay daemon.
+fn send_local_achievements_to_overlay(
+    rom_hash: &str,
+    defs: &LocalDefinitions,
+    cache: &RACache,
+) -> Result<()> {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+
+    let socket_path = "/tmp/kazeta-overlay.sock";
+    if !Path::new(socket_path).exists() {
+        return Ok(());
+    }
+
+    let unlocked_ids = cache.get_local_unlock_ids(rom_hash)?;
+
+    let achievements: Vec<serde_json::Value> = defs
+        .achievements
+        .iter()
+        .map(|a| {
+            let earned = unlocked_ids.contains(&a.id);
+            serde_json::json!({
+                "id": a.id,
+                "title": a.title,
+                "description": a.description,
+                "points": a.points,
+                "earned": earned,
+                "earned_hardcore": false,
+            })
+        })
+        .collect();
+
+    let message = serde_json::json!({
+        "type": "ra_achievement_list",
+        "game_title": defs.game_title,
+        "game_hash": rom_hash,
+        "achievements": achievements,
+    });
+
+    if let Ok(mut stream) = UnixStream::connect(socket_path) {
+        let _ = writeln!(stream, "{}", message);
     }
 
     Ok(())
@@ -690,7 +989,8 @@ fn cmd_send_achievements_to_overlay(hash: Option<&str>, path: Option<&PathBuf>, 
 fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
     // Check if ROM path is inside a cartridge directory structure
     // Cartridges are typically in ~/.local/share/kazeta-plus/cartridges/ or similar
-    let rom_path = rom_path.canonicalize()
+    let rom_path = rom_path
+        .canonicalize()
         .context("Failed to canonicalize ROM path")?;
 
     // Walk up the directory tree looking for a .kzi file
@@ -711,19 +1011,23 @@ fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
     bail!("Could not find cartridge file for ROM")
 }
 
-fn cmd_set_game_name(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>, name: &str) -> Result<()> {
+fn cmd_set_game_name(
+    hash: Option<&str>,
+    path: Option<&PathBuf>,
+    console: Option<&str>,
+    name: &str,
+) -> Result<()> {
     // Determine hash and console
     let (rom_hash, console_id) = if let Some(h) = hash {
         // Hash provided, console is required
-        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c)
-            .context(format!("Unknown console: {}", c))?;
+        let c =
+            console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c)
-                .context(format!("Unknown console: {}", c))?
+            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -741,19 +1045,22 @@ fn cmd_set_game_name(hash: Option<&str>, path: Option<&PathBuf>, console: Option
     Ok(())
 }
 
-fn cmd_remove_game_name(hash: Option<&str>, path: Option<&PathBuf>, console: Option<&str>) -> Result<()> {
+fn cmd_remove_game_name(
+    hash: Option<&str>,
+    path: Option<&PathBuf>,
+    console: Option<&str>,
+) -> Result<()> {
     // Determine hash and console
     let (rom_hash, _console_id) = if let Some(h) = hash {
         // Hash provided, console is required
-        let c = console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c)
-            .context(format!("Unknown console: {}", c))?;
+        let c =
+            console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
+        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c)
-                .context(format!("Unknown console: {}", c))?
+            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };

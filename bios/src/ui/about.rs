@@ -1,8 +1,7 @@
 use crate::{
-    VideoPlayer,
-    audio::SoundEffects,
-    config::Config, FONT_SIZE, SystemInfo, Screen, BackgroundState, BatteryInfo, render_background, render_ui_overlay, get_current_font, measure_text, text_with_config_color, InputState,
-    system::get_ip_address,
+    audio::SoundEffects, config::Config, get_current_font, measure_text, render_background,
+    render_ui_overlay, system::get_ip_address, text_with_config_color, BackgroundState,
+    BatteryInfo, InputState, Screen, SystemInfo, VideoPlayer, FONT_SIZE,
 };
 use macroquad::prelude::*;
 use std::collections::HashMap;
@@ -35,9 +34,23 @@ pub fn draw(
     render_background(&background_cache, video_cache, &config, background_state);
 
     // Dim the background to improve text readability
-    draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
 
-    render_ui_overlay(&logo_cache, &font_cache, &config, &battery_info, &current_time_str, gcc_adapter_poll_rate, scale_factor);
+    render_ui_overlay(
+        &logo_cache,
+        &font_cache,
+        &config,
+        &battery_info,
+        &current_time_str,
+        gcc_adapter_poll_rate,
+        scale_factor,
+    );
 
     let current_font = get_current_font(font_cache, config);
     let about_font_size = (FONT_SIZE as f32 * scale_factor * 0.8) as u16;
@@ -61,8 +74,22 @@ pub fn draw(
     ];
 
     for (label, value) in info {
-        text_with_config_color(font_cache, config, label, start_x_labels, current_y, about_font_size);
-        text_with_config_color(font_cache, config, value, start_x_values, current_y, about_font_size);
+        text_with_config_color(
+            font_cache,
+            config,
+            label,
+            start_x_labels,
+            current_y,
+            about_font_size,
+        );
+        text_with_config_color(
+            font_cache,
+            config,
+            value,
+            start_x_values,
+            current_y,
+            about_font_size,
+        );
         current_y += line_height;
     }
 
@@ -80,11 +107,7 @@ pub fn draw(
         let dims = measure_text(line, Some(current_font), about_font_size, 1.0);
         let x_pos = screen_width() / 2.0 - dims.width / 2.0;
 
-        text_with_config_color(
-            font_cache, config, line,
-            x_pos, current_y,
-            about_font_size
-        );
+        text_with_config_color(font_cache, config, line, x_pos, current_y, about_font_size);
         // ---
         current_y += line_height;
     }

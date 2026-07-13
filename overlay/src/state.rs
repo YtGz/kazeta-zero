@@ -1,15 +1,15 @@
-use crate::ipc::{AchievementInfo, OverlayMessage, OverlayScreen, ToastStyle};
-use crate::input::ControllerInput;
 use crate::controllers::{ControllerState, CONTROLLER_MENU_OPTIONS, MAX_PLAYERS};
+use crate::input::ControllerInput;
+use crate::ipc::{AchievementInfo, OverlayMessage, OverlayScreen, ToastStyle};
 use crate::menu_config::{MenuConfigManager, MenuItemId};
 use crate::performance::PerformanceStats;
 use crate::playtime::PlaytimeTracker;
 use crate::theme_config::ThemeConfigManager;
-use macroquad::prelude::*;
-use std::time::{Duration, Instant};
-use std::collections::{VecDeque, HashSet};
-use kazeta_ra::{CredentialManager, RAClient};
 use kazeta_ra::types::GameInfoAndProgress;
+use kazeta_ra::{CredentialManager, RAClient};
+use macroquad::prelude::*;
+use std::collections::{HashSet, VecDeque};
+use std::time::{Duration, Instant};
 
 /// Represents the achievement completion state
 #[derive(Debug, Clone)]
@@ -346,36 +346,46 @@ impl OverlayState {
                 );
                 self.playtime.start_session(cart_id);
             }
-        OverlayMessage::RaGameStart {
-            game_title,
-            game_id,
-            game_icon: _,
-            total_achievements,
-            earned_achievements,
-        } => {
-            println!("[State] RA Game started: {} ({}/{})", game_title, earned_achievements, total_achievements);
-            self.achievements.game_title = game_title.clone();
-            self.achievements.game_id = None;
-            if let Some(id) = game_id {
-                self.achievements.game_id = Some(id);
-                self.start_ra_poller(id);
+            OverlayMessage::RaGameStart {
+                game_title,
+                game_id,
+                game_icon: _,
+                total_achievements,
+                earned_achievements,
+            } => {
+                println!(
+                    "[State] RA Game started: {} ({}/{})",
+                    game_title, earned_achievements, total_achievements
+                );
+                self.achievements.game_title = game_title.clone();
+                self.achievements.game_id = None;
+                if let Some(id) = game_id {
+                    self.achievements.game_id = Some(id);
+                    self.start_ra_poller(id);
+                }
+                self.achievements
+                    .update_progress(earned_achievements, total_achievements);
             }
-            self.achievements.update_progress(earned_achievements, total_achievements);
-        }
-        OverlayMessage::RaAchievementList { game_title, game_hash, achievements } => {
-            if !game_title.is_empty() {
-                self.achievements.game_title = game_title;
+            OverlayMessage::RaAchievementList {
+                game_title,
+                game_hash,
+                achievements,
+            } => {
+                if !game_title.is_empty() {
+                    self.achievements.game_title = game_title;
+                }
+                self.achievements.game_hash = Some(game_hash);
+                self.achievements.set_achievements(achievements);
+                if let Some(poller) = &mut self.ra_poller {
+                    poller.earned = self
+                        .achievements
+                        .achievements
+                        .iter()
+                        .filter(|a| a.earned)
+                        .map(|a| a.id)
+                        .collect();
+                }
             }
-            self.achievements.game_hash = Some(game_hash);
-            self.achievements.set_achievements(achievements);
-            if let Some(poller) = &mut self.ra_poller {
-                poller.earned = self.achievements.achievements
-                    .iter()
-                    .filter(|a| a.earned)
-                    .map(|a| a.id)
-                    .collect();
-            }
-        }
             OverlayMessage::RaProgressUpdate { earned, total } => {
                 self.achievements.update_progress(earned, total);
             }
@@ -397,14 +407,20 @@ impl OverlayState {
                 );
                 println!("[State] Achievement unlocked: {} - {}", title, desc_text);
             }
-            OverlayMessage::SetTheme { font_color, cursor_color } => {
+            OverlayMessage::SetTheme {
+                font_color,
+                cursor_color,
+            } => {
                 // Note: SetTheme in IPC currently just sets colors, not a full theme
                 // For now, just log it
-                println!("[State] SetTheme called with font_color={}, cursor_color={}", font_color, cursor_color);
+                println!(
+                    "[State] SetTheme called with font_color={}, cursor_color={}",
+                    font_color, cursor_color
+                );
                 // TODO: Apply custom colors to theme
             }
-        OverlayMessage::GameStopped { cart_id } => {
-            println!("[State] Game stopped: {}", cart_id);
+            OverlayMessage::GameStopped { cart_id } => {
+                println!("[State] Game stopped: {}", cart_id);
                 self.playtime.end_session();
                 // Clear achievement data when game stops
                 self.achievements.clear();
@@ -424,8 +440,15 @@ impl OverlayState {
                     2000,
                 );
             }
-            OverlayMessage::UnlockAchievement { cart_id, achievement_id, timestamp } => {
-                println!("[State] Achievement unlocked: cart={}, id={}, time={}", cart_id, achievement_id, timestamp);
+            OverlayMessage::UnlockAchievement {
+                cart_id,
+                achievement_id,
+                timestamp,
+            } => {
+                println!(
+                    "[State] Achievement unlocked: cart={}, id={}, time={}",
+                    cart_id, achievement_id, timestamp
+                );
                 // This is handled by RaAchievementUnlocked for RetroAchievements
             }
             OverlayMessage::GetStatus => {
@@ -462,7 +485,9 @@ impl OverlayState {
     }
 
     fn update_ra_polling(&mut self) {
-        let Some(poller) = self.ra_poller.as_mut() else { return; };
+        let Some(poller) = self.ra_poller.as_mut() else {
+            return;
+        };
 
         let interval = poller.backoff.unwrap_or(poller.interval);
         if poller.last_poll.elapsed() < interval {
@@ -509,8 +534,12 @@ impl OverlayState {
     }
 
     fn apply_ra_poll(&mut self, info: GameInfoAndProgress) {
-        let Some(poller) = self.ra_poller.as_mut() else { return; };
-        let Some(achievements_map) = info.achievements.as_ref() else { return; };
+        let Some(poller) = self.ra_poller.as_mut() else {
+            return;
+        };
+        let Some(achievements_map) = info.achievements.as_ref() else {
+            return;
+        };
 
         let mut earned_now: HashSet<u32> = HashSet::new();
         let mut newly_unlocked = Vec::new();
@@ -519,7 +548,11 @@ impl OverlayState {
             if achievement.is_earned() {
                 earned_now.insert(achievement.id);
                 if poller.earned.insert(achievement.id) {
-                    newly_unlocked.push((achievement.id, achievement.title.clone(), achievement.points));
+                    newly_unlocked.push((
+                        achievement.id,
+                        achievement.title.clone(),
+                        achievement.points,
+                    ));
                 }
             }
         }
@@ -563,7 +596,12 @@ impl OverlayState {
     }
 
     /// Helper to adjust scroll offset to keep selected item visible
-    fn adjust_scroll_offset(selected: usize, scroll_offset: &mut usize, max_visible: usize, total_items: usize) {
+    fn adjust_scroll_offset(
+        selected: usize,
+        scroll_offset: &mut usize,
+        max_visible: usize,
+        total_items: usize,
+    ) {
         if selected < *scroll_offset {
             // Selected item is above visible area, scroll up
             *scroll_offset = selected;
@@ -827,7 +865,11 @@ impl OverlayState {
                             3000,
                         );
                     } else {
-                        let is_visible = self.menu_config.config().items.iter()
+                        let is_visible = self
+                            .menu_config
+                            .config()
+                            .items
+                            .iter()
                             .find(|i| i.id == item_id)
                             .map(|i| i.visible)
                             .unwrap_or(false);
@@ -839,7 +881,10 @@ impl OverlayState {
                             ToastStyle::Info,
                             2000,
                         );
-                        println!("[State] Toggled visibility for {:?}: {}", item_id, is_visible);
+                        println!(
+                            "[State] Toggled visibility for {:?}: {}",
+                            item_id, is_visible
+                        );
                     }
                 }
             }
@@ -954,10 +999,16 @@ impl OverlayState {
 
     fn handle_quit_confirm_input(&mut self, input: ControllerInput) {
         match input {
-            ControllerInput::Up | ControllerInput::Down |
-            ControllerInput::Left | ControllerInput::Right => {
+            ControllerInput::Up
+            | ControllerInput::Down
+            | ControllerInput::Left
+            | ControllerInput::Right => {
                 // Toggle between Cancel (0) and Quit (1)
-                self.quit_confirm_selected = if self.quit_confirm_selected == 0 { 1 } else { 0 };
+                self.quit_confirm_selected = if self.quit_confirm_selected == 0 {
+                    1
+                } else {
+                    0
+                };
             }
             ControllerInput::Select => {
                 // Execute selected action
@@ -1060,7 +1111,13 @@ fn signal_game_quit() -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
     {
         // Try to find and signal common emulator processes
-        let emulators = ["mgba-qt", "vbam", "visualboyadvance-m", "retroarch", "dolphin-emu"];
+        let emulators = [
+            "mgba-qt",
+            "vbam",
+            "visualboyadvance-m",
+            "retroarch",
+            "dolphin-emu",
+        ];
         for emu in emulators {
             let _ = std::process::Command::new("pkill")
                 .args(["-TERM", emu])
@@ -1092,7 +1149,13 @@ impl ToastManager {
         }
     }
 
-    pub fn add_toast(&mut self, message: String, icon: Option<String>, style: ToastStyle, duration_ms: u32) {
+    pub fn add_toast(
+        &mut self,
+        message: String,
+        icon: Option<String>,
+        style: ToastStyle,
+        duration_ms: u32,
+    ) {
         println!("[Toast] Added: {} ({:?})", message, style);
         let toast = Toast {
             message,
@@ -1106,9 +1169,8 @@ impl ToastManager {
 
     pub fn update(&mut self) {
         let now = Instant::now();
-        self.queue.retain(|toast| {
-            now.duration_since(toast.created_at) < toast.duration
-        });
+        self.queue
+            .retain(|toast| now.duration_since(toast.created_at) < toast.duration);
     }
 
     pub fn get_visible_toasts(&self) -> Vec<&Toast> {
@@ -1164,12 +1226,7 @@ mod tests {
 
         // Add more toasts than max_visible
         for i in 0..5 {
-            manager.add_toast(
-                format!("Toast {}", i),
-                None,
-                ToastStyle::Info,
-                5000,
-            );
+            manager.add_toast(format!("Toast {}", i), None, ToastStyle::Info, 5000);
         }
 
         // Should only show max_visible (3)
@@ -1330,27 +1387,25 @@ mod tests {
 
     #[test]
     fn test_quit_confirm_selection() {
-        let mut state_builder = || {
-            OverlayState {
-                visible: true,
-                current_screen: OverlayScreen::QuitConfirm,
-                selected_option: 0,
-                main_menu_scroll_offset: 0,
-                settings_selected_option: 0,
-                settings_scroll_offset: 0,
-                menu_customization_selected: 0,
-                menu_customization_scroll_offset: 0,
-                theme_selected: 0,
-                theme_selection_scroll_offset: 0,
-                quit_confirm_selected: 0,
-                toasts: ToastManager::new(),
-                achievements: AchievementTracker::new(),
-                controllers: ControllerState::new(),
-                performance: PerformanceStats::new(),
-                playtime: PlaytimeTracker::new().unwrap(),
-                menu_config: MenuConfigManager::new().unwrap(),
-                theme_config: ThemeConfigManager::new().unwrap(),
-            }
+        let mut state_builder = || OverlayState {
+            visible: true,
+            current_screen: OverlayScreen::QuitConfirm,
+            selected_option: 0,
+            main_menu_scroll_offset: 0,
+            settings_selected_option: 0,
+            settings_scroll_offset: 0,
+            menu_customization_selected: 0,
+            menu_customization_scroll_offset: 0,
+            theme_selected: 0,
+            theme_selection_scroll_offset: 0,
+            quit_confirm_selected: 0,
+            toasts: ToastManager::new(),
+            achievements: AchievementTracker::new(),
+            controllers: ControllerState::new(),
+            performance: PerformanceStats::new(),
+            playtime: PlaytimeTracker::new().unwrap(),
+            menu_config: MenuConfigManager::new().unwrap(),
+            theme_config: ThemeConfigManager::new().unwrap(),
         };
 
         let mut state = state_builder();

@@ -56,15 +56,12 @@ impl OverlayClient {
         let mut stream = UnixStream::connect(&self.socket_path)
             .context("Failed to connect to overlay daemon")?;
 
-        let json = serde_json::to_string(message)
-            .context("Failed to serialize message")?;
+        let json = serde_json::to_string(message).context("Failed to serialize message")?;
 
         stream
             .write_all(json.as_bytes())
             .context("Failed to write message")?;
-        stream
-            .write_all(b"\n")
-            .context("Failed to write newline")?;
+        stream.write_all(b"\n").context("Failed to write newline")?;
         stream.flush().context("Failed to flush stream")?;
 
         Ok(())
