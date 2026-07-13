@@ -1,3 +1,4 @@
+use crate::rcheevos_ffi::hash_rom_rcheevos;
 use crate::types::ConsoleId;
 use anyhow::{bail, Context, Result};
 use md5::{Digest, Md5};
@@ -9,6 +10,12 @@ use std::path::Path;
 /// Different consoles may require different hashing methods
 /// Uses streaming to avoid loading entire file into memory
 pub fn hash_rom(path: &Path, console_id: ConsoleId) -> Result<String> {
+    // GameCube and Wii use rcheevos' partition-aware hashing which
+    // handles RVZ (compressed), ISO, and GCM formats transparently.
+    if matches!(console_id, ConsoleId::GameCube | ConsoleId::Wii) {
+        return hash_rom_rcheevos(path).context("rcheevos failed to hash GameCube/Wii disc image");
+    }
+
     let file = File::open(path).context("Failed to open ROM file")?;
 
     let metadata = file.metadata().context("Failed to get file metadata")?;
@@ -19,8 +26,6 @@ pub fn hash_rom(path: &Path, console_id: ConsoleId) -> Result<String> {
         ConsoleId::NES => hash_nes_rom(file)?,
         ConsoleId::SNES => hash_snes_rom(file, file_size)?,
         ConsoleId::Nintendo64 => hash_n64_rom(file)?,
-        ConsoleId::GameCube => hash_gamecube_rom(file, file_size)?,
-        ConsoleId::Wii => hash_gamecube_rom(file, file_size)?,
         _ => hash_generic_rom(file)?,
     };
 
@@ -209,127 +214,6 @@ fn hash_generic_rom(file: File) -> Result<Md5> {
             break;
         }
         hasher.update(&chunk[..bytes_read]);
-    }
-
-    Ok(hasher)
-}
-
-/// Hash GameCube/Wii disc image using the rcheevos partition-aware algorithm.
-///
-/// This matches `rc_hash_gamecube()` from rcheevos' hash_disc.c:
-/// 1. Check magic word 0xC2339F3D at offset 0x1c
-/// 2. Parse apploader header/body/trailer sizes
-/// 3. MD5 the partition header block (up to 1MB)
-/// 4. Read boot DOL offset, parse 18 DOL segment offsets+sizes (7 code + 11 data)
-/// 5. MD5 each of the 18 segments in sequence
-/// 6. Finalize → 32-char hex hash
-///
-/// For ISO/GCM files, this produces the exact same hash as rcheevos.
-/// RVZ (compressed) files are handled by extracting the ISO first.
-fn hash_gamecube_rom(mut file: File, _file_size: usize) -> Result<Md5> {
-    // Check magic word at offset 0x1c: 0xC2339F3D (GameCube)
-    let mut magic = [0u8; 4];
-    file.seek(SeekFrom::Start(0x1c))
-        .context("Failed to seek to GameCube magic offset")?;
-    file.read_exact(&mut magic)
-        .context("Failed to read GameCube magic bytes")?;
-
-    if magic != [0xC2, 0x33, 0x9F, 0x3D] {
-        bail!("Not a GameCube disc (magic word mismatch at offset 0x1c)");
-    }
-
-    // Constants matching rcheevos' rc_hash_nintendo_disc_partition
-    const BASE_HEADER_SIZE: u32 = 0x2440;
-    const MAX_HEADER_SIZE: u32 = 1024 * 1024;
-    const MAX_CHUNK_SIZE: usize = 1024 * 1024;
-
-    // GetApploaderSize: read at part_offset + BASE_HEADER_SIZE + 0x14
-    file.seek(SeekFrom::Start((BASE_HEADER_SIZE + 0x14) as u64))
-        .context("Failed to seek to apploader sizes")?;
-
-    // apploader_header_size is fixed at 0x20
-    let apploader_header_size: u32 = 0x20;
-
-    let mut quad = [0u8; 4];
-    file.read_exact(&mut quad)
-        .context("Failed to read apploader body size")?;
-    let apploader_body_size = u32::from_be_bytes(quad);
-
-    file.read_exact(&mut quad)
-        .context("Failed to read apploader trailer size")?;
-    let apploader_trailer_size = u32::from_be_bytes(quad);
-
-    let header_size =
-        BASE_HEADER_SIZE + apploader_header_size + apploader_body_size + apploader_trailer_size;
-    let header_size = header_size.min(MAX_HEADER_SIZE) as usize;
-
-    // Hash the partition header
-    let mut hasher = Md5::new();
-    let mut header_buf = vec![0u8; header_size];
-    file.seek(SeekFrom::Start(0))
-        .context("Failed to seek to partition start")?;
-    file.read_exact(&mut header_buf)
-        .context("Failed to read partition header")?;
-    hasher.update(&header_buf);
-
-    // GetBootDOLOffset: dol_offset is at buffer[0x420..0x424] (big-endian u32)
-    let dol_offset = u32::from_be_bytes([
-        header_buf[0x420],
-        header_buf[0x421],
-        header_buf[0x422],
-        header_buf[0x423],
-    ]);
-
-    // Read DOL header (0xD8 bytes) to get 18 segment offsets and sizes
-    file.seek(SeekFrom::Start(dol_offset as u64))
-        .context("Failed to seek to DOL header")?;
-    let mut dol_header = [0u8; 0xD8];
-    file.read_exact(&mut dol_header)
-        .context("Failed to read DOL header")?;
-
-    // Parse 18 segment offsets (offsets 0x00-0x47, 4 bytes each, big-endian)
-    // and 18 segment sizes (offsets 0x90-0xD7, 4 bytes each, big-endian)
-    let mut dol_offsets = [0u32; 18];
-    let mut dol_sizes = [0u32; 18];
-
-    for i in 0..18 {
-        let off_base = i * 4;
-        dol_offsets[i] = u32::from_be_bytes([
-            dol_header[off_base],
-            dol_header[off_base + 1],
-            dol_header[off_base + 2],
-            dol_header[off_base + 3],
-        ]);
-
-        let size_base = 0x90 + i * 4;
-        dol_sizes[i] = u32::from_be_bytes([
-            dol_header[size_base],
-            dol_header[size_base + 1],
-            dol_header[size_base + 2],
-            dol_header[size_base + 3],
-        ]);
-    }
-
-    // Hash each of the 18 DOL segments
-    let mut chunk_buf = vec![0u8; MAX_CHUNK_SIZE];
-    for i in 0..18 {
-        if dol_sizes[i] == 0 {
-            continue;
-        }
-
-        let segment_offset = dol_offset.wrapping_add(dol_offsets[i]);
-        let mut remaining = dol_sizes[i] as usize;
-
-        file.seek(SeekFrom::Start(segment_offset as u64))
-            .context("Failed to seek to DOL segment")?;
-
-        while remaining > 0 {
-            let to_read = remaining.min(MAX_CHUNK_SIZE);
-            file.read_exact(&mut chunk_buf[..to_read])
-                .context("Failed to read DOL segment data")?;
-            hasher.update(&chunk_buf[..to_read]);
-            remaining -= to_read;
-        }
     }
 
     Ok(hasher)

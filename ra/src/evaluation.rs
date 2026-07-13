@@ -1,12 +1,17 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::io::Read;
+use std::os::raw::c_void;
 use std::os::unix::net::UnixDatagram;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::local_definitions::LocalDefinitions;
+use crate::rcheevos_ffi::{
+    RcRuntimeEvent, RcRuntimeEventHandler, RcRuntimePeek, Runtime as RcRuntime,
+    RC_RUNTIME_EVENT_ACHIEVEMENT_TRIGGERED,
+};
 
 /// Default Dolphin user directory paths for MemoryWatcher.
 /// Dolphin looks for these in its user directory (typically
@@ -117,31 +122,50 @@ pub fn parse_memorywatcher_datagram(data: &[u8], cache: &MemoryCache) {
 /// Listen for MemoryWatcher datagrams and update the memory cache.
 ///
 /// This blocks the calling thread. It should be spawned in a separate thread.
-/// The socket file must already exist (Dolphin creates it on startup).
+/// The socket directory must exist — we create it and bind before Dolphin starts.
+/// If the socket is already in use (stale from a previous run), we remove it first.
 pub fn listen_memorywatcher(cache: MemoryCache) -> Result<()> {
     let socket_path = socket_file_path()?;
 
-    // Remove stale socket if present (Dolphin will recreate it)
-    // Actually, Dolphin creates this socket — we just bind to it as a client.
-    // MemoryWatcher uses SOCK_DGRAM and sends TO this socket path.
-    // We need to bind to the path to receive datagrams.
-
-    // Clean up any stale socket file
-    if socket_path.exists() {
-        // Check if it's a socket
-        let metadata = std::fs::metadata(&socket_path)?;
-        use std::os::unix::fs::FileTypeExt;
-        if metadata.file_type().is_socket() {
-            // Try to remove it — if Dolphin is running, this is its socket
-            // and we shouldn't remove it. If stale, we can remove it.
-            // Actually, Dolphin sends TO this path, it doesn't bind to it.
-            // We bind to it. So we should remove a stale one.
-            let _ = std::fs::remove_file(&socket_path);
-        }
+    // Ensure the MemoryWatcher directory exists
+    if let Some(parent) = socket_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
 
-    let socket = UnixDatagram::bind(&socket_path)
-        .with_context(|| format!("Failed to bind MemoryWatcher socket at {:?}", socket_path))?;
+    // Remove stale socket file from a previous run
+    if socket_path.exists() {
+        let _ = std::fs::remove_file(&socket_path);
+    }
+
+    // Bind to the socket path with retries (Dolphin may not have started yet)
+    let socket = {
+        let mut last_err = None;
+        let mut bound_socket: Option<UnixDatagram> = None;
+        for attempt in 0..30 {
+            match UnixDatagram::bind(&socket_path) {
+                Ok(s) => {
+                    bound_socket = Some(s);
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if attempt < 29 {
+                        std::thread::sleep(Duration::from_millis(500));
+                    }
+                }
+            }
+        }
+        match bound_socket {
+            Some(s) => s,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Failed to bind MemoryWatcher socket at {:?} after 30 attempts: {}",
+                    socket_path,
+                    last_err.unwrap()
+                ))
+            }
+        }
+    };
 
     tracing_debug(&format!(
         "Listening for MemoryWatcher datagrams on {:?}",
@@ -235,7 +259,7 @@ impl EvaluationEngine {
     ///
     /// Spawns:
     /// 1. A socket listener thread that receives MemoryWatcher datagrams
-    /// 2. A tick thread that evaluates conditions at ~60Hz
+    /// 2. A tick thread that calls rcheevos' rc_runtime_do_frame at ~60Hz
     ///
     /// Returns a handle that can be used to stop the engine.
     pub fn start(&self, unlock_callback: impl Fn(u32, &str) + Send + Sync + 'static) -> Result<()> {
@@ -250,7 +274,7 @@ impl EvaluationEngine {
             let _ = listen_memorywatcher(cache_listener);
         });
 
-        // Spawn evaluation tick loop
+        // Spawn evaluation tick loop using rcheevos
         let cache_tick = self.cache.clone();
         let defs = self.defs.clone();
         let game_hash = self.game_hash.clone();
@@ -267,49 +291,124 @@ impl EvaluationEngine {
                 }
             };
 
-            // Track which achievements have already been unlocked this session
-            // to avoid duplicate notifications
-            let mut unlocked_this_session: std::collections::HashSet<u32> =
-                match cache_db.get_local_unlock_ids(&game_hash) {
-                    Ok(ids) => ids,
-                    Err(_) => std::collections::HashSet::new(),
-                };
+            // Initialize rcheevos runtime and activate all achievements
+            let mut runtime = RcRuntime::new();
+            let mut active_count = 0u32;
+            for ach in &defs.achievements {
+                if cache_db
+                    .is_local_unlocked(ach.id, &game_hash)
+                    .unwrap_or(false)
+                {
+                    continue; // Already unlocked, don't activate
+                }
+                if runtime.activate_achievement(ach.id, &ach.mem_addr) {
+                    active_count += 1;
+                } else {
+                    tracing_debug(&format!(
+                        "Failed to activate achievement #{}: {}",
+                        ach.id, ach.mem_addr
+                    ));
+                }
+            }
+            tracing_debug(&format!(
+                "Activated {} of {} achievements",
+                active_count,
+                defs.achievements.len()
+            ));
+
+            // Track unlocked IDs to avoid duplicate notifications
+            let unlocked_ids: Arc<Mutex<std::collections::HashSet<u32>>> = Arc::new(Mutex::new(
+                cache_db
+                    .get_local_unlock_ids(&game_hash)
+                    .unwrap_or_default(),
+            ));
+
+            // The peek callback reads from our MemoryWatcher cache.
+            // rcheevos calls this for each memory address it needs.
+            let cache_for_peek = cache_tick.clone();
+
+            extern "C" fn peek_callback(address: u32, num_bytes: u32, ud: *mut c_void) -> u32 {
+                let cache = unsafe { &*(ud as *const MemoryCache) };
+                let aligned = address & 0xFFFF_FFFC;
+                let cache_lock = cache.lock().unwrap();
+                let value = cache_lock.get(&aligned).copied().unwrap_or(0);
+
+                // rcheevos expects values in little-endian byte order.
+                // MemoryWatcher sends big-endian hex values which we stored as u32.
+                // For 1-byte reads, return the byte at the correct offset.
+                // For 2-byte reads, return the correct half.
+                // For 4-byte reads, return the full value.
+                // GameCube is big-endian, so the u32 we got is already in
+                // big-endian order. rcheevos reads memory as raw bytes,
+                // so we return the value as-is for 4-byte reads.
+                match num_bytes {
+                    1 => {
+                        let byte_offset = address & 0x03;
+                        (value >> ((3 - byte_offset) * 8)) & 0xFF
+                    }
+                    2 => {
+                        let half_offset = (address & 0x02) >> 1;
+                        (value >> ((1 - half_offset) * 16)) & 0xFFFF
+                    }
+                    _ => value,
+                }
+            }
+
+            // The event handler is called by rcheevos when achievements trigger.
+            // We use a thread-local to communicate the triggered ID back to the
+            // tick loop. This is safe because event_handler is called
+            // synchronously from do_frame on the same thread.
+            let unlocked_for_handler = unlocked_ids.clone();
+            let callback_for_handler = callback.clone();
+            let game_hash_for_handler = game_hash.clone();
+
+            std::thread_local! {
+                static TRIGGERED_ACHIEVEMENT: std::cell::Cell<u32> = std::cell::Cell::new(0);
+            }
+
+            extern "C" fn event_handler(event: *const RcRuntimeEvent) {
+                unsafe {
+                    if (*event).type_ == RC_RUNTIME_EVENT_ACHIEVEMENT_TRIGGERED {
+                        let id = (*event).id;
+                        TRIGGERED_ACHIEVEMENT.with(|cell| cell.set(id));
+                    }
+                }
+            }
 
             loop {
                 let is_running = {
-                    let mut r = running.lock().unwrap();
+                    let r = running.lock().unwrap();
                     *r
                 };
                 if !is_running {
                     break;
                 }
 
-                // Evaluate each achievement
-                // Note: full rcheevos integration requires the C library.
-                // For now, we do a simple evaluation: check if any memory
-                // value matches expected conditions. The real implementation
-                // will call rc_runtime_tick() via FFI.
-                for ach in &defs.achievements {
-                    if unlocked_this_session.contains(&ach.id) {
-                        continue;
-                    }
+                // Reset the triggered ID before each frame
+                TRIGGERED_ACHIEVEMENT.with(|cell| cell.set(0));
 
-                    // Check if already unlocked in DB
-                    if let Ok(true) = cache_db.is_local_unlocked(ach.id, &game_hash) {
-                        unlocked_this_session.insert(ach.id);
-                        continue;
-                    }
+                // Process one frame through rcheevos
+                let cache_ptr = &cache_for_peek as *const MemoryCache as *mut c_void;
+                runtime.do_frame(Some(peek_callback), cache_ptr, Some(event_handler));
 
-                    // TODO: When rcheevos FFI is integrated, this becomes:
-                    //   rc_runtime_tick(runtime, frame_number, &read_memory_callback, ...)
-                    // For now, the evaluation is a placeholder. The real
-                    // condition evaluation will be done by rcheevos' C engine.
-                    let triggered = evaluate_condition_placeholder(&ach.mem_addr, &cache_tick);
+                // Check if an achievement was triggered this frame
+                let triggered_id = TRIGGERED_ACHIEVEMENT.with(|cell| cell.get());
+                if triggered_id != 0 {
+                    let mut unlocked = unlocked_for_handler.lock().unwrap();
+                    if !unlocked.contains(&triggered_id) {
+                        unlocked.insert(triggered_id);
+                        drop(unlocked);
 
-                    if triggered {
-                        let _ = cache_db.local_unlock(ach.id, &game_hash, false);
-                        unlocked_this_session.insert(ach.id);
-                        callback(ach.id, &ach.title);
+                        // Find the achievement title
+                        if let Some(ach) = defs.achievements.iter().find(|a| a.id == triggered_id) {
+                            let _ =
+                                cache_db.local_unlock(triggered_id, &game_hash_for_handler, false);
+                            callback_for_handler(triggered_id, &ach.title);
+                            tracing_debug(&format!(
+                                "Achievement unlocked: #{} {}",
+                                triggered_id, ach.title
+                            ));
+                        }
                     }
                 }
 

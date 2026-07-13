@@ -100,6 +100,9 @@ enum Commands {
         /// Achievement title (optional, for display)
         #[arg(short, long)]
         title: Option<String>,
+        /// ROM hash (to associate unlock with the correct game in SQLite)
+        #[arg(short = 'H', long)]
+        hash: Option<String>,
     },
 
     /// Check if RA is configured and enabled
@@ -180,7 +183,7 @@ fn main() -> Result<()> {
             path.as_ref(),
             notify_overlay,
         ),
-        Commands::NotifyAchievement { id, title } => cmd_notify_achievement(id, title),
+        Commands::NotifyAchievement { id, title, hash } => cmd_notify_achievement(id, title, hash),
         Commands::Status => cmd_status(),
         Commands::ClearCache => cmd_clear_cache(),
         Commands::SendAchievementsToOverlay {
@@ -646,7 +649,7 @@ fn cmd_game_start(
     Ok(())
 }
 
-fn cmd_notify_achievement(id: u32, title: Option<String>) -> Result<()> {
+fn cmd_notify_achievement(id: u32, title: Option<String>, hash: Option<String>) -> Result<()> {
     let cache = RACache::new()?;
 
     let achievement_title = title.unwrap_or_else(|| format!("Achievement #{}", id));
@@ -655,9 +658,8 @@ fn cmd_notify_achievement(id: u32, title: Option<String>) -> Result<()> {
     notify_overlay_achievement(&achievement_title)?;
 
     // Record as local unlock (never contacts server)
-    // We don't have the game hash here, so we record with a placeholder.
-    // The evaluation engine will use the proper hash when it triggers unlocks.
-    let _ = cache.local_unlock(id, "current", false);
+    let game_hash = hash.unwrap_or_else(|| "unknown".to_string());
+    let _ = cache.local_unlock(id, &game_hash, false);
 
     println!("{{\"success\": true, \"achievement_id\": {}}}", id);
     Ok(())
@@ -775,23 +777,16 @@ fn cmd_send_achievements_to_overlay(
     use std::io::Write;
     use std::os::unix::net::UnixStream;
 
-    let cred_manager = CredentialManager::new()?;
-    let credentials = cred_manager
-        .load()?
-        .context("No credentials stored. Run 'kazeta-ra login' first.")?;
-
     // Save path for cartridge lookup
     let path_for_cart = path.cloned();
 
     // Determine hash and console
-    let (rom_hash, console_id) = if let Some(h) = hash {
-        // Hash provided, console is required
+    let (rom_hash, _console_id) = if let Some(h) = hash {
         let c =
             console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
         let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
-        // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
             ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
         } else {
@@ -803,12 +798,10 @@ fn cmd_send_achievements_to_overlay(
         bail!("Either --hash or --path is required");
     };
 
-    let client = RAClient::new(credentials);
     let cache = RACache::new()?;
 
     // Check for custom game name
     let game_name_mapping = GameNameMapping::load().ok();
-    // Try to find cartridge path from ROM path if provided
     let cart_path = path_for_cart
         .as_ref()
         .and_then(|p| find_cartridge_for_rom(p).ok());
@@ -816,8 +809,25 @@ fn cmd_send_achievements_to_overlay(
         .as_ref()
         .and_then(|m| m.get_name(&rom_hash, cart_path.as_deref()));
 
+    // Try local definitions first (offline mode)
+    if let Some(p) = &path_for_cart {
+        if let Some(defs) = find_local_definitions(p) {
+            send_local_achievements_to_overlay(&rom_hash, &defs, &cache)?;
+            println!("{{\"success\": true, \"local_mode\": true}}");
+            return Ok(());
+        }
+    }
+
+    // Fall back to online mode
+    let cred_manager = CredentialManager::new()?;
+    let credentials = cred_manager
+        .load()?
+        .context("No credentials stored and no local definitions found.")?;
+
+    let client = RAClient::new(credentials);
+
     // Get game ID from hash
-    let game_id = match client.get_game_id(&rom_hash, console_id)? {
+    let game_id = match client.get_game_id(&rom_hash, _console_id)? {
         Some(id) => id,
         None => {
             println!("{{\"success\": false, \"error\": \"Game not found\"}}");
