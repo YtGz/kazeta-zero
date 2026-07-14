@@ -1,4 +1,4 @@
-# Development Dockerfile for Kazeta+ BIOS
+# Development Dockerfile for Kazeta Zero BIOS
 # Allows running the BIOS GUI on macOS via Docker + XQuartz
 
 FROM rust:1.92-slim

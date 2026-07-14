@@ -1,6 +1,6 @@
-# Kazeta+ Build & Deployment Guide
+# Kazeta Zero Build & Deployment Guide
 
-This guide explains how to build, package, and deploy Kazeta+ updates.
+This guide explains how to build, package, and deploy Kazeta Zero updates.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The build system consists of three main scripts:
 
 1. **`build-all.sh`** - Builds all Rust binaries and optionally runtime packages
 2. **`create-upgrade-kit.sh`** - Packages everything into a distributable upgrade kit
-3. **`update-kazeta-plus.sh`** - Deploys updates to a running Kazeta+ system
+3. **`update-kazeta-zero.sh`** - Deploys updates to a running Kazeta Zero system
 
 ## Components Built
 
@@ -66,29 +66,29 @@ The build system consists of three main scripts:
 
 **Output:**
 ```
-~/Desktop/kazeta_assets/upgrade_kits/kazeta-plus-upgrade-kit-X.X/
-~/Desktop/kazeta_assets/upgrade_kits/kazeta-plus-upgrade-kit-X.X.zip
+~/Desktop/kazeta_assets/upgrade_kits/kazeta-zero-upgrade-kit-X.X/
+~/Desktop/kazeta_assets/upgrade_kits/kazeta-zero-upgrade-kit-X.X.zip
 ```
 
-### Step 3: Deploy to Kazeta+ System
+### Step 3: Deploy to Kazeta Zero System
 
-On your Kazeta+ device:
+On your Kazeta Zero device:
 
 ```bash
 # Extract the upgrade kit
-unzip kazeta-plus-upgrade-kit-X.X.zip
-cd kazeta-plus-upgrade-kit-X.X
+unzip kazeta-zero-upgrade-kit-X.X.zip
+cd kazeta-zero-upgrade-kit-X.X
 
 # Run the upgrade script
-sudo ./upgrade-to-plus.sh    # For initial installation
+sudo ./upgrade-to-zero.sh    # For initial installation
 # OR
-sudo ./update-kazeta-plus.sh  # For updates to existing installation
+sudo ./update-kazeta-zero.sh  # For updates to existing installation
 ```
 
 ## Deployment Scripts
 
-### upgrade-to-plus.sh (Initial Installation)
-For upgrading base Kazeta to Kazeta+ or fresh installations:
+### upgrade-to-zero.sh (Initial Installation)
+For upgrading base Kazeta to Kazeta Zero or fresh installations:
 
 - Installs WiFi packages if needed
 - Configures network connectivity
@@ -99,8 +99,8 @@ For upgrading base Kazeta to Kazeta+ or fresh installations:
 - **Installs runtime packages**
 - Requires reboot
 
-### update-kazeta-plus.sh (Updates)
-For updating an already-running Kazeta+ system:
+### update-kazeta-zero.sh (Updates)
+For updating an already-running Kazeta Zero system:
 
 - **Detects new packages** and installs them
 - Copies updated files
@@ -150,7 +150,7 @@ cd bios && cargo run --features dev
 ./create-upgrade-kit.sh
 
 # 3. Upload to GitHub releases or distribute as needed
-# Users will download and run upgrade-to-plus.sh or update-kazeta-plus.sh
+# Users will download and run upgrade-to-zero.sh or update-kazeta-zero.sh
 ```
 
 ### Iterating on Updates
@@ -168,7 +168,7 @@ cp overlay/target/release/kazeta-overlay rootfs/usr/bin/
 
 # Test on device
 scp -r rootfs/usr/bin/kazeta-overlay user@device:/path/to/upgrade-kit/rootfs/usr/bin/
-ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-plus.sh"
+ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-zero.sh"
 ```
 
 ## Troubleshooting
@@ -178,7 +178,7 @@ ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-plus.sh"
 - Check `target/release/` or `target/debug/` for the binary
 
 ### Service not restarting
-- Check service name in `update-kazeta-plus.sh` matches systemd service file
+- Check service name in `update-kazeta-zero.sh` matches systemd service file
 - Verify binary name matches the case statement in the update script
 
 ### Runtime not installing
@@ -196,10 +196,10 @@ ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-plus.sh"
 - Creates: `*.kzr` runtime files in project root
 
 ### create-upgrade-kit.sh
-- Creates: `~/Desktop/kazeta_assets/upgrade_kits/kazeta-plus-upgrade-kit-X.X/`
+- Creates: `~/Desktop/kazeta_assets/upgrade_kits/kazeta-zero-upgrade-kit-X.X/`
 - Modifies: None (read-only operation)
 
-### update-kazeta-plus.sh (on target system)
+### update-kazeta-zero.sh (on target system)
 - Creates/Updates: `/frzr_root/deployments/kazeta-*/usr/bin/kazeta*`
 - Creates/Updates: `/frzr_root/deployments/kazeta-*/etc/systemd/system/*.service`
 - Creates/Updates: `/frzr_root/deployments/kazeta-*/etc/udev/rules.d/*`
@@ -220,7 +220,7 @@ ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-plus.sh"
 
 3. Create systemd service in `rootfs/etc/systemd/system/kazeta-my-daemon.service`
 
-4. Add service mapping in `update-kazeta-plus.sh`:
+4. Add service mapping in `update-kazeta-zero.sh`:
    ```bash
    "kazeta-my-daemon")
        if [ "$needs_restart" = true ]; then
@@ -229,14 +229,14 @@ ssh user@device "sudo /path/to/upgrade-kit/update-kazeta-plus.sh"
        ;;
    ```
 
-5. Add to services list in `upgrade-to-plus.sh` if it should auto-enable
+5. Add to services list in `upgrade-to-zero.sh` if it should auto-enable
 
 ### Adding a New Runtime
 
 1. Create runtime build script in `runtimes/PLATFORM/build.sh`
 2. `build-all.sh` will automatically detect and build it
 3. `create-upgrade-kit.sh` will automatically include it
-4. `update-kazeta-plus.sh` will automatically install it
+4. `update-kazeta-zero.sh` will automatically install it
 
 No code changes needed - just follow the pattern of existing runtimes!
 
@@ -244,7 +244,7 @@ No code changes needed - just follow the pattern of existing runtimes!
 
 New packages can be added to both scripts by updating the `CURRENT_PACKAGES` array:
 
-**In `upgrade-to-plus.sh` (line 129-137):**
+**In `upgrade-to-zero.sh` (line 129-137):**
 ```bash
 PACKAGES_TO_INSTALL=(
     "brightnessctl" "keyd" "rsync" "xxhash" "iwd" "networkmanager"
@@ -253,12 +253,12 @@ PACKAGES_TO_INSTALL=(
 )
 ```
 
-**In `update-kazeta-plus.sh` (line 48-57):**
+**In `update-kazeta-zero.sh` (line 48-57):**
 ```bash
 CURRENT_PACKAGES=(
     "brightnessctl" "keyd" "rsync" "xxhash" "iwd" "networkmanager"
     # ... existing packages ...
-    "your-new-package"  # Add here (must match upgrade-to-plus.sh)
+    "your-new-package"  # Add here (must match upgrade-to-zero.sh)
 )
 ```
 

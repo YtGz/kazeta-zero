@@ -15,7 +15,7 @@ NC='\033[0m'
 ###                       PRE-FLIGHT CHECKS
 ### ===================================================================
 
-echo -e "${GREEN}Starting Kazeta+ Update...${NC}"
+echo -e "${GREEN}Starting Kazeta Zero Update...${NC}"
 
 # 1. Check for Root Privileges
 if [ "$EUID" -ne 0 ]; then
@@ -44,7 +44,7 @@ echo -e "${YELLOW}Step 1: Checking for new packages...${NC}"
 # Store the package list in a marker file
 PACKAGE_MARKER_FILE="$DEPLOYMENT_DIR/.kazeta-installed-packages"
 
-# Define the current package list (must match upgrade-to-plus.sh)
+# Define the current package list (must match upgrade-to-zero.sh)
 CURRENT_PACKAGES=(
     "brightnessctl" "keyd" "rsync" "xxhash" "iwd" "networkmanager"
     "ffmpeg" "unzip" "bluez" "bluez-utils"
@@ -347,7 +347,7 @@ echo "--------------------------------------------------"
 ###                             COMPLETE
 ### ===================================================================
 
-echo -e "${GREEN}Kazeta+ update complete!${NC}"
+echo -e "${GREEN}Kazeta Zero update complete!${NC}"
 
 if [ ${#SERVICES_TO_RESTART[@]} -gt 0 ]; then
     echo -e "${YELLOW}The following services were restarted:${NC}"

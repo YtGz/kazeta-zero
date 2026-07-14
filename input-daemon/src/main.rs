@@ -1,4 +1,4 @@
-//! kazeta-input: Global input daemon for Kazeta+ overlay
+//! kazeta-input: Global input daemon for Kazeta Zero overlay
 //!
 //! This daemon reads raw input events from /dev/input/* using evdev,
 //! allowing it to capture hotkeys regardless of which application has focus.

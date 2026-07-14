@@ -1,5 +1,5 @@
 #!/bin/bash
-# Docker entrypoint for running Kazeta+ BIOS with virtual display
+# Docker entrypoint for running Kazeta Zero BIOS with virtual display
 
 set -e
 
@@ -15,7 +15,7 @@ echo "📺 Starting VNC server..."
 x11vnc -display :99 -nopw -listen 0.0.0.0 -forever -shared &
 VNC_PID=$!
 
-echo "🎮 Starting Kazeta+ BIOS..."
+echo "🎮 Starting Kazeta Zero BIOS..."
 echo "   VNC available at: localhost:5900"
 echo "   Use VNC viewer to connect and see the display"
 echo ""

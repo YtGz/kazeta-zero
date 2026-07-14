@@ -27,8 +27,8 @@ const ITEMS_PER_PAGE: usize = 5;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RuntimeSource {
     Official,   // From kazetaos/kazeta
-    Outcaster,  // From the-outcaster/kazeta-plus (kzr)
-    ThirdParty, // From the-outcaster/kazeta-plus (zip)
+    Outcaster,  // From the-outcaster/kazeta-zero (kzr)
+    ThirdParty, // From the-outcaster/kazeta-zero (zip)
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +119,7 @@ impl RuntimeDownloaderState {
 /// Returns the correct runtime directory based on dev mode
 fn get_runtime_dir() -> PathBuf {
     if DEV_MODE {
-        // Dev path: ~/.local/share/kazeta-plus/runtimes/
+        // Dev path: ~/.local/share/kazeta-zero/runtimes/
         get_user_data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("runtimes")
@@ -472,7 +472,7 @@ pub fn draw(
                 // Add a prefix based on the source
                 let source_prefix = match runtime.source {
                     RuntimeSource::Official => "[Official]",
-                    RuntimeSource::Outcaster => "[Kazeta+]",
+                    RuntimeSource::Outcaster => "[Kazeta Zero]",
                     RuntimeSource::ThirdParty => "[Third-Party]",
                 };
 
@@ -828,7 +828,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
         }
 
         // --- 2. Fetch Outcaster & Third-Party Runtimes ---
-        // From: https://github.com/the-outcaster/kazeta-plus/releases/tag/runtimes
+        // From: https://github.com/the-outcaster/kazeta-zero/releases/tag/runtimes
         let outcaster_files = [
             "dolphin-1.0.kzr",
             "linux-1.1.kzr",
@@ -842,7 +842,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
             "segacd-1.0.zip",
         ];
         let response_plus = client
-            .get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases/tags/runtimes")
+            .get("https://api.github.com/repos/the-outcaster/kazeta-zero/releases/tags/runtimes")
             .send();
 
         if let Ok(resp) = response_plus {
@@ -855,7 +855,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
                         all_runtimes.push(RemoteRuntime {
                             name: asset.name.clone(),
                             file_name: asset.name.clone(),
-                            description: "Kazeta+ specific runtime.".to_string(),
+                            description: "Kazeta Zero specific runtime.".to_string(),
                             download_url: asset.browser_download_url,
                             source: RuntimeSource::Outcaster,
                             is_installed: false,
@@ -877,10 +877,10 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
                     }
                 }
             } else {
-                eprintln!("[Runtime] Failed to parse kazeta-plus releases JSON");
+                eprintln!("[Runtime] Failed to parse kazeta-zero releases JSON");
             }
         } else {
-            eprintln!("[Runtime] Failed to fetch kazeta-plus releases");
+            eprintln!("[Runtime] Failed to fetch kazeta-zero releases");
         }
 
         // --- 3. Sort and Check Installation Status ---

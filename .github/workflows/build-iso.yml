@@ -1,4 +1,4 @@
-name: Build Kazeta+ ISO
+name: Build Kazeta Zero ISO
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Build Docker image
-      run: docker build -t kazeta-plus-builder .
+      run: docker build -t kazeta-zero-builder .
 
     - name: Create output directory
       run: mkdir -p output
@@ -31,13 +31,13 @@ jobs:
           -v "$(pwd)/output:/output" \
           -v "$(pwd)/runtimes:/workdir/runtimes:ro" \
           -e OUTPUT_DIR=/output \
-          kazeta-plus-builder \
+          kazeta-zero-builder \
           sudo /workdir/build-image.sh
 
     - name: Upload ISO artifact
       uses: actions/upload-artifact@v4
       with:
-        name: kazeta-plus-iso
+        name: kazeta-zero-iso
         path: |
           output/*.img.tar.xz
           output/build_info.txt

@@ -930,7 +930,7 @@ fn fetch_theme_list(tx: Sender<DownloaderMessage>) {
             .build()
             .unwrap();
         let response = client
-            .get("https://api.github.com/repos/the-outcaster/kazeta-plus-themes/releases")
+            .get("https://api.github.com/repos/the-outcaster/kazeta-zero-themes/releases")
             .send();
         let result = match response {
             Ok(resp) => match resp.json::<Vec<GithubRelease>>() {

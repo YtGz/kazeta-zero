@@ -1,8 +1,8 @@
-# Kazeta++ Code Review: Overlay / Input-Daemon / RetroAchievements
+# Kazeta Zero+ Code Review: Overlay / Input-Daemon / RetroAchievements
 
 ## Executive Summary
 
-This document provides a comprehensive review of three key components in the Kazeta++ codebase:
+This document provides a comprehensive review of three key components in the Kazeta Zero+ codebase:
 1. **Overlay** - In-game overlay daemon with achievement display, controller management, and performance HUD
 2. **Input-Daemon** - Global hotkey capture daemon using Linux evdev
 3. **RetroAchievements (RA)** - Integration with RetroAchievements.org for achievement tracking

@@ -1,5 +1,5 @@
 [Unit]
-Description=Load custom InputPlumber profile for Kazeta+
+Description=Load custom InputPlumber profile for Kazeta Zero
 # We need to wait for both InputPlumber AND the gamer user session to be ready.
 Requires=inputplumber.service user@1000.service
 After=inputplumber.service user@1000.service

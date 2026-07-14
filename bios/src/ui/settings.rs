@@ -900,7 +900,7 @@ pub fn update(
                                     .config
                                     .logo_selection
                                     .clone()
-                                    .unwrap_or_else(|| "Kazeta+ (Default)".to_string());
+                                    .unwrap_or_else(|| "Kazeta Zero (Default)".to_string());
                                 config.background_selection = theme
                                     .config
                                     .background_selection

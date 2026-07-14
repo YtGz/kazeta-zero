@@ -98,7 +98,7 @@ const VERSION_NUMBER: &str = concat!("V", ver!(), "d.KAZETA+");
 #[cfg(not(feature = "dev"))]
 const VERSION_NUMBER: &str = concat!("V", ver!(), ".KAZETA+");
 
-const WINDOW_TITLE: &str = "Kazeta+ BIOS";
+const WINDOW_TITLE: &str = "Kazeta Zero BIOS";
 const SCREEN_WIDTH: i32 = 640;
 const SCREEN_HEIGHT: i32 = 360;
 const BASE_SCREEN_HEIGHT: f32 = 360.0;
@@ -557,7 +557,7 @@ async fn load_all_assets(
     let status = "LOADING LOGOS...".to_string();
     let default_logo =
         Texture2D::from_file_with_format(include_bytes!("../logo.png"), Some(ImageFormat::Png));
-    logo_cache.insert("Kazeta+ (Default)".to_string(), default_logo);
+    logo_cache.insert("Kazeta Zero (Default)".to_string(), default_logo);
     assets_loaded += 1;
     animate_step!(
         &mut display_progress,
@@ -934,7 +934,7 @@ async fn main() {
     let mut custom_logos: Vec<String> = logo_cache
         .keys()
         .filter(|k| {
-            *k != "Kazeta+ (Default)" && *k != "Kazeta (Original)" && k.ends_with("_logo.png")
+            *k != "Kazeta Zero (Default)" && *k != "Kazeta (Original)" && k.ends_with("_logo.png")
         }) // Add this filter
         .cloned()
         .collect();
@@ -943,7 +943,7 @@ async fn main() {
     // 2. Create the final list with our specific order
     let mut logo_choices: Vec<String> = vec![
         "None".to_string(),
-        "Kazeta+ (Default)".to_string(),
+        "Kazeta Zero (Default)".to_string(),
         "Kazeta (Original)".to_string(),
     ];
     logo_choices.extend(custom_logos);

@@ -48,7 +48,7 @@ pub fn get_system_info() -> SystemInfo {
     // --- OS Name ---
     let os_name = read_line_from_file("/etc/os-release", "PRETTY_NAME=")
         .map(|name| name.replace("\"", "")) // Remove quotes
-        .unwrap_or_else(|| "Kazeta+ OS".to_string());
+        .unwrap_or_else(|| "Kazeta Zero OS".to_string());
 
     // --- Kernel Version ---
     let kernel = Command::new("uname")

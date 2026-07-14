@@ -1,9 +1,9 @@
 #!/bin/bash
-# Run Kazeta+ BIOS in Docker with VNC display
+# Run Kazeta Zero BIOS in Docker with VNC display
 
 set -e
 
-echo "🎮 Kazeta+ BIOS Docker Runner (VNC Mode)"
+echo "🎮 Kazeta Zero BIOS Docker Runner (VNC Mode)"
 echo "==========================================="
 
 # Build the Docker image

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ===================================================================
-# Kazeta+ Complete Build Script
+# Kazeta Zero Complete Build Script
 # ===================================================================
 # Builds all Rust binaries and runtimes for deployment
 #
@@ -68,7 +68,7 @@ else
 fi
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Kazeta+ Complete Build Script                   ║${NC}"
+echo -e "${BLUE}║           Kazeta Zero Complete Build Script                   ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -263,7 +263,7 @@ fi
 
 echo -e "${YELLOW}Next Steps:${NC}"
 echo -e "  1. Run ${BLUE}./create-upgrade-kit.sh${NC} to package for deployment"
-echo -e "  2. Or use ${BLUE}./update-kazeta-plus.sh${NC} to deploy to a running system"
+echo -e "  2. Or use ${BLUE}./update-kazeta-zero.sh${NC} to deploy to a running system"
 echo ""
 
 # Show binary sizes

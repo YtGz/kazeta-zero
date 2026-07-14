@@ -2,7 +2,7 @@
 # This script runs with sudo to prepare the system for Wi-Fi.
 
 set -e
-echo "--- Kazeta+ Wi-Fi Setup ---"
+echo "--- Kazeta Zero Wi-Fi Setup ---"
 
 SENTINEL_FILE="/var/kazeta/state/.kazeta_unlocked"
 

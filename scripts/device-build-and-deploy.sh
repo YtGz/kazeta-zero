@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build and deploy Kazeta+ binaries and runtimes directly on a device.
+# Build and deploy Kazeta Zero binaries and runtimes directly on a device.
 
 set -euo pipefail
 

@@ -484,7 +484,7 @@ fn check_for_updates(tx: Sender<CheckerMessage>) {
         };
 
         let response = client
-            .get("https://api.github.com/repos/the-outcaster/kazeta-plus/releases")
+            .get("https://api.github.com/repos/the-outcaster/kazeta-zero/releases")
             .send();
 
         let result = match response {
@@ -562,7 +562,7 @@ fn perform_update_logic(
         .name
         .strip_suffix(".zip")
         .unwrap_or(&update_asset.name);
-    let kit_path = tmp_extract_dir.join(root_dir_name); // e.g., /tmp/kazeta-plus-upgrade-kit-1.34
+    let kit_path = tmp_extract_dir.join(root_dir_name); // e.g., /tmp/kazeta-zero-upgrade-kit-1.34
 
     // Clean up previous attempt if it exists (run before extraction)
     if kit_path.exists() {
@@ -574,7 +574,7 @@ fn perform_update_logic(
     extract_archive(&tmp_zip_path, &tmp_extract_dir)?;
 
     // Build the script path INSIDE the kit directory
-    let script_path = kit_path.join("upgrade-to-plus.sh"); // e.g., /tmp/kazeta-plus-upgrade-kit-1.34/upgrade-to-plus.sh
+    let script_path = kit_path.join("upgrade-to-zero.sh"); // e.g., /tmp/kazeta-zero-upgrade-kit-1.34/upgrade-to-zero.sh
 
     // Add a log to see the exact path being checked
     println!(

@@ -115,7 +115,7 @@ setup_retroachievements(cart_info, kzi_path);
 **Logic:**
 1. **KZP files:** Returns `None` (wrapper handles RA setup)
 2. **KZI files:** Extracts to cache directory
-   - Dev mode: `~/.local/share/kazeta-plus/kzi-cache/{cart_id}/`
+   - Dev mode: `~/.local/share/kazeta-zero/kzi-cache/{cart_id}/`
    - Production: `/tmp/kazeta-kzi/{cart_id}/`
 3. **Cache check:** Returns existing path if already extracted
 4. **Best-effort extraction:** Doesn't fail if extraction errors occur

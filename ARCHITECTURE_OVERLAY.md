@@ -1,6 +1,6 @@
-# Kazeta+ Overlay & System Architecture - Memory Bank
+# Kazeta Zero Overlay & System Architecture - Memory Bank
 
-> **Purpose:** This document serves as a comprehensive memory bank for AI assistants to quickly understand the Kazeta+ architecture, implemented features, and system design.
+> **Purpose:** This document serves as a comprehensive memory bank for AI assistants to quickly understand the Kazeta Zero architecture, implemented features, and system design.
 
 ## Quick Reference Files (AI Context Seeding)
 
@@ -15,7 +15,7 @@ When starting work on this project, read these files first:
 
 ## System Overview
 
-Kazeta+ is a retro gaming console OS based on Linux, featuring:
+Kazeta Zero is a retro gaming console OS based on Linux, featuring:
 - Custom BIOS UI for game selection and system settings
 - Real-time overlay system for in-game menus and stats
 - RetroAchievements integration for achievement tracking
@@ -629,7 +629,7 @@ cargo run -- clear-cache
 ## File Layout Reference
 
 ```
-kazeta-plus/
+kazeta-zero/
 ├── bios/                          # BIOS UI
 │   ├── src/
 │   │   ├── main.rs               # Entry point
@@ -745,7 +745,7 @@ done
 
 ## Conclusion
 
-**The Kazeta+ architecture is:**
+**The Kazeta Zero architecture is:**
 - ✅ **Modular:** Clean separation of concerns
 - ✅ **Performant:** Optimized critical paths, minimal overhead
 - ✅ **Reliable:** Graceful degradation, proper error handling

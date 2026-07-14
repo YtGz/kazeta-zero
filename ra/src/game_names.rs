@@ -124,7 +124,7 @@ impl GameNameMapping {
     fn get_config_path() -> Result<PathBuf> {
         let data_dir = dirs::home_dir()
             .context("Could not find home directory")?
-            .join(".local/share/kazeta-plus");
+            .join(".local/share/kazeta-zero");
 
         fs::create_dir_all(&data_dir).context("Failed to create kazeta data directory")?;
 

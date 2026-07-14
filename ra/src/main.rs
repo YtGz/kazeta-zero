@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "kazeta-ra")]
-#[command(about = "RetroAchievements integration for Kazeta+")]
+#[command(about = "RetroAchievements integration for Kazeta Zero")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -190,31 +190,18 @@ fn main() -> Result<()> {
             hash,
             path,
             console,
-        } => cmd_send_achievements_to_overlay(
-            hash.as_ref().map(|s| s.as_str()),
-            path.as_ref(),
-            console.as_deref(),
-        ),
+        } => cmd_send_achievements_to_overlay(hash.as_deref(), path.as_ref(), console.as_deref()),
         Commands::SetGameName {
             hash,
             path,
             console,
             name,
-        } => cmd_set_game_name(
-            hash.as_ref().map(|s| s.as_str()),
-            path.as_ref(),
-            console.as_deref(),
-            &name,
-        ),
+        } => cmd_set_game_name(hash.as_deref(), path.as_ref(), console.as_deref(), &name),
         Commands::RemoveGameName {
             hash,
             path,
             console,
-        } => cmd_remove_game_name(
-            hash.as_ref().map(|s| s.as_str()),
-            path.as_ref(),
-            console.as_deref(),
-        ),
+        } => cmd_remove_game_name(hash.as_deref(), path.as_ref(), console.as_deref()),
         Commands::ListGameNames => cmd_list_game_names(),
     }
 }
@@ -903,7 +890,7 @@ fn cmd_send_achievements_to_overlay(
 fn has_local_definitions_available() -> bool {
     // Check cartridge directories in the standard Kazeta path
     if let Some(home) = dirs::home_dir() {
-        let cart_base = home.join(".local/share/kazeta-plus/cartridges");
+        let cart_base = home.join(".local/share/kazeta-zero/cartridges");
         if cart_base.exists() {
             if let Ok(entries) = std::fs::read_dir(&cart_base) {
                 for entry in entries.flatten() {
@@ -998,7 +985,7 @@ fn send_local_achievements_to_overlay(
 /// This is a best-effort search - may not always find the cartridge
 fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
     // Check if ROM path is inside a cartridge directory structure
-    // Cartridges are typically in ~/.local/share/kazeta-plus/cartridges/ or similar
+    // Cartridges are typically in ~/.local/share/kazeta-zero/cartridges/ or similar
     let rom_path = rom_path
         .canonicalize()
         .context("Failed to canonicalize ROM path")?;

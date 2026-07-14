@@ -2,7 +2,7 @@
 name = "kazeta-ra"
 version = "0.1.0"
 edition = "2021"
-description = "RetroAchievements integration for Kazeta+"
+description = "RetroAchievements integration for Kazeta Zero"
 
 [[bin]]
 name = "kazeta-ra"

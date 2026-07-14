@@ -1,5 +1,5 @@
 // kazeta-ra library
-// RetroAchievements integration for Kazeta+
+// RetroAchievements integration for Kazeta Zero
 
 pub mod api;
 pub mod auth;

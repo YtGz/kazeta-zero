@@ -1,12 +1,12 @@
 #!/bin/bash
-# Development run script for Kazeta+
+# Development run script for Kazeta Zero
 # Starts the overlay daemon, input daemon, and BIOS together
 
 set -e
 
 cd "$(dirname "$0")"
 
-echo "=== Kazeta+ Dev Runner ==="
+echo "=== Kazeta Zero Dev Runner ==="
 
 # Clean up any previous instances
 echo "[1/6] Cleaning up previous instances..."

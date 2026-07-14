@@ -1,4 +1,4 @@
-# Proposed New Features for Kazeta++
+# Proposed New Features for Kazeta Zero+
 
 ## Overlay Features
 
@@ -59,7 +59,7 @@
 **Description:** Allow users to customize overlay toggle key
 **Implementation:**
 
-- Read hotkey config from `~/.config/kazeta-plus/input.toml`
+- Read hotkey config from `~/.config/kazeta-zero/input.toml`
 - Support multiple hotkey definitions
 - Example config:
 
@@ -155,7 +155,7 @@
 **Implementation:**
 
 - Download badges on game start
-- Store in `~/.cache/kazeta-plus/badges/`
+- Store in `~/.cache/kazeta-zero/badges/`
 - Display in overlay achievement list
 - Use placeholder for missing images
 

@@ -160,7 +160,7 @@ impl Drop for PlaytimeTracker {
 fn get_playtime_db_path() -> Result<PathBuf> {
     let overlay_dir = dirs::home_dir()
         .context("No home directory found")?
-        .join(".local/share/kazeta-plus/overlay");
+        .join(".local/share/kazeta-zero/overlay");
 
     fs::create_dir_all(&overlay_dir).context("Failed to create overlay directory")?;
 

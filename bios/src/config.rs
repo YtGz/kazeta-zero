@@ -2,10 +2,10 @@ use crate::MenuPosition;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fs, path::PathBuf};
 
-/// Returns the path to the user's data directory for Kazeta+.
+/// Returns the path to the user's data directory for Kazeta Zero.
 /// This is a public helper function for other modules to use.
 pub fn get_user_data_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|path| path.join(".local/share/kazeta-plus"))
+    dirs::home_dir().map(|path| path.join(".local/share/kazeta-zero"))
 }
 
 /// Gets the full path to the kazeta.toml configuration file.
@@ -134,7 +134,7 @@ impl Default for Config {
             color_shift_speed: "NORMAL".to_string(),
             bgm_track: None,
             sfx_pack: "Default".to_string(),
-            logo_selection: "Kazeta+ (Default)".to_string(),
+            logo_selection: "Kazeta Zero (Default)".to_string(),
             background_selection: "Default".to_string(),
             font_selection: "Default".to_string(),
             splash_video: "Default".to_string(),

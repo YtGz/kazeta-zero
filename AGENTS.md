@@ -5,7 +5,7 @@
 - `overlay/`: Overlay daemon; IPC/rendering/hotkeys in `src/ipc.rs`, `rendering.rs`, `hotkeys.rs`; themes/assets in `assets/`.
 - `input-daemon/`: Linux-only evdev hotkey watcher (inotify-driven).
 - `ra/`: RetroAchievements library + CLI (`kazeta-ra`) for hashing/API/cache.
-- `rootfs/`: Systemd units, polkit rules, udev/session files; helpers: `dev-run.sh`, `build-image.sh`, `upgrade-to-plus.sh`, `Dockerfile*`, `run-bios-docker.sh`.
+- `rootfs/`: Systemd units, polkit rules, udev/session files; helpers: `dev-run.sh`, `build-image.sh`, `upgrade-to-zero.sh`, `Dockerfile*`, `run-bios-docker.sh`.
 
 ## Architecture Overview (from `ARCHITECTURE_OVERLAY.md`)
 - Multi-process: BIOS and overlay never run together; `kazeta-session` launches BIOS, then game → overlay + input daemon → back to BIOS on exit.

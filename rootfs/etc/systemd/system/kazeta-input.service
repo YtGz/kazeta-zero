@@ -1,6 +1,6 @@
 [Unit]
-Description=Kazeta+ Input Daemon
-Documentation=https://github.com/ziggy/kazeta-plus
+Description=Kazeta Zero Input Daemon
+Documentation=https://github.com/ziggy/kazeta-zero
 After=graphical.target
 
 [Service]

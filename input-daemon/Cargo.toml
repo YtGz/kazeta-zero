@@ -2,7 +2,7 @@
 name = "kazeta-input"
 version = "0.1.0"
 edition = "2021"
-description = "Global input daemon for Kazeta+ overlay hotkeys"
+description = "Global input daemon for Kazeta Zero overlay hotkeys"
 
 [[bin]]
 name = "kazeta-input"

@@ -13,7 +13,7 @@ impl RACache {
     pub fn new() -> Result<Self> {
         let cache_dir = dirs::home_dir()
             .context("Could not find home directory")?
-            .join(".local/share/kazeta-plus/ra_cache");
+            .join(".local/share/kazeta-zero/ra_cache");
 
         std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 

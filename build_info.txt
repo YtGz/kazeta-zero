@@ -1,4 +1,4 @@
-kazeta-plus-1.43
+kazeta-zero-1.43
 
 abseil-cpp 20250814.1-1
 accountsservice 23.13.9-2

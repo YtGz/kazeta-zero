@@ -101,6 +101,12 @@ pub struct Runtime {
     ptr: *mut RcRuntime,
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Runtime {
     /// Create a new rcheevos runtime.
     pub fn new() -> Self {
@@ -157,18 +163,6 @@ impl Runtime {
     /// Reset all achievement state (e.g. on savestate load).
     pub fn reset(&mut self) {
         unsafe { rc_runtime_reset(self.ptr) }
-    }
-
-    /// Debug: get the number of active triggers by reading the C struct directly.
-    pub fn trigger_count_debug(&self) -> u32 {
-        // rc_runtime_t layout from rc_runtime.h:
-        //   triggers: pointer (8 bytes on 64-bit)
-        //   trigger_count: uint32_t (4 bytes)
-        unsafe {
-            let base = self.ptr as *const u8;
-            let count_ptr = base.add(8) as *const u32;
-            std::ptr::read_volatile(count_ptr)
-        }
     }
 
     /// Get the raw pointer (for advanced use).
@@ -285,7 +279,7 @@ mod tests {
 
         extern "C" fn mock_peek(_address: u32, _num_bytes: u32, _ud: *mut c_void) -> u32 {
             let n = CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-            if n % 2 == 0 {
+            if n.is_multiple_of(2) {
                 0
             } else {
                 1
@@ -293,7 +287,7 @@ mod tests {
         }
 
         std::thread_local! {
-            static ANY_EVENT: std::cell::Cell<bool> = std::cell::Cell::new(false);
+            static ANY_EVENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         }
         extern "C" fn mock_handler(_event: *const RcRuntimeEvent) {
             ANY_EVENT.with(|e| e.set(true));

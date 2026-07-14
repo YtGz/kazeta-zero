@@ -305,7 +305,7 @@ pub fn start_overlay_daemon() -> std::io::Result<()> {
 
         if let Some(home) = dirs::home_dir() {
             possible_paths
-                .push(home.join("sandbox/kazeta-plus/overlay/target/debug/kazeta-overlay"));
+                .push(home.join("sandbox/kazeta-zero/overlay/target/debug/kazeta-overlay"));
         }
 
         if let Ok(project_root) = std::env::var("KAZETA_PROJECT_ROOT") {

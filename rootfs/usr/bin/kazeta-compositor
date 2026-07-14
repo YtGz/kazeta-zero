@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lightweight compositor launcher for Kazeta+ sessions (X11 only).
+# Lightweight compositor launcher for Kazeta Zero sessions (X11 only).
 # Tries picom first, then xcompmgr. Safe to call multiple times.
 
 set -euo pipefail

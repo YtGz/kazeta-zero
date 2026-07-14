@@ -55,7 +55,7 @@ fn hash_nes_rom(mut file: File) -> Result<Md5> {
         }
     } else {
         // No header, hash everything including what we already read
-        hasher.update(&header);
+        hasher.update(header);
         let mut reader = BufReader::with_capacity(1024 * 1024, file);
         let mut chunk = [0u8; 8192];
         loop {
@@ -109,7 +109,7 @@ fn hash_n64_rom(mut file: File) -> Result<Md5> {
     match &magic {
         // Big-endian (z64) - no swap needed
         [0x80, 0x37, 0x12, 0x40] => {
-            hasher.update(&magic);
+            hasher.update(magic);
             let mut reader = BufReader::with_capacity(1024 * 1024, file);
             let mut chunk = [0u8; 8192];
             loop {
@@ -124,7 +124,7 @@ fn hash_n64_rom(mut file: File) -> Result<Md5> {
         // Little-endian (n64) - swap every 4 bytes
         [0x40, 0x12, 0x37, 0x80] => {
             // Hash the swapped magic first
-            hasher.update(&[magic[3], magic[2], magic[1], magic[0]]);
+            hasher.update([magic[3], magic[2], magic[1], magic[0]]);
 
             // Stream and swap the rest
             let mut reader = BufReader::with_capacity(1024 * 1024, file);
@@ -139,11 +139,11 @@ fn hash_n64_rom(mut file: File) -> Result<Md5> {
                 let full_chunks = bytes_read / 4;
                 for i in 0..full_chunks {
                     let offset = i * 4;
-                    hasher.update(&[
+                    hasher.update([
                         chunk[offset + 3],
                         chunk[offset + 2],
                         chunk[offset + 1],
-                        chunk[offset + 0],
+                        chunk[offset],
                     ]);
                 }
 
@@ -159,7 +159,7 @@ fn hash_n64_rom(mut file: File) -> Result<Md5> {
         // Byte-swapped (v64) - swap every 2 bytes
         [0x37, 0x80, 0x40, 0x12] => {
             // Hash the swapped magic first
-            hasher.update(&[magic[1], magic[0], magic[3], magic[2]]);
+            hasher.update([magic[1], magic[0], magic[3], magic[2]]);
 
             // Stream and swap the rest
             let mut reader = BufReader::with_capacity(1024 * 1024, file);
@@ -174,19 +174,19 @@ fn hash_n64_rom(mut file: File) -> Result<Md5> {
                 let full_chunks = bytes_read / 2;
                 for i in 0..full_chunks {
                     let offset = i * 2;
-                    hasher.update(&[chunk[offset + 1], chunk[offset + 0]]);
+                    hasher.update([chunk[offset + 1], chunk[offset]]);
                 }
 
                 // Handle remaining byte (if any)
                 if bytes_read % 2 == 1 {
-                    hasher.update(&[chunk[bytes_read - 1]]);
+                    hasher.update([chunk[bytes_read - 1]]);
                 }
             }
         }
 
         // Unknown format - hash as-is
         _ => {
-            hasher.update(&magic);
+            hasher.update(magic);
             let mut reader = BufReader::with_capacity(1024 * 1024, file);
             let mut chunk = [0u8; 8192];
             loop {
@@ -332,32 +332,27 @@ fn verify_with_magic_bytes(path: &Path, console: ConsoleId) -> Result<bool> {
             // This is complex for disc images, so we'll trust extension
             true
         }
-        ConsoleId::GameCube | ConsoleId::Wii => {
+        ConsoleId::GameCube | ConsoleId::Wii
             // GameCube magic: 0xC2339F3D at offset 0x1c
             // Wii magic: 0x5D1C9EA3 at offset 0x18
-            if bytes_read >= 0x20 {
+            if bytes_read >= 0x20 => {
                 file.seek(SeekFrom::Start(0x1c))
                     .context("Failed to seek to GameCube magic")?;
                 let mut gc_magic = [0u8; 4];
-                if file.read_exact(&mut gc_magic).is_ok() {
-                    if gc_magic == [0xC2, 0x33, 0x9F, 0x3D] {
+                if file.read_exact(&mut gc_magic).is_ok()
+                    && gc_magic == [0xC2, 0x33, 0x9F, 0x3D] {
                         return Ok(true);
                     }
-                }
                 file.seek(SeekFrom::Start(0x18))
                     .context("Failed to seek to Wii magic")?;
                 let mut wii_magic = [0u8; 4];
-                if file.read_exact(&mut wii_magic).is_ok() {
-                    if wii_magic == [0x5D, 0x1C, 0x9E, 0xA3] {
+                if file.read_exact(&mut wii_magic).is_ok()
+                    && wii_magic == [0x5D, 0x1C, 0x9E, 0xA3] {
                         // Wii disc — treat as GameCube for hashing purposes
                         return Ok(true);
                     }
-                }
                 false
-            } else {
-                true
             }
-        }
         _ => true, // For other consoles, trust extension
     };
 
@@ -379,18 +374,14 @@ fn detect_from_magic_bytes(path: &Path) -> Result<ConsoleId> {
         // Check for GameCube magic at offset 0x1c: 0xC2339F3D
         file.seek(SeekFrom::Start(0x1c))?;
         let mut gc_magic = [0u8; 4];
-        if file.read_exact(&mut gc_magic).is_ok() {
-            if gc_magic == [0xC2, 0x33, 0x9F, 0x3D] {
-                return Ok(ConsoleId::GameCube);
-            }
+        if file.read_exact(&mut gc_magic).is_ok() && gc_magic == [0xC2, 0x33, 0x9F, 0x3D] {
+            return Ok(ConsoleId::GameCube);
         }
         // Check for Wii magic at offset 0x18: 0x5D1C9EA3
         file.seek(SeekFrom::Start(0x18))?;
         let mut wii_magic = [0u8; 4];
-        if file.read_exact(&mut wii_magic).is_ok() {
-            if wii_magic == [0x5D, 0x1C, 0x9E, 0xA3] {
-                return Ok(ConsoleId::Wii);
-            }
+        if file.read_exact(&mut wii_magic).is_ok() && wii_magic == [0x5D, 0x1C, 0x9E, 0xA3] {
+            return Ok(ConsoleId::Wii);
         }
     }
 

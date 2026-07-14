@@ -247,7 +247,7 @@ impl HotkeyManager {
         let data_dir =
             dirs::data_local_dir().context("Could not determine local data directory")?;
 
-        let overlay_dir = data_dir.join("kazeta-plus").join("overlay");
+        let overlay_dir = data_dir.join("kazeta-zero").join("overlay");
 
         // Create directory if it doesn't exist
         if !overlay_dir.exists() {

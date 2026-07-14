@@ -15,7 +15,7 @@ NC='\033[0m'
 ###                       PRE-FLIGHT CHECKS
 ### ===================================================================
 
-echo -e "${GREEN}Starting Kazeta+ Upgrade...${NC}"
+echo -e "${GREEN}Starting Kazeta Zero Upgrade...${NC}"
 
 # 1. Check for Root Privileges
 if [ "$EUID" -ne 0 ]; then
@@ -143,7 +143,7 @@ for pkg in "${PACKAGES_TO_INSTALL[@]}"; do
     pacman -S --noconfirm --needed "$pkg"
 done
 
-# we need to bypass overwriting /etc/lsb-release when installing Steam, since pacman will try to do so when Kazeta/Kazeta+ already has this file
+# we need to bypass overwriting /etc/lsb-release when installing Steam, since pacman will try to do so when Kazeta/Kazeta Zero already has this file
 echo -e "${GREEN}Installing Steam..."
 pacman -S --noconfirm --needed --assume-installed lsb-release steam
 
@@ -335,5 +335,5 @@ echo "--------------------------------------------------"
 ###                             COMPLETE
 ### ===================================================================
 
-echo -e "${GREEN}Upgrade to Kazeta+ is complete!${NC}"
+echo -e "${GREEN}Upgrade to Kazeta Zero is complete!${NC}"
 echo -e "${YELLOW}Please reboot your system now for all changes to take effect.${NC}"

@@ -1,6 +1,6 @@
 # Kazeta Zero
 
-Offline, no-account RetroAchievements, running entirely on-device — a fork of [kazeta-plus-plus](https://github.com/goldsziggy/kazeta-plus-plus), hosted at [github.com/YtGz/kazeta-zero](https://github.com/YtGz/kazeta-zero).
+Offline, no-account RetroAchievements, running entirely on-device — a fork of [kazeta-zero-plus](https://github.com/goldsziggy/kazeta-zero-plus), hosted at [github.com/YtGz/kazeta-zero](https://github.com/YtGz/kazeta-zero).
 
 Kazeta Zero replaces the server-dependent RetroAchievements flow with a fully local one: achievement definitions are fetched once and baked into each cartridge's SD card, then evaluated on-device by the rcheevos engine against the emulator's live memory every frame. The playing machine has no internet connection and no RetroAchievements account. Unlocks are stored in a local SQLite database and never transmitted anywhere.
 
@@ -84,8 +84,8 @@ The `mem_addr` field is the rcheevos condition string — the full achievement l
 ## Core Features
 
 ### Media & Storage
-- [Multi-cart support](https://github.com/the-outcaster/kazeta-plus/wiki/Multi%E2%80%90Cart-Logic)
-- [Optical disc drive support](https://github.com/the-outcaster/kazeta-plus/wiki/Creating-Optical-Disc-Media) (CDs, DVDs, etc)
+- [Multi-cart support](https://github.com/the-outcaster/kazeta-zero/wiki/Multi%E2%80%90Cart-Logic)
+- [Optical disc drive support](https://github.com/the-outcaster/kazeta-zero/wiki/Creating-Optical-Disc-Media) (CDs, DVDs, etc)
   - Music CD player support
 - Compressed `.kzp` EROFS image support for space-efficient game packaging
 - Runtime downloads directly to hard drive (saves space on removable media)
@@ -103,8 +103,8 @@ The `mem_addr` field is the rcheevos condition string — the full achievement l
 
 ### Customization
 - Full BIOS customization: fonts, backgrounds, logos, and more
-- Theme support with [community themes](https://github.com/the-outcaster/kazeta-plus-themes)
-- [Theme creator](https://github.com/the-outcaster/kazeta-plus-theme-creator) for making custom themes
+- Theme support with [community themes](https://github.com/the-outcaster/kazeta-zero-themes)
+- [Theme creator](https://github.com/the-outcaster/kazeta-zero-theme-creator) for making custom themes
 - Overlay themes: Dark, Light, RetroGreen, PlayStation, Xbox
 
 ### System Management
@@ -235,17 +235,17 @@ kazeta-ra-export --username USER --api-key KEY --game-id 7693 --output-dir ./mar
 
 ## Screenshots
 
-![Kazeta+ About page](https://i.imgur.com/kQiAVvc.png)
+![Kazeta Zero About page](https://i.imgur.com/kQiAVvc.png)
 
 ## Credits
 
-**Kazeta Zero is a fork of [kazeta-plus-plus](https://github.com/goldsziggy/kazeta-plus-plus)** by [Linux Gaming Central](https://linuxgamingcentral.org/).
+**Kazeta Zero is a fork of [kazeta-zero-plus](https://github.com/goldsziggy/kazeta-zero-plus)** by [Linux Gaming Central](https://linuxgamingcentral.org/).
 
-**Lineage:** [Kazeta](https://github.com/kazetaos/kazeta) (Alkazar) → [Kazeta+](https://github.com/the-outcaster/kazeta-plus) (the-outcaster) → [Kazeta++](https://github.com/goldsziggy/kazeta-plus-plus) → **Kazeta Zero**
+**Lineage:** [Kazeta](https://github.com/kazetaos/kazeta) (Alkazar) → [Kazeta Zero](https://github.com/the-outcaster/kazeta-zero) (the-outcaster) → [Kazeta Zero+](https://github.com/goldsziggy/kazeta-zero-plus) → **Kazeta Zero**
 
 **Major Contributors:**
-- the-outcaster (Kazeta+ fork maintainer)
-- goldsziggy (Kazeta++ fork maintainer)
+- the-outcaster (Kazeta Zero fork maintainer)
+- goldsziggy (Kazeta Zero+ fork maintainer)
 - Community theme creators
 - RetroAchievements integration and overlay system
 
@@ -256,10 +256,10 @@ See the [original Kazeta repository](https://github.com/kazetaos/kazeta) for lic
 ## Links
 
 - **[This fork](https://github.com/YtGz/kazeta-zero)**
-- **[Upstream: Kazeta++](https://github.com/goldsziggy/kazeta-plus-plus)**
-- **[Kazeta+ Wiki](https://github.com/the-outcaster/kazeta-plus/wiki/Installation)**
-- **[Community Themes](https://github.com/the-outcaster/kazeta-plus-themes)**
-- **[Theme Creator](https://github.com/the-outcaster/kazeta-plus-theme-creator)**
+- **[Upstream: Kazeta Zero+](https://github.com/goldsziggy/kazeta-zero-plus)**
+- **[Kazeta Zero Wiki](https://github.com/the-outcaster/kazeta-zero/wiki/Installation)**
+- **[Community Themes](https://github.com/the-outcaster/kazeta-zero-themes)**
+- **[Theme Creator](https://github.com/the-outcaster/kazeta-zero-theme-creator)**
 - **[Linux Gaming Central](https://linuxgamingcentral.org/)**
 - **[RetroAchievements](https://retroachievements.org/)**
 - **[rcheevos (C library)](https://github.com/RetroAchievements/rcheevos)**

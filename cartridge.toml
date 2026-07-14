@@ -1,5 +1,5 @@
 # Multi-Player GBA Test Cart
-# For testing Kazeta+ multi-cart functionality
+# For testing Kazeta Zero multi-cart functionality
 
 name = "GBA Multiplayer Test"
 id = "gba-multiplayer-test"
@@ -12,7 +12,7 @@ exec = "dad.gba"
 runtime = "mgba"
 
 # Multi-cart configuration
-# This tells Kazeta+ that multiple ROMs should be launched together
+# This tells Kazeta Zero that multiple ROMs should be launched together
 [[carts]]
 name = "Player 1 (Dad)"
 rom = "dad.gba"

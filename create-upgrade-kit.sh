@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ---
-# Script to automate the creation of a Kazeta+ upgrade kit.
+# Script to automate the creation of a Kazeta Zero upgrade kit.
 # It checks for debug flags, creates the directory structure, copies all
 # required files, and zips the final kit for release.
 # ---
@@ -23,10 +23,10 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-KIT_DIR_NAME="kazeta-plus-upgrade-kit-$VERSION"
+KIT_DIR_NAME="kazeta-zero-upgrade-kit-$VERSION"
 KIT_FULL_PATH="$DEST_BASE_DIR/$KIT_DIR_NAME"
 
-echo "Creating Kazeta+ Upgrade Kit v$VERSION"
+echo "Creating Kazeta Zero Upgrade Kit v$VERSION"
 echo "Source: $SOURCE_DIR"
 echo "Destination: $KIT_FULL_PATH"
 echo "-----------------------------------------------------"
@@ -54,17 +54,17 @@ echo "Directory structure created."
 
 # 5. Copy the upgrade scripts
 echo "Copying upgrade scripts from local source..."
-cp "$SOURCE_DIR/upgrade-to-plus.sh" "$KIT_FULL_PATH/upgrade-to-plus.sh"
-chmod +x "$KIT_FULL_PATH/upgrade-to-plus.sh"
+cp "$SOURCE_DIR/upgrade-to-zero.sh" "$KIT_FULL_PATH/upgrade-to-zero.sh"
+chmod +x "$KIT_FULL_PATH/upgrade-to-zero.sh"
 
-cp "$SOURCE_DIR/update-kazeta-plus.sh" "$KIT_FULL_PATH/update-kazeta-plus.sh"
-chmod +x "$KIT_FULL_PATH/update-kazeta-plus.sh"
+cp "$SOURCE_DIR/update-kazeta-zero.sh" "$KIT_FULL_PATH/update-kazeta-zero.sh"
+chmod +x "$KIT_FULL_PATH/update-kazeta-zero.sh"
 echo "Copy complete."
 
 # 6. Copy all necessary files from your local dev environment
 echo "Copying files from rootfs..."
 cp "$SOURCE_DIR/rootfs/etc/keyd/default.conf" "$KIT_FULL_PATH/rootfs/etc/keyd/"
-cp "$SOURCE_DIR/rootfs/etc/sudoers.d/99-kazeta-plus" "$KIT_FULL_PATH/rootfs/etc/sudoers.d/"
+cp "$SOURCE_DIR/rootfs/etc/sudoers.d/99-kazeta-zero" "$KIT_FULL_PATH/rootfs/etc/sudoers.d/"
 
 echo "Copying systemd services..."
 cp "$SOURCE_DIR/rootfs/etc/systemd/system/kazeta-profile-loader.service" "$KIT_FULL_PATH/rootfs/etc/systemd/system/"

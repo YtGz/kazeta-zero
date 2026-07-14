@@ -419,7 +419,7 @@ fn sync_to_disk() {
 /// Returns the correct directory for state files based on the environment.
 fn get_state_dir() -> std::io::Result<PathBuf> {
     let path = if DEV_MODE {
-        // In dev mode, use a user-writable path like ~/.local/share/kazeta-plus/state
+        // In dev mode, use a user-writable path like ~/.local/share/kazeta-zero/state
         get_user_data_dir().unwrap().join("state")
     } else {
         // In production on the device, use the system path
@@ -697,7 +697,7 @@ pub fn launch_game_with_options(
             // Try absolute path based on common dev setup
             if let Some(home) = dirs::home_dir() {
                 possible_paths
-                    .push(home.join("sandbox/kazeta-plus/runtimes/gba/vba-run-wrapper.sh"));
+                    .push(home.join("sandbox/kazeta-zero/runtimes/gba/vba-run-wrapper.sh"));
             }
 
             // Check environment variable for project root

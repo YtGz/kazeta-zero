@@ -883,7 +883,7 @@ echo '{"type":"unlock_achievement","cart_id":"test-game","achievement_id":"test_
 ## File Structure
 
 ```
-kazeta-plus/
+kazeta-zero/
 ├── bios/                    # Existing BIOS
 │   └── src/
 │       └── save.rs          # Modified to spawn overlay

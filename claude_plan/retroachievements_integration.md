@@ -1,14 +1,14 @@
-# RetroAchievements Integration Plan for Kazeta+
+# RetroAchievements Integration Plan for Kazeta Zero
 
 ## Overview
 
-This document outlines the plan to integrate [RetroAchievements](https://retroachievements.org/) with the Kazeta+ system, providing achievement tracking for retro games across all supported runtimes.
+This document outlines the plan to integrate [RetroAchievements](https://retroachievements.org/) with the Kazeta Zero system, providing achievement tracking for retro games across all supported runtimes.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Kazeta+ System                                 │
+│                           Kazeta Zero System                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌─────────────┐     ┌──────────────────┐     ┌────────────────────┐   │
@@ -83,7 +83,7 @@ notification_duration = 5000
 
 **Credential Storage:**
 
-- Store in `~/.local/share/kazeta-plus/ra_credentials.json`
+- Store in `~/.local/share/kazeta-zero/ra_credentials.json`
 - Encrypted with user password or system keyring
 - Fields: `username`, `api_key`, `web_api_key`
 
@@ -145,7 +145,7 @@ Many emulators have built-in RetroAchievements support via `rcheevos`:
 | Dolphin     | ✅ Built-in | GC/Wii              |
 | PPSSPP      | ✅ Built-in | PSP                 |
 
-**Note:** For Kazeta+, VBA-M is the preferred GBA emulator due to its superior local multiplayer support (separate processes with shared memory linking).
+**Note:** For Kazeta Zero, VBA-M is the preferred GBA emulator due to its superior local multiplayer support (separate processes with shared memory linking).
 
 **Integration approach:**
 

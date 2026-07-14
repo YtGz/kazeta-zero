@@ -361,7 +361,7 @@ impl EvaluationEngine {
             let game_hash_for_handler = game_hash.clone();
 
             std::thread_local! {
-                static TRIGGERED_ACHIEVEMENT: std::cell::Cell<u32> = std::cell::Cell::new(0);
+                static TRIGGERED_ACHIEVEMENT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
             }
 
             extern "C" fn event_handler(event: *const RcRuntimeEvent) {
