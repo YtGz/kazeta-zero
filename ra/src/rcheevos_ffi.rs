@@ -146,18 +146,20 @@ impl Runtime {
     /// Process one frame. Calls the peek callback to read memory,
     /// and the event handler when achievements trigger.
     ///
+    /// # Safety
+    /// The `ud` pointer must be valid for the lifetime of this call and
+    /// must be safely accessible from the `peek` callback.
+    ///
     /// - `peek`: callback that reads memory values
     /// - `ud`: user data pointer passed to peek
     /// - `handler`: callback for achievement events
-    pub fn do_frame(
+    pub unsafe fn do_frame(
         &mut self,
         peek: RcRuntimePeek,
         ud: *mut c_void,
         handler: RcRuntimeEventHandler,
     ) {
-        unsafe {
-            rc_runtime_do_frame(self.ptr, handler, peek, ud, std::ptr::null_mut());
-        }
+        rc_runtime_do_frame(self.ptr, handler, peek, ud, std::ptr::null_mut());
     }
 
     /// Reset all achievement state (e.g. on savestate load).
@@ -298,7 +300,9 @@ mod tests {
         // Run several frames — the peek callback should be called and
         // events should be dispatched (ACTIVATED, RESET, etc.)
         for _ in 0..4 {
-            rt.do_frame(Some(mock_peek), std::ptr::null_mut(), Some(mock_handler));
+            unsafe {
+                rt.do_frame(Some(mock_peek), std::ptr::null_mut(), Some(mock_handler));
+            }
         }
 
         // Verify the FFI plumbing works: peeks were called and events received

@@ -180,7 +180,7 @@ fn main() -> Result<()> {
         } => cmd_game_start(
             hash.as_deref(),
             console.as_deref(),
-            path.as_ref(),
+            path.as_deref(),
             notify_overlay,
         ),
         Commands::NotifyAchievement { id, title, hash } => cmd_notify_achievement(id, title, hash),
@@ -190,18 +190,18 @@ fn main() -> Result<()> {
             hash,
             path,
             console,
-        } => cmd_send_achievements_to_overlay(hash.as_deref(), path.as_ref(), console.as_deref()),
+        } => cmd_send_achievements_to_overlay(hash.as_deref(), path.as_deref(), console.as_deref()),
         Commands::SetGameName {
             hash,
             path,
             console,
             name,
-        } => cmd_set_game_name(hash.as_deref(), path.as_ref(), console.as_deref(), &name),
+        } => cmd_set_game_name(hash.as_deref(), path.as_deref(), console.as_deref(), &name),
         Commands::RemoveGameName {
             hash,
             path,
             console,
-        } => cmd_remove_game_name(hash.as_deref(), path.as_ref(), console.as_deref()),
+        } => cmd_remove_game_name(hash.as_deref(), path.as_deref(), console.as_deref()),
         Commands::ListGameNames => cmd_list_game_names(),
     }
 }
@@ -309,9 +309,9 @@ fn cmd_profile() -> Result<()> {
     Ok(())
 }
 
-fn cmd_hash_rom(path: &PathBuf, console: Option<&str>) -> Result<()> {
+fn cmd_hash_rom(path: &Path, console: Option<&str>) -> Result<()> {
     let console_id = if let Some(c) = console {
-        ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+        ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
     } else {
         // Auto-detect console from file
         detect_console(path)?
@@ -324,14 +324,14 @@ fn cmd_hash_rom(path: &PathBuf, console: Option<&str>) -> Result<()> {
 
 fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&str>) -> Result<()> {
     // Save path for cartridge lookup before it's moved
-    let path_for_cart = path.as_ref().cloned();
+    let path_for_cart = path.clone();
 
     // Get hash either directly or by hashing the ROM
     let (rom_hash, console_id) = if let Some(h) = hash {
         (h, ConsoleId::GameBoyAdvance)
     } else if let Some(p) = path {
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+            ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(&p)?
         };
@@ -368,7 +368,10 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
 
             let earned = unlocked_ids.len();
             let total = defs.achievements.len();
-            let pct = if total > 0 { earned * 100 / total } else { 0 };
+            let pct = earned
+                .checked_mul(100)
+                .and_then(|v| v.checked_div(total))
+                .unwrap_or(0);
             println!("║  Progress: {}/{} ({}%)", earned, total, pct);
             println!("╚════════════════════════════════════════════════════════╝");
 
@@ -438,7 +441,10 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
 
     if let Some(earned) = info.num_awarded_to_user {
         let total = info.num_achievements;
-        let pct = if total > 0 { earned * 100 / total } else { 0 };
+        let pct = earned
+            .checked_mul(100)
+            .and_then(|v| v.checked_div(total))
+            .unwrap_or(0);
         println!("║  Progress: {}/{} ({}%)", earned, total, pct);
     }
 
@@ -471,18 +477,18 @@ fn cmd_game_info(hash: Option<String>, path: Option<PathBuf>, console: Option<&s
 fn cmd_game_start(
     hash: Option<&str>,
     console: Option<&str>,
-    path: Option<&PathBuf>,
+    path: Option<&Path>,
     notify_overlay: bool,
 ) -> Result<()> {
     // Determine hash and console
     let (rom_hash, console_id) = if let Some(h) = hash {
         let c =
             console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
+        let console_id = ConsoleId::parse(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+            ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -758,24 +764,24 @@ fn notify_overlay_achievement(title: &str) -> Result<()> {
 
 fn cmd_send_achievements_to_overlay(
     hash: Option<&str>,
-    path: Option<&PathBuf>,
+    path: Option<&Path>,
     console: Option<&str>,
 ) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
 
     // Save path for cartridge lookup
-    let path_for_cart = path.cloned();
+    let path_for_cart = path.map(|p| p.to_path_buf());
 
     // Determine hash and console
     let (rom_hash, _console_id) = if let Some(h) = hash {
         let c =
             console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
+        let console_id = ConsoleId::parse(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+            ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -983,7 +989,7 @@ fn send_local_achievements_to_overlay(
 
 /// Try to find a cartridge (.kzi) file that contains the given ROM path
 /// This is a best-effort search - may not always find the cartridge
-fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
+fn find_cartridge_for_rom(rom_path: &Path) -> Result<PathBuf> {
     // Check if ROM path is inside a cartridge directory structure
     // Cartridges are typically in ~/.local/share/kazeta-zero/cartridges/ or similar
     let rom_path = rom_path
@@ -1010,7 +1016,7 @@ fn find_cartridge_for_rom(rom_path: &PathBuf) -> Result<PathBuf> {
 
 fn cmd_set_game_name(
     hash: Option<&str>,
-    path: Option<&PathBuf>,
+    path: Option<&Path>,
     console: Option<&str>,
     name: &str,
 ) -> Result<()> {
@@ -1019,12 +1025,12 @@ fn cmd_set_game_name(
         // Hash provided, console is required
         let c =
             console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
+        let console_id = ConsoleId::parse(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+            ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };
@@ -1044,7 +1050,7 @@ fn cmd_set_game_name(
 
 fn cmd_remove_game_name(
     hash: Option<&str>,
-    path: Option<&PathBuf>,
+    path: Option<&Path>,
     console: Option<&str>,
 ) -> Result<()> {
     // Determine hash and console
@@ -1052,12 +1058,12 @@ fn cmd_remove_game_name(
         // Hash provided, console is required
         let c =
             console.ok_or_else(|| anyhow::anyhow!("--console is required when using --hash"))?;
-        let console_id = ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?;
+        let console_id = ConsoleId::parse(c).context(format!("Unknown console: {}", c))?;
         (h.to_string(), console_id)
     } else if let Some(p) = path {
         // Path provided, auto-detect console if not specified
         let detected_console = if let Some(c) = console {
-            ConsoleId::from_str(c).context(format!("Unknown console: {}", c))?
+            ConsoleId::parse(c).context(format!("Unknown console: {}", c))?
         } else {
             detect_console(p)?
         };

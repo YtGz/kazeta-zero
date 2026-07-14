@@ -387,7 +387,9 @@ impl EvaluationEngine {
 
                 // Process one frame through rcheevos
                 let cache_ptr = &cache_for_peek as *const MemoryCache as *mut c_void;
-                runtime.do_frame(Some(peek_callback), cache_ptr, Some(event_handler));
+                unsafe {
+                    runtime.do_frame(Some(peek_callback), cache_ptr, Some(event_handler));
+                }
 
                 // Check if an achievement was triggered this frame
                 let triggered_id = TRIGGERED_ACHIEVEMENT.with(|cell| cell.get());

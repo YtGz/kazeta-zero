@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 fn default_achievement_type() -> String {
     "standard".to_string()
@@ -26,7 +27,7 @@ pub enum ConsoleId {
 }
 
 impl ConsoleId {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "gba" | "gameboy advance" | "game boy advance" => Some(Self::GameBoyAdvance),
             "gb" | "gameboy" | "game boy" => Some(Self::GameBoy),
@@ -50,25 +51,28 @@ impl ConsoleId {
     pub fn as_u32(&self) -> u32 {
         *self as u32
     }
+}
 
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::GameBoyAdvance => "gba".to_string(),
-            Self::GameBoy => "gb".to_string(),
-            Self::GameBoyColor => "gbc".to_string(),
-            Self::NES => "nes".to_string(),
-            Self::SNES => "snes".to_string(),
-            Self::Nintendo64 => "n64".to_string(),
-            Self::PlayStation => "psx".to_string(),
-            Self::PlayStation2 => "ps2".to_string(),
-            Self::MegaDrive => "genesis".to_string(),
-            Self::MasterSystem => "sms".to_string(),
-            Self::NintendoDS => "nds".to_string(),
-            Self::Atari2600 => "atari2600".to_string(),
-            Self::VirtualBoy => "vb".to_string(),
-            Self::GameCube => "gamecube".to_string(),
-            Self::Wii => "wii".to_string(),
-        }
+impl fmt::Display for ConsoleId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::GameBoyAdvance => "gba",
+            Self::GameBoy => "gb",
+            Self::GameBoyColor => "gbc",
+            Self::NES => "nes",
+            Self::SNES => "snes",
+            Self::Nintendo64 => "n64",
+            Self::PlayStation => "psx",
+            Self::PlayStation2 => "ps2",
+            Self::MegaDrive => "genesis",
+            Self::MasterSystem => "sms",
+            Self::NintendoDS => "nds",
+            Self::Atari2600 => "atari2600",
+            Self::VirtualBoy => "vb",
+            Self::GameCube => "gamecube",
+            Self::Wii => "wii",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -230,15 +234,15 @@ mod tests {
 
     #[test]
     fn test_gamecube_from_str() {
-        assert_eq!(ConsoleId::from_str("gamecube"), Some(ConsoleId::GameCube));
-        assert_eq!(ConsoleId::from_str("gc"), Some(ConsoleId::GameCube));
-        assert_eq!(ConsoleId::from_str("ngc"), Some(ConsoleId::GameCube));
-        assert_eq!(ConsoleId::from_str("GAMECUBE"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::parse("gamecube"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::parse("gc"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::parse("ngc"), Some(ConsoleId::GameCube));
+        assert_eq!(ConsoleId::parse("GAMECUBE"), Some(ConsoleId::GameCube));
     }
 
     #[test]
     fn test_wii_from_str() {
-        assert_eq!(ConsoleId::from_str("wii"), Some(ConsoleId::Wii));
+        assert_eq!(ConsoleId::parse("wii"), Some(ConsoleId::Wii));
     }
 
     #[test]
