@@ -1,4 +1,4 @@
-use crate::controllers::{ControllerState, CONTROLLER_MENU_OPTIONS, MAX_PLAYERS};
+use crate::controllers::{ControllerState, CONTROLLER_MENU_OPTIONS};
 use crate::input::ControllerInput;
 use crate::ipc::{AchievementInfo, OverlayMessage, OverlayScreen, ToastStyle};
 use crate::menu_config::{MenuConfigManager, MenuItemId};
@@ -235,7 +235,7 @@ pub struct OverlayState {
     pub achievements_scroll_offset: usize,
 }
 
-struct RaPoller {
+pub struct RaPoller {
     game_id: u32,
     earned: HashSet<u32>,
     last_poll: Instant,
@@ -459,10 +459,6 @@ impl OverlayState {
                 self.toggle_visibility();
                 println!("[State] Toggled overlay via IPC message");
             }
-            OverlayMessage::HideOverlay => {
-                self.visible = false;
-                println!("[State] Hiding overlay via IPC message");
-            }
         }
     }
 
@@ -520,15 +516,20 @@ impl OverlayState {
 
         let client = RAClient::new(credentials);
         let game_id = poller.game_id;
-        match client.get_game_info_and_progress(game_id) {
+        let result = client.get_game_info_and_progress(game_id);
+        // End the mutable borrow of poller before calling self methods
+        match result {
             Ok(info) => {
-                poller.backoff = None;
-                drop(poller); // Drop the mutable borrow before calling apply_ra_poll
+                if let Some(p) = &mut self.ra_poller {
+                    p.backoff = None;
+                }
                 self.apply_ra_poll(info);
             }
             Err(e) => {
                 eprintln!("[RA] Poll failed: {}", e);
-                poller.backoff = Some(interval * 2);
+                if let Some(p) = &mut self.ra_poller {
+                    p.backoff = Some(interval * 2);
+                }
             }
         }
     }
@@ -696,22 +697,16 @@ impl OverlayState {
     }
 
     fn handle_achievements_input(&mut self, input: ControllerInput) {
-        match input {
-            ControllerInput::Back => {
-                self.current_screen = OverlayScreen::Main;
-                println!("[State] Returning to main menu");
-            }
-            _ => {}
+        if input == ControllerInput::Back {
+            self.current_screen = OverlayScreen::Main;
+            println!("[State] Returning to main menu");
         }
     }
 
     fn handle_performance_input(&mut self, input: ControllerInput) {
-        match input {
-            ControllerInput::Back => {
-                self.current_screen = OverlayScreen::Main;
-                println!("[State] Returning to main menu");
-            }
-            _ => {}
+        if input == ControllerInput::Back {
+            self.current_screen = OverlayScreen::Main;
+            println!("[State] Returning to main menu");
         }
     }
 
@@ -812,12 +807,9 @@ impl OverlayState {
     }
 
     fn handle_playtime_input(&mut self, input: ControllerInput) {
-        match input {
-            ControllerInput::Back => {
-                self.current_screen = OverlayScreen::Main;
-                println!("[State] Returning to main menu");
-            }
-            _ => {}
+        if input == ControllerInput::Back {
+            self.current_screen = OverlayScreen::Main;
+            println!("[State] Returning to main menu");
         }
     }
 

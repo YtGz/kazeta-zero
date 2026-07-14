@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "daemon")]
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 const FRAME_HISTORY_SIZE: usize = 120; // Track last 2 seconds at 60fps
 

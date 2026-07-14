@@ -337,7 +337,7 @@ impl HotkeyManager {
         self.config
             .bindings
             .entry(action)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(binding);
     }
 
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_conflict_detection() {
-        let mut manager = HotkeyManager::new().unwrap();
+        let manager = HotkeyManager::new().unwrap();
 
         let test_components = vec![InputComponent::Key("F12".to_string())];
 
@@ -418,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_add_remove_binding() {
-        let mut manager = HotkeyManager::new().unwrap();
+        let manager = HotkeyManager::new().unwrap();
 
         let new_binding = HotkeyBinding::new(
             vec![InputComponent::Key("F1".to_string())],

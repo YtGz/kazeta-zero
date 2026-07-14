@@ -1,5 +1,4 @@
 use macroquad::prelude::*;
-use serde::{Deserialize, Serialize};
 
 /// Complete theme definition for overlay UI
 #[derive(Debug, Clone)]
@@ -23,6 +22,7 @@ pub struct Theme {
 
 impl Theme {
     /// Create a theme from individual color components
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         background: Color,

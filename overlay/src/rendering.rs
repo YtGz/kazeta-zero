@@ -63,7 +63,7 @@ fn render_main_menu(state: &OverlayState) {
     let menu_x = (screen_width() - menu_width) / 2.0;
     let menu_y = (screen_height() - menu_height) / 2.0;
 
-    draw_panel(menu_x, menu_y, menu_width, menu_height, &t);
+    draw_panel(menu_x, menu_y, menu_width, menu_height, t);
 
     // Title
     let title = "KAZETA OVERLAY";
@@ -289,7 +289,7 @@ fn render_achievements_screen(state: &OverlayState) {
     let menu_x = (screen_width() - menu_width) / 2.0;
     let menu_y = (screen_height() - menu_height) / 2.0;
 
-    draw_panel(menu_x, menu_y, menu_width, menu_height, &t);
+    draw_panel(menu_x, menu_y, menu_width, menu_height, t);
 
     let tracker = &state.achievements;
 
@@ -1419,8 +1419,8 @@ fn render_theme_selection(state: &OverlayState) {
         let is_current = theme_name == state.theme_config.theme_name();
 
         // Get theme preview
-        let preview_theme = crate::themes::Theme::by_name(theme_name)
-            .unwrap_or_else(|| crate::themes::Theme::dark());
+        let preview_theme =
+            crate::themes::Theme::by_name(theme_name).unwrap_or_else(crate::themes::Theme::dark);
 
         // Selection background
         if is_selected {
@@ -1531,7 +1531,7 @@ fn render_performance(state: &OverlayState) {
     let panel_x = (screen_width() - panel_width) / 2.0;
     let panel_y = (screen_height() - panel_height) / 2.0;
 
-    draw_panel(panel_x, panel_y, panel_width, panel_height, &t);
+    draw_panel(panel_x, panel_y, panel_width, panel_height, t);
 
     // Title
     draw_text(

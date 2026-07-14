@@ -5,7 +5,6 @@
 //! - Controller-to-player assignment
 //! - Gamepad testing/visualization
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Maximum number of players supported

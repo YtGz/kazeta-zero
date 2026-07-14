@@ -65,11 +65,8 @@ impl HotkeyMonitor {
 
         // Process gamepad events (must call next_event to drain queue)
         while let Some(ev) = self.gilrs.next_event() {
-            match ev.event {
-                gilrs::EventType::ButtonPressed(Button::Mode, _) => {
-                    inputs.insert(InputComponent::GamepadButton(GamepadButtonType::Mode), true);
-                }
-                _ => {}
+            if let gilrs::EventType::ButtonPressed(Button::Mode, _) = ev.event {
+                inputs.insert(InputComponent::GamepadButton(GamepadButtonType::Mode), true);
             }
         }
 
