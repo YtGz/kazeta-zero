@@ -47,7 +47,7 @@ impl RAClient {
     }
 
     /// Get game ID from ROM hash
-    pub fn get_game_id(&self, hash: &str, console_id: ConsoleId) -> Result<Option<u32>> {
+    pub fn get_game_id(&self, hash: &str, _console_id: ConsoleId) -> Result<Option<u32>> {
         let url = format!(
             "{}/API_GetGameInfoExtended.php?m={}&y={}",
             RA_API_BASE, hash, self.credentials.api_key

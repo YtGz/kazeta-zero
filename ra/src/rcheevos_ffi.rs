@@ -6,7 +6,7 @@
 //! 2. Achievement condition evaluation (rc_runtime_t API)
 
 use std::ffi::CString;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_void};
 use std::path::Path;
 
 // ===================================================================
@@ -91,11 +91,7 @@ extern "C" {
 // Safe wrappers
 // ===================================================================
 
-/// Size of rc_runtime_t in bytes. We allocate it on the Rust side
-/// and pass a pointer to C. The actual struct layout is defined in
-/// rc_runtime.h but we treat it as opaque.
-///
-/// We use rc_runtime_alloc() instead to let rcheevos allocate it.
+// We use rc_runtime_alloc() to let rcheevos allocate the runtime struct.
 extern "C" {
     pub fn rc_runtime_alloc() -> *mut RcRuntime;
 }

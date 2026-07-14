@@ -1,16 +1,14 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use std::io::Read;
 use std::os::raw::c_void;
 use std::os::unix::net::UnixDatagram;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::local_definitions::LocalDefinitions;
 use crate::rcheevos_ffi::{
-    RcRuntimeEvent, RcRuntimeEventHandler, RcRuntimePeek, Runtime as RcRuntime,
-    RC_RUNTIME_EVENT_ACHIEVEMENT_TRIGGERED,
+    RcRuntimeEvent, Runtime as RcRuntime, RC_RUNTIME_EVENT_ACHIEVEMENT_TRIGGERED,
 };
 
 /// Default Dolphin user directory paths for MemoryWatcher.
@@ -426,116 +424,6 @@ impl EvaluationEngine {
     }
 }
 
-/// Placeholder condition evaluator.
-///
-/// This is a simplified evaluator that handles basic equality checks.
-/// The real implementation will use rcheevos' rc_runtime_t API via FFI
-/// to evaluate the full condition string grammar (hit counts, deltas,
-/// pause conditions, AddSource/SubSource, etc.).
-///
-/// Supported (simplified):
-///   0xH<addr>=<value>  — 8-bit value equals constant
-///   0xH<addr>><value>  — 8-bit value greater than constant
-///
-/// Everything else returns false (not triggered).
-fn evaluate_condition_placeholder(condition: &str, cache: &MemoryCache) -> bool {
-    // Parse the first condition group (before any dot separator)
-    let first_cond = condition.split('.').next().unwrap_or("");
-
-    // Try to parse: [d]0x<size><addr><op><value>
-    // where size is H, X, space, L, U, or M
-    let bytes = first_cond.as_bytes();
-    let mut i = 0;
-
-    // Skip optional 'd' prefix (delta — we don't support this in placeholder)
-    if i < bytes.len() && bytes[i] == b'd' {
-        return false;
-    }
-
-    // Expect "0x"
-    if i + 2 >= bytes.len() || bytes[i] != b'0' || bytes[i + 1] != b'x' {
-        return false;
-    }
-    i += 2;
-
-    // Parse size modifier
-    let size = if i < bytes.len() {
-        match bytes[i] {
-            b'H' => {
-                i += 1;
-                MemorySize::Bit8
-            }
-            b'X' => {
-                i += 1;
-                MemorySize::Bit32
-            }
-            b'L' => {
-                i += 1;
-                MemorySize::Lower16
-            }
-            b'U' => {
-                i += 1;
-                MemorySize::Upper16
-            }
-            b' ' => {
-                i += 1;
-                MemorySize::Bit16
-            }
-            b'M' => {
-                i += 1;
-                MemorySize::Bit0
-            }
-            _ => return false,
-        }
-    } else {
-        return false;
-    };
-
-    // Parse hex address
-    let addr_start = i;
-    while i < bytes.len() && bytes[i].is_ascii_hexdigit() {
-        i += 1;
-    }
-    if i == addr_start {
-        return false;
-    }
-    let addr_str = &first_cond[addr_start..i];
-    let addr = match u32::from_str_radix(addr_str, 16) {
-        Ok(a) => a,
-        Err(_) => return false,
-    };
-
-    // Parse operator
-    if i >= bytes.len() {
-        return false;
-    }
-    let op = bytes[i];
-    i += 1;
-
-    // Parse value (hex)
-    let val_start = i;
-    while i < bytes.len() && bytes[i].is_ascii_hexdigit() {
-        i += 1;
-    }
-    if i == val_start {
-        return false;
-    }
-    let val_str = &first_cond[val_start..i];
-    let expected = match u32::from_str_radix(val_str, 16) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    let actual = read_memory_value(cache, addr, size);
-
-    match op {
-        b'=' => actual == expected,
-        b'>' => actual > expected,
-        b'<' => actual < expected,
-        _ => false,
-    }
-}
-
 fn tracing_debug(msg: &str) {
     // In production, this would use a proper logging framework.
     // For now, just eprintln to stderr (won't interfere with stdout JSON).
@@ -598,31 +486,15 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_placeholder_equality() {
+    fn test_read_memory_value_upper16() {
         let cache = new_memory_cache();
         {
             let mut c = cache.lock().unwrap();
-            c.insert(0x00801234, 0x00000001);
+            c.insert(0x00801234, 0x1234ABCD);
         }
-        assert!(evaluate_condition_placeholder("0xH00801234=1", &cache));
-        assert!(!evaluate_condition_placeholder("0xH00801234=2", &cache));
-    }
-
-    #[test]
-    fn test_evaluate_placeholder_greater() {
-        let cache = new_memory_cache();
-        {
-            let mut c = cache.lock().unwrap();
-            c.insert(0x00801234, 0x00000005);
-        }
-        assert!(evaluate_condition_placeholder("0xH00801234>3", &cache));
-        assert!(!evaluate_condition_placeholder("0xH00801234>5", &cache));
-    }
-
-    #[test]
-    fn test_evaluate_placeholder_delta_returns_false() {
-        let cache = new_memory_cache();
-        // Delta conditions are not supported in the placeholder
-        assert!(!evaluate_condition_placeholder("d0xH00801234=1", &cache));
+        assert_eq!(
+            read_memory_value(&cache, 0x00801234, MemorySize::Upper16),
+            0x1234
+        );
     }
 }
