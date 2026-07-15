@@ -124,6 +124,26 @@ if [ -f "$PACMAN_LOCK" ]; then
     echo -e "${GREEN}  -> Lock file removed.${NC}"
 fi
 
+# --- Update pacman.conf SigLevel ---
+PACMAN_CONF="/etc/pacman.conf"
+echo -e "${YELLOW}  -> Configuring pacman signature levels...${NC}"
+
+if [ -f "$PACMAN_CONF" ]; then
+    # 1. Remove the line if it already exists (to avoid duplicates when moving it)
+    sed -i '/SigLevel = Optional TrustAll/d' "$PACMAN_CONF"
+
+    # 2. Insert the line immediately before the [core] section
+    sed -i '/\[core\]/i SigLevel = Optional TrustAll' "$PACMAN_CONF"
+
+    echo -e "${GREEN}  -> pacman.conf updated successfully.${NC}"
+else
+    echo -e "${RED}  -> Error: /etc/pacman.conf not found!${NC}"
+fi
+
+echo -e "${YELLOW}  -> Synchronizing system clock via NTP...${NC}"
+timedatectl set-ntp true
+echo -e "${GREEN}  -> Network time synchronization enabled.${NC}"
+
 pacman -Syy
 
 PACKAGES_TO_INSTALL=(
