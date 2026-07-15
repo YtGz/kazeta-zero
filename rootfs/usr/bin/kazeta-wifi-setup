@@ -19,8 +19,8 @@ else
 fi
 
 echo "Starting networking services..."
-systemctl enable --now iwd.service
-systemctl enable --now NetworkManager.service
+systemctl enable --now systemd-networkd
+systemctl enable --now systemd-resolved
 
 # Give the services a moment to start up
 sleep 2

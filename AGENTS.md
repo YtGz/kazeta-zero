@@ -81,3 +81,31 @@ Resolve conflicts keeping Kazeta Zero versions (rebrand changes take priority). 
 ```bash
 git push origin main
 ```
+
+### Package decisions (do not revert during sync)
+
+Kazeta Zero diverges from upstream on several architectural choices. These are
+deliberate decisions — do not revert them when merging upstream changes:
+
+**Adopted from original kazeta (kazetaos/kazeta):**
+- **greetd** instead of lightdm (Wayland-only, no X11 display manager)
+- **systemd-networkd + systemd-resolved** instead of NetworkManager + iwd
+- **gamescope as compositor** (no picom, no xorg-server, no kazeta-compositor)
+- **Xbox Series controller emulation** (not Xbox 360)
+- **Optical media automount** support (udev rules for sr0 devices)
+
+**Kept from kazeta-plus (the-outcaster/kazeta-plus) — fork features:**
+- **bluez / bluez-utils** — Bluetooth controller support (BIOS has Bluetooth UI)
+- **keyd** — Steam Deck volume/brightness button mapping
+- **gamemode** — CPU governor optimization for games
+- **steam** — Steam game support as cartridges
+
+**Removed (not needed):**
+- ~~mangohud / lib32-mangohud~~ — overlay daemon does its own performance monitoring
+- ~~xorg-server / picom / kazeta-compositor~~ — gamescope handles compositing
+- ~~lightdm / accountsservice~~ — replaced by greetd
+- ~~networkmanager / iwd / fuse-overlayfs~~ — replaced by systemd-networkd
+- ~~clang~~ — build-time only, not needed at runtime
+
+When merging upstream, if a conflict touches any of these packages or
+architectural choices, keep the Kazeta Zero version.
