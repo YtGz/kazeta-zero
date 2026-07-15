@@ -40,3 +40,44 @@
 - No embedded secrets; RA API keys must come from user/env.
 - IPC socket path stays `/tmp/kazeta-overlay.sock`; clean stale sockets instead of moving it.
 - When altering build scripts, confirm hashes against `sha256sum.txt` before publishing artifacts.
+
+## Upstream Sync
+
+Kazeta Zero is a fork of a fork of a fork. The chain is:
+
+```
+kazetaos/kazeta  →  the-outcaster/kazeta-plus  →  goldsziggy/kazeta-plus-plus  →  YtGz/kazeta-zero
+```
+
+GitHub forks don't auto-sync from their parents, so each link diverges. To pull in upstream changes from all three repos:
+
+### One-time setup
+
+```bash
+git remote add kazeta https://github.com/kazetaos/kazeta.git
+git remote add kazeta-plus https://github.com/the-outcaster/kazeta-plus.git
+# upstream (kazeta-plus-plus) is already configured
+```
+
+### Sync procedure (run periodically)
+
+Merge in **chain order** (original → middle fork → direct parent) so dependencies cascade correctly. `kazeta-plus` changes may build on `kazeta` changes, and `upstream` changes may build on `kazeta-plus` changes:
+
+```bash
+git fetch --all
+
+# 1. Original Kazeta (optical media, boot fixes, Docker changes)
+git merge kazeta/main --allow-unrelated-histories
+
+# 2. Kazeta+ (Dreamcast runtime, controller configs, upgrade script fixes)
+git merge kazeta-plus/main --allow-unrelated-histories
+
+# 3. Kazeta++ (fullscreen, compositor, service cleanup)
+git merge upstream/main --allow-unrelated-histories
+```
+
+Resolve conflicts keeping Kazeta Zero versions (rebrand changes take priority). Push to origin when done:
+
+```bash
+git push origin main
+```
