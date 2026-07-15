@@ -59,7 +59,7 @@ fn window_conf() -> Conf {
         fullscreen: false,
         platform: miniquad::conf::Platform {
             apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
-            linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // For production: support both X11 and Wayland systems
+            linux_backend: miniquad::conf::LinuxBackend::X11WithWaylandFallback, // Gamescope provides XWayland; X11 preferred as miniquad's Wayland backend is less mature
             swap_interval: None,
             framebuffer_alpha: true, // Enable transparency
             ..Default::default()

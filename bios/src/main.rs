@@ -335,7 +335,7 @@ fn window_conf() -> Conf {
         platform: miniquad::conf::Platform {
             apple_gfx_api: miniquad::conf::AppleGfxApi::Metal, // Prefer Metal on macOS to avoid GL pixel format issues
             #[cfg(target_os = "linux")]
-            linux_backend: miniquad::conf::LinuxBackend::X11Only, // Use X11 only since miniquad doesn't support native Wayland
+            linux_backend: miniquad::conf::LinuxBackend::X11Only, // Gamescope provides XWayland; X11 backend is more mature than miniquad's Wayland
             ..Default::default()
         },
         ..Default::default()
