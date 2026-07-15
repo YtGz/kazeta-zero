@@ -49,8 +49,8 @@ impl RAClient {
     /// Get game ID from ROM hash
     pub fn get_game_id(&self, hash: &str, _console_id: ConsoleId) -> Result<Option<u32>> {
         let url = format!(
-            "{}/API_GetGameInfoExtended.php?m={}&y={}",
-            RA_API_BASE, hash, self.credentials.api_key
+            "{}/dorequest.php?r=gameid&m={}",
+            RA_API_BASE, hash
         );
 
         let response = self
@@ -70,14 +70,18 @@ impl RAClient {
         let text = response.text()?;
 
         // RA API returns empty object {} or error for unknown hash
-        if text == "{}" || text.is_empty() || text.contains("\"ID\":0") {
+        if text == "{}" || text.is_empty() || text == "[]" {
             return Ok(None);
         }
 
-        let lookup: GameInfoAndProgress =
+        let lookup: GameIdLookup =
             serde_json::from_str(&text).context("Failed to parse game lookup response")?;
 
-        Ok(Some(lookup.id))
+        if !lookup.success || lookup.game_id == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some(lookup.game_id))
     }
 
     /// Get game info and user's achievement progress
@@ -103,10 +107,10 @@ impl RAClient {
     }
 
     /// Get full game info (including MemAddr achievement definitions) by game ID.
-    /// Uses API_GetGameInfoExtended.php which does not require a user parameter.
+    /// Uses API_GetGameExtended.php which does not require a user parameter.
     pub fn get_game_info_extended(&self, game_id: u32) -> Result<GameInfoAndProgress> {
         let url = format!(
-            "{}/API_GetGameInfoExtended.php?i={}&y={}",
+            "{}/API_GetGameExtended.php?i={}&y={}",
             RA_API_BASE, game_id, self.credentials.api_key
         );
 
@@ -291,8 +295,8 @@ impl AsyncRAClient {
     /// Get game ID from ROM hash
     pub async fn get_game_id(&self, hash: &str, _console_id: ConsoleId) -> Result<Option<u32>> {
         let url = format!(
-            "{}/API_GetGameInfoExtended.php?m={}&y={}",
-            RA_API_BASE, hash, self.credentials.api_key
+            "{}/dorequest.php?r=gameid&m={}",
+            RA_API_BASE, hash
         );
 
         let response = self
@@ -313,14 +317,18 @@ impl AsyncRAClient {
         let text = response.text().await?;
 
         // RA API returns empty object {} or error for unknown hash
-        if text == "{}" || text.is_empty() || text.contains("\"ID\":0") {
+        if text == "{}" || text.is_empty() || text == "[]" {
             return Ok(None);
         }
 
-        let lookup: GameInfoAndProgress =
+        let lookup: GameIdLookup =
             serde_json::from_str(&text).context("Failed to parse game lookup response")?;
 
-        Ok(Some(lookup.id))
+        if !lookup.success || lookup.game_id == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some(lookup.game_id))
     }
 
     /// Get game info and user's achievement progress
