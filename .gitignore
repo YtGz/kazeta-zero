@@ -79,6 +79,7 @@ $RECYCLE.BIN/
 # Runtime files
 /tmp/
 *.sock
+*.kzr
 
 # Game files (if not part of repository)
 # Uncomment if you don't want to commit game files

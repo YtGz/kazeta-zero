@@ -39,6 +39,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RA_DIR="${SCRIPT_DIR}/ra"
 RUNTIME_NAME="dolphin-standalone-1.0"
+RUNTIME_LABEL="dolphin"
 KZR_FILE="${SCRIPT_DIR}/${RUNTIME_NAME}.kzr"
 
 SKIP_BUILD=false
@@ -253,7 +254,7 @@ LICENSE_README
     echo ""
     echo -e "${YELLOW}→ Building EROFS image: ${KZR_FILE}${NC}"
 
-    if mkfs.erofs -L "$RUNTIME_NAME" "$KZR_FILE" "$RUNTIME_DIR"; then
+    if mkfs.erofs -L "$RUNTIME_LABEL" "$KZR_FILE" "$RUNTIME_DIR"; then
         echo -e "${GREEN}  ✓ Built: ${KZR_FILE} ($(du -h "$KZR_FILE" | cut -f1))${NC}"
     else
         echo -e "${RED}  ERROR: Failed to build .kzr image${NC}"
@@ -347,15 +348,18 @@ if [ -n "$FETCH_GAME_ID" ]; then
 fi
 
 echo -e "${YELLOW}Next Steps:${NC}"
-echo -e "  1. Install the .kzr to the system:"
-echo -e "     sudo kazeta-runtime-helper install ${KZR_FILE} ${RUNTIME_NAME}.kzr"
+echo -e "  On this machine (prep):"
+echo -e "  1. (Optional) Fetch achievement definitions for each game:"
+echo -e "     ./bootstrap-dolphin-runtime.sh --skip-build --skip-kzr \\"
+echo -e "       --fetch GAME_ID --username USER --api-key KEY \\"
+echo -e "       --output-dir ./cartridge-data/GAME/"
 echo ""
-echo -e "  2. Fetch achievement definitions for each game:"
-echo -e "     ./bootstrap-dolphin-runtime.sh --fetch GAME_ID --username USER --api-key KEY --output-dir ./cartridge-data/GAME/"
-echo ""
-echo -e "  3. Copy achievements.json + badges/ to each cartridge's SD card"
+echo -e "  2. Copy achievements.json + badges/ to each cartridge's SD card"
 echo -e "     alongside cart.kzi, icon.png, and the game ROM"
 echo ""
-echo -e "  4. Update cartridge cart.kzi files to use Runtime=dolphin-standalone"
+echo -e "  On the Kazeta Zero machine (playing device):"
+echo -e "  3. Install the .kzr runtime:"
+echo -e "     sudo kazeta-runtime-helper install ${RUNTIME_NAME}.kzr"
+echo -e "     (copy the .kzr to the device first, e.g. via SD card or scp)"
 echo ""
 echo -e "${GREEN}Done!${NC}"
