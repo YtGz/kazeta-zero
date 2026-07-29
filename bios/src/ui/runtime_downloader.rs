@@ -27,8 +27,8 @@ const ITEMS_PER_PAGE: usize = 5;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RuntimeSource {
     Official,   // From kazetaos/kazeta
-    Outcaster,  // From the-outcaster/kazeta-zero (kzr)
-    ThirdParty, // From the-outcaster/kazeta-zero (zip)
+    Outcaster,  // From the-outcaster/kazeta (kzr)
+    ThirdParty, // From the-outcaster/kazeta (zip)
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +119,7 @@ impl RuntimeDownloaderState {
 /// Returns the correct runtime directory based on dev mode
 fn get_runtime_dir() -> PathBuf {
     if DEV_MODE {
-        // Dev path: ~/.local/share/kazeta-zero/runtimes/
+        // Dev path: ~/.local/share/kazeta/runtimes/
         get_user_data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("runtimes")
@@ -828,7 +828,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
         }
 
         // --- 2. Fetch Outcaster & Third-Party Runtimes ---
-        // From: https://github.com/the-outcaster/kazeta-zero/releases/tag/runtimes
+        // From: https://github.com/the-outcaster/kazeta/releases/tag/runtimes
         let outcaster_files = [
             "dolphin-1.0.kzr",
             "linux-1.1.kzr",
@@ -842,7 +842,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
             "segacd-1.0.zip",
         ];
         let response_plus = client
-            .get("https://api.github.com/repos/the-outcaster/kazeta-zero/releases/tags/runtimes")
+            .get("https://api.github.com/repos/the-outcaster/kazeta/releases/tags/runtimes")
             .send();
 
         if let Ok(resp) = response_plus {
@@ -877,10 +877,10 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
                     }
                 }
             } else {
-                eprintln!("[Runtime] Failed to parse kazeta-zero releases JSON");
+                eprintln!("[Runtime] Failed to parse kazeta releases JSON");
             }
         } else {
-            eprintln!("[Runtime] Failed to fetch kazeta-zero releases");
+            eprintln!("[Runtime] Failed to fetch kazeta releases");
         }
 
         // --- 3. Sort and Check Installation Status ---

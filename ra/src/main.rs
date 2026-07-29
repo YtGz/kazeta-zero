@@ -896,7 +896,7 @@ fn cmd_send_achievements_to_overlay(
 fn has_local_definitions_available() -> bool {
     // Check cartridge directories in the standard Kazeta path
     if let Some(home) = dirs::home_dir() {
-        let cart_base = home.join(".local/share/kazeta-zero/cartridges");
+        let cart_base = home.join(".local/share/kazeta/cartridges");
         if cart_base.exists() {
             if let Ok(entries) = std::fs::read_dir(&cart_base) {
                 for entry in entries.flatten() {
@@ -991,7 +991,7 @@ fn send_local_achievements_to_overlay(
 /// This is a best-effort search - may not always find the cartridge
 fn find_cartridge_for_rom(rom_path: &Path) -> Result<PathBuf> {
     // Check if ROM path is inside a cartridge directory structure
-    // Cartridges are typically in ~/.local/share/kazeta-zero/cartridges/ or similar
+    // Cartridges are typically in ~/.local/share/kazeta/cartridges/ or similar
     let rom_path = rom_path
         .canonicalize()
         .context("Failed to canonicalize ROM path")?;

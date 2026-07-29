@@ -5,7 +5,7 @@ use std::{error::Error, fs, path::PathBuf};
 /// Returns the path to the user's data directory for Kazeta Zero.
 /// This is a public helper function for other modules to use.
 pub fn get_user_data_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|path| path.join(".local/share/kazeta-zero"))
+    dirs::home_dir().map(|path| path.join(".local/share/kazeta"))
 }
 
 /// Gets the full path to the kazeta.toml configuration file.

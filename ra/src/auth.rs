@@ -37,7 +37,7 @@ impl CredentialManager {
     pub fn new() -> Result<Self> {
         let data_dir = dirs::home_dir()
             .context("Could not find home directory")?
-            .join(".local/share/kazeta-zero");
+            .join(".local/share/kazeta");
 
         fs::create_dir_all(&data_dir).context("Failed to create kazeta data directory")?;
 
@@ -83,7 +83,7 @@ impl CredentialManager {
     fn load_from_bios_config() -> Result<Option<Credentials>> {
         let config_path = dirs::home_dir()
             .context("Could not find home directory")?
-            .join(".local/share/kazeta-zero/config.toml");
+            .join(".local/share/kazeta/config.toml");
 
         if !config_path.exists() {
             return Ok(None);

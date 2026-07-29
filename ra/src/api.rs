@@ -48,10 +48,7 @@ impl RAClient {
 
     /// Get game ID from ROM hash
     pub fn get_game_id(&self, hash: &str, _console_id: ConsoleId) -> Result<Option<u32>> {
-        let url = format!(
-            "{}/dorequest.php?r=gameid&m={}",
-            RA_API_BASE, hash
-        );
+        let url = format!("{}/dorequest.php?r=gameid&m={}", RA_API_BASE, hash);
 
         let response = self
             .client
@@ -294,10 +291,7 @@ impl AsyncRAClient {
 
     /// Get game ID from ROM hash
     pub async fn get_game_id(&self, hash: &str, _console_id: ConsoleId) -> Result<Option<u32>> {
-        let url = format!(
-            "{}/dorequest.php?r=gameid&m={}",
-            RA_API_BASE, hash
-        );
+        let url = format!("{}/dorequest.php?r=gameid&m={}", RA_API_BASE, hash);
 
         let response = self
             .client
