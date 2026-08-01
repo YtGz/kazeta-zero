@@ -546,11 +546,11 @@ umount /tmp/test-measure-mount
 losetup -j ${TEST_IMG} | cut -d : -f 1 | xargs -r losetup -d
 rm -rf /tmp/test-measure-mount ${TEST_IMG}
 
-# Add 10% safety margin
-ROOT_SIZE=$((ACTUAL_ROOT_SIZE * 110 / 100))
+# Use exact measured size (no margin - partition must match filesystem metadata)
+ROOT_SIZE=${ACTUAL_ROOT_SIZE}
 FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
 
-echo "Measured root size: ${ACTUAL_ROOT_SIZE}MB, Using: ${ROOT_SIZE}MB"
+echo "Measured root size: ${ACTUAL_ROOT_SIZE}MB, Using exact size: ${ROOT_SIZE}MB"
 
 # Create final disk image with calculated size
 echo "Creating final disk image with GPT partition table..."
