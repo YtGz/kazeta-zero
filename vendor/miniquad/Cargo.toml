@@ -13,7 +13,7 @@
 edition = "2018"
 rust-version = "1.70"
 name = "miniquad"
-version = "0.4.8"
+version = "0.4.11"
 authors = ["not-fl3 <not.fl3@gmail.com>"]
 build = "build.rs"
 exclude = ["examples/"]
