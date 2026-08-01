@@ -23,6 +23,8 @@ log_time() {
 # Parse arguments
 FORCE_FULL_BUILD=false
 SKIP_COMPRESS=false
+USE_DOCKER=false
+DOCKER_IMAGE=${DOCKER_IMAGE:-kazeta-zero-builder}
 while [[ $# -gt 0 ]]; do
     case $1 in
         --force|-f)
@@ -33,18 +35,32 @@ while [[ $# -gt 0 ]]; do
             SKIP_COMPRESS=true
             shift
             ;;
+        --docker|-d)
+            USE_DOCKER=true
+            shift
+            ;;
+        --docker-image)
+            DOCKER_IMAGE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --force, -f        Force full rebuild (ignore cache)"
             echo "  --no-compress, -n  Skip xz compression of final image"
+            echo "  --docker, -d       Run build inside Docker container"
+            echo "  --docker-image     Docker image to use (default: kazeta-zero-builder)"
             echo "  --help, -h         Show this help"
             echo ""
             echo "Caching behavior:"
             echo "  - If btrfs stream exists and is newer than source changes, reuse it"
-            echo "  - If Rust binaries exist and are newer than source, reuse them"
             echo "  - Use --force to rebuild everything from scratch"
+            echo ""
+            echo "Docker mode:"
+            echo "  - Runs build in isolated Docker container"
+            echo "  - Slower but more reproducible across machines"
+            echo "  - Requires Docker image with build tools"
             exit 0
             ;;
         *)
@@ -53,6 +69,34 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Docker mode: re-execute inside container
+if [ "$USE_DOCKER" = true ]; then
+    echo "Running build in Docker container..."
+    
+    # Check if Docker image exists
+    if ! docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+        echo "Docker image '$DOCKER_IMAGE' not found. Build it first:"
+        echo "  docker build -t $DOCKER_IMAGE ."
+        exit 1
+    fi
+    
+    # Prepare output directory
+    mkdir -p output
+    
+    # Run build in Docker
+    docker run \
+        -u root --rm --privileged=true \
+        --entrypoint=/workdir/build-image.sh \
+        -v "$(pwd):/workdir" \
+        -v "$(pwd)/output:/output" \
+        -e FORCE_FULL_BUILD="$FORCE_FULL_BUILD" \
+        -e SKIP_COMPRESS="$SKIP_COMPRESS" \
+        -e NO_COMPRESS="$NO_COMPRESS" \
+        "$DOCKER_IMAGE"
+    
+    exit $?
+fi
 
 if [ $EUID -ne 0 ]; then
     echo "$(basename $0) must be run as root"
