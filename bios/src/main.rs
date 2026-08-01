@@ -194,6 +194,25 @@ const KAZETA_LOADING_MESSAGES: &[&str] = &[
     "REMEMBER TO SAVE YOUR PROGRESS.",
 ];
 
+// Fallback loading messages when custom_edition is enabled but has no custom messages
+const CUSTOM_EDITION_FALLBACK_MESSAGES: &[&str] = &[
+    "BOOTING UP THE GOOD STUFF...",
+    "THIS ONE'S EXTRA SPECIAL...",
+    "NOT YOUR AVERAGE KAZETA...",
+    "ONE-OF-A-KIND BUILD DETECTED...",
+    "SPECIAL SAUCE LOADING...",
+    "PREPARING THE VIP EXPERIENCE...",
+    "THIS CONSOLE HAS A SECRET...",
+    "LOADING EXCLUSIVITY...",
+    "A RARE GEM INDEED...",
+    "CUSTOM CRAFTED, JUST BECAUSE...",
+    "THE SPECIAL ONE IS BOOTING...",
+    "NOT MASS PRODUCED. PROMISE.",
+    "HANDPICKED PIXELS LOADING...",
+    "THIS ONE SPARKLES DIFFERENTLY...",
+    "UNIQUE BY DESIGN...",
+];
+
 const KZP_ICON_BYTES: &[u8] = include_bytes!("../kzp.png");
 
 /*
@@ -872,6 +891,14 @@ async fn main() {
     let loading_text = if !config.loading_messages.is_empty() {
         let idx = rng.random_range(0..config.loading_messages.len());
         config.loading_messages[idx].as_str()
+    } else if let Some(custom) = &config.custom_edition {
+        if !custom.loading_messages.is_empty() {
+            let idx = rng.random_range(0..custom.loading_messages.len());
+            custom.loading_messages[idx].as_str()
+        } else {
+            CUSTOM_EDITION_FALLBACK_MESSAGES
+                [rng.random_range(0..CUSTOM_EDITION_FALLBACK_MESSAGES.len())]
+        }
     } else {
         KAZETA_LOADING_MESSAGES[rng.random_range(0..KAZETA_LOADING_MESSAGES.len())]
     };
@@ -1156,6 +1183,58 @@ async fn main() {
                         ..Default::default()
                     },
                 );
+            }
+
+            // Draw custom edition text overlay if configured
+            if let Some(custom) = &config.custom_edition {
+                let splash_scale = screen_height() / BASE_SCREEN_HEIGHT;
+                let title_size = (48.0 * splash_scale) as u16;
+                let subtitle_size = (24.0 * splash_scale) as u16;
+
+                // Calculate fade alpha (same timing as logo/video)
+                let text_alpha = if elapsed < 0.5 {
+                    elapsed / 0.5
+                } else if elapsed > duration - 0.5 {
+                    (duration - elapsed) / 0.5
+                } else {
+                    1.0
+                } as f32;
+
+                let center_x = screen_width() / 2.0;
+                let center_y = screen_height() / 2.0;
+
+                // Draw title if set
+                if let Some(title) = &custom.title {
+                    let title_dims = measure_text(title, Some(&startup_font), title_size, 1.0);
+                    draw_text_ex(
+                        title,
+                        center_x - title_dims.width / 2.0,
+                        center_y - title_dims.height,
+                        TextParams {
+                            font: Some(&startup_font),
+                            font_size: title_size,
+                            color: Color::new(1.0, 1.0, 1.0, text_alpha),
+                            ..Default::default()
+                        },
+                    );
+                }
+
+                // Draw subtitle if set
+                if let Some(subtitle) = &custom.subtitle {
+                    let subtitle_dims =
+                        measure_text(subtitle, Some(&startup_font), subtitle_size, 1.0);
+                    draw_text_ex(
+                        subtitle,
+                        center_x - subtitle_dims.width / 2.0,
+                        center_y + 10.0 * splash_scale,
+                        TextParams {
+                            font: Some(&startup_font),
+                            font_size: subtitle_size,
+                            color: Color::new(0.9, 0.9, 0.9, text_alpha * 0.9),
+                            ..Default::default()
+                        },
+                    );
+                }
             }
             next_frame().await;
         }

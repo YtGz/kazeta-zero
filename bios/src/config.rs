@@ -46,6 +46,10 @@ pub struct Config {
     pub splash_audio: String,
     #[serde(default)]
     pub loading_messages: Vec<String>,
+    /// Custom edition branding (e.g., for special builds, gifts)
+    /// Loaded from optional custom-edition.toml in config dir
+    #[serde(skip)]
+    pub custom_edition: Option<CustomEditionConfig>,
     // RetroAchievements settings
     #[serde(default)]
     pub retroachievements: RetroAchievementsConfig,
@@ -62,6 +66,35 @@ pub struct Config {
     pub blade_transparency: f32,
     #[serde(default)]
     pub blade_blur_enabled: bool,
+}
+
+/// Custom edition branding configuration
+/// Loaded from custom-edition.toml in the config directory
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct CustomEditionConfig {
+    /// Main title text (e.g., names, occasion)
+    pub title: Option<String>,
+    /// Subtitle text (e.g., "Special Edition", "Birthday Edition")
+    pub subtitle: Option<String>,
+    /// Custom loading messages (replaces defaults when non-empty)
+    #[serde(default)]
+    pub loading_messages: Vec<String>,
+}
+
+impl CustomEditionConfig {
+    /// Load custom edition config from custom-edition.toml if it exists
+    pub fn load() -> Option<Self> {
+        let config_dir = get_user_data_dir()?;
+        let path = config_dir.join("custom-edition.toml");
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(config) = toml::from_str(&content) {
+                    return Some(config);
+                }
+            }
+        }
+        None
+    }
 }
 
 /// RetroAchievements configuration
@@ -140,6 +173,7 @@ impl Default for Config {
             splash_video: "Default".to_string(),
             splash_audio: "Default".to_string(),
             loading_messages: Vec::new(), // Empty means use default messages
+            custom_edition: CustomEditionConfig::load(), // Load from custom-edition.toml if present
             retroachievements: RetroAchievementsConfig::default(),
             blades_enabled: false,
             blade_games_color: default_blade_games_color(),
@@ -154,14 +188,18 @@ impl Default for Config {
 impl Config {
     /// Loads the configuration from config.toml, or returns a default if it fails.
     pub fn load() -> Self {
-        if let Ok(config_path) = get_config_path() {
+        let mut config = if let Ok(config_path) = get_config_path() {
             if let Ok(content) = fs::read_to_string(config_path) {
-                if let Ok(config) = toml::from_str(&content) {
-                    return config;
-                }
+                toml::from_str(&content).unwrap_or_default()
+            } else {
+                Self::default()
             }
-        }
-        Self::default()
+        } else {
+            Self::default()
+        };
+        // Always try to load custom edition from separate file
+        config.custom_edition = CustomEditionConfig::load();
+        config
     }
 
     /// Saves the current configuration to config.toml.

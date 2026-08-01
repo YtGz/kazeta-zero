@@ -124,6 +124,9 @@ gba-multiplayer-test.kzi
 local.toml
 config.local.*
 
+# Custom edition personalization (private, not for public repo)
+custom-edition.toml
+
 # Debug files
 *.dSYM/
 *.su

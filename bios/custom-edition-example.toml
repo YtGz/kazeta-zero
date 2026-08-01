@@ -1,0 +1,62 @@
+# Custom Edition Configuration
+# Copy this file to ~/.local/share/kazeta/custom-edition.toml and customize
+# This file is gitignored by default - your personal text stays private!
+
+# Main title displayed prominently on splash screen and about page
+# title = "Your Name Here"
+
+# Subtitle displayed below the title
+# subtitle = "Special Edition"
+
+# Custom loading messages (optional - replaces defaults when set)
+# Get creative! Here are some ideas:
+#
+# For a birthday:
+# loading_messages = [
+#     "LEVEL UP! IT'S YOUR BIRTHDAY!",
+#     "ACHIEVEMENT UNLOCKED: ANOTHER YEAR!",
+#     "HAPPY BIRTHDAY, PLAYER ONE!",
+#     "CAKE LOADING... 99% COMPLETE",
+#     "BIRTHDAY MODE: ACTIVATED",
+#     "INSERT COIN TO CELEBRATE",
+#     "PARTY LIKE IT'S 1999",
+#     "YOUR PERSONAL ARCADE AWAITS",
+#     "GAMING LEGEND SINCE [YEAR]",
+#     "WISHING YOU A CRITICAL HIT OF A YEAR!",
+#     "PRESS START TO PARTY",
+#     "BIRTHDAY.EXE RUNNING...",
+#     "THIS SAVE FILE IS EXTRA SPECIAL",
+#     "NEW HIGH SCORE: YOUR AGE!",
+#     "UNLOCKED: BIRTHDAY EDITION",
+# ]
+#
+# For an anniversary:
+# loading_messages = [
+#     "CO-OP MODE: ETERNAL",
+#     "PLAYER 2 FOREVER",
+#     "OUR LOVE IS THE BEST GAME",
+#     "STILL MY PLAYER TWO",
+#     "TOGETHER IN EVERY TIMELINE",
+# ]
+#
+# For a graduation:
+# loading_messages = [
+#     "ACHIEVEMENT UNLOCKED: GRADUATION!",
+#     "LEVEL COMPLETE: SCHOOL",
+#     "NEW GAME+ STARTS NOW",
+#     "BOSS DEFEATED: FINAL EXAMS",
+# ]
+#
+# For a wedding:
+# loading_messages = [
+#     "TWO PLAYERS, ONE ADVENTURE",
+#     "CO-OP CAMPAIGN: FOREVER",
+#     "MARRIAGE: THE ULTIMATE MULTIPLAYER",
+#     "SAVE FILE MERGED SUCCESSFULLY",
+#     "NEW PARTY MEMBER JOINED!",
+# ]
+#
+# loading_messages = [
+#     "CUSTOM MESSAGE 1",
+#     "CUSTOM MESSAGE 2",
+# ]

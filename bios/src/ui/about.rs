@@ -96,6 +96,40 @@ pub fn draw(
     // --- Credits ---
     current_y = screen_height() - (80.0 * scale_factor);
 
+    // Show custom edition text if configured
+    if let Some(custom) = &config.custom_edition {
+        // Draw custom title prominently
+        if let Some(title) = &custom.title {
+            let title_font_size = (FONT_SIZE as f32 * scale_factor * 1.2) as u16;
+            let dims = measure_text(title, Some(current_font), title_font_size, 1.0);
+            let x_pos = screen_width() / 2.0 - dims.width / 2.0;
+            text_with_config_color(
+                font_cache,
+                config,
+                title,
+                x_pos,
+                current_y - line_height,
+                title_font_size,
+            );
+        }
+
+        // Draw subtitle below title
+        if let Some(subtitle) = &custom.subtitle {
+            let dims = measure_text(subtitle, Some(current_font), about_font_size, 1.0);
+            let x_pos = screen_width() / 2.0 - dims.width / 2.0;
+            text_with_config_color(
+                font_cache,
+                config,
+                subtitle,
+                x_pos,
+                current_y,
+                about_font_size,
+            );
+            current_y += line_height;
+        }
+        current_y += line_height; // Extra spacing before standard credits
+    }
+
     let credit_lines = vec![
         "Original Kazeta concept by Alkazar.",
         "\"Overly Complex\" Kazeta Zero forked and developed by Linux Gaming Central.",
