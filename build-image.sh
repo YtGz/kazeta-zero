@@ -524,9 +524,11 @@ mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
 # Clean up staging
 rm -rf ${MOUNT_PATH}-efi-staging
 
-# Create final disk image
-echo "Creating final disk image with GPT partition table..."
-fallocate -l $((${SIZE/MB/} + 512))M ${FINAL_IMG}
+# Create final disk image with larger size to accommodate decompressed stream
+# Original SIZE is 5000MB, but stream needs ~5.5GB+ when uncompressed
+# Add 1GB extra for safety margin
+FINAL_SIZE=$((${SIZE/MB/} + 512 + 1024))
+fallocate -l ${FINAL_SIZE}M ${FINAL_IMG}
 
 # Create GPT partition table
 parted -s ${FINAL_IMG} mklabel gpt
