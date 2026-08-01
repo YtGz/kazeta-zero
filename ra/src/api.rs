@@ -104,10 +104,10 @@ impl RAClient {
     }
 
     /// Get full game info (including MemAddr achievement definitions) by game ID.
-    /// Uses API_GetGameExtended.php which does not require a user parameter.
+    /// Uses API_GetGameInfoExtended.php which does not require a user parameter.
     pub fn get_game_info_extended(&self, game_id: u32) -> Result<GameInfoAndProgress> {
         let url = format!(
-            "{}/API_GetGameExtended.php?i={}&y={}",
+            "{}/API_GetGameInfoExtended.php?i={}&y={}",
             RA_API_BASE, game_id, self.credentials.api_key
         );
 
