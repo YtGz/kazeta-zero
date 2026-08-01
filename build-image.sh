@@ -537,9 +537,10 @@ parted -s ${FINAL_IMG} mkpart primary btrfs 513MiB 100%
 # Write EFI partition
 dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
 
-# Create temp root image with same size as stream (no extra space needed)
-# The stream is already the exact size of the filesystem
-fallocate -l ${SIZE} ${TEMP_ROOT_IMG}
+# Create temp root image slightly larger than stream for decompression overhead
+# Stream is ~5GB compressed, needs ~5.5GB uncompressed
+TEMP_SIZE=$((${SIZE/MB/} * 110 / 100))
+fallocate -l ${TEMP_SIZE}M ${TEMP_ROOT_IMG}
 mkfs.btrfs -f ${TEMP_ROOT_IMG}
 
 # Mount temp image and receive stream
