@@ -159,6 +159,36 @@ output/build_info.txt
 output/sha256sum.txt
 ```
 
+### Custom Edition Branding (Optional)
+
+You can personalize the BIOS splash screen, loading messages, and about page
+by creating a `custom-edition.toml` file in the repo root before building.
+This file is **gitignored** and will not be committed.
+
+1. Copy the example and customize:
+   ```bash
+   cp bios/custom-edition-example.toml custom-edition.toml
+   # Edit custom-edition.toml with your text
+   ```
+
+2. Build the image as normal. The file is automatically detected and
+   included at `/var/kazeta/custom-edition.toml` in the image.
+
+3. On first boot, the BIOS will display your custom branding.
+
+**Example `custom-edition.toml`:**
+```toml
+title = "Matze & Valli"
+subtitle = "Birthday Edition"
+loading_messages = [
+    "LEVEL UP! IT'S YOUR BIRTHDAY!",
+    "ACHIEVEMENT UNLOCKED: ANOTHER YEAR!",
+]
+```
+
+See `bios/custom-edition-example.toml` for more message templates
+(birthdays, anniversaries, graduations, weddings).
+
 ### Known issues
 
 - **`umount: target is busy`**: The `btrfs send` command can leave the mount

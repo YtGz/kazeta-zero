@@ -71,6 +71,13 @@ cp /etc/pacman.d/mirrorlist rootfs/etc/pacman.d/mirrorlist
 # copy files into chroot
 cp -R manifest rootfs/. ${BUILD_PATH}/
 
+# Include custom edition config if present (gitignored, for personalized builds)
+if [ -f custom-edition.toml ]; then
+	echo "Including custom edition config..."
+	mkdir -p ${BUILD_PATH}/var/kazeta
+	cp custom-edition.toml ${BUILD_PATH}/var/kazeta/
+fi
+
 mkdir ${BUILD_PATH}/own_pkgs
 mkdir ${BUILD_PATH}/extra_pkgs
 
