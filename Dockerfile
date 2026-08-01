@@ -19,8 +19,10 @@ RUN pacman --noconfirm -Syy && \
   arch-install-scripts \
   base-devel \
   btrfs-progs \
+  dosfstools \
   fmt \
   git \
+  parted \
   pyalpm \
   python \
   python-build \

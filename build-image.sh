@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 set -e
 
@@ -6,9 +6,8 @@ cleanup_on_error() {
     echo "Script failed! Attempting to clean up mounts..."
     umount "${BUILD_PATH}" 2>/dev/null || true
     umount "${MOUNT_PATH}" 2>/dev/null || true
-    losetup -j "${BUILD_IMG}" | cut -d : -f 1 | xargs -r losetup -d
-
-
+    losetup -j "${BUILD_IMG}" 2>/dev/null | cut -d : -f 1 | xargs -r losetup -d 2>/dev/null || true
+    losetup -j "${TEMP_ROOT_IMG}" 2>/dev/null | cut -d : -f 1 | xargs -r losetup -d 2>/dev/null || true
 }
 trap cleanup_on_error ERR
 
@@ -21,14 +20,47 @@ log_time() {
     echo "[TIMER] $1 took ${elapsed}s"
 }
 
+# Parse arguments
+FORCE_FULL_BUILD=false
+SKIP_COMPRESS=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --force|-f)
+            FORCE_FULL_BUILD=true
+            shift
+            ;;
+        --no-compress|-n)
+            SKIP_COMPRESS=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --force, -f        Force full rebuild (ignore cache)"
+            echo "  --no-compress, -n  Skip xz compression of final image"
+            echo "  --help, -h         Show this help"
+            echo ""
+            echo "Caching behavior:"
+            echo "  - If btrfs stream exists and is newer than source changes, reuse it"
+            echo "  - If Rust binaries exist and are newer than source, reuse them"
+            echo "  - Use --force to rebuild everything from scratch"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
 if [ $EUID -ne 0 ]; then
-	echo "$(basename $0) must be run as root"
-	exit 1
+    echo "$(basename $0) must be run as root"
+    exit 1
 fi
 
 BUILD_USER=${BUILD_USER:-}
 OUTPUT_DIR=${OUTPUT_DIR:-}
-
 
 source manifest
 
@@ -47,106 +79,138 @@ LSB_VERSION=${VERSION}
 VERSION_NUMBER=${VERSION}
 
 if [ -n "$1" ]; then
-	DISPLAY_VERSION="${VERSION} (${1})"
-	VERSION="${VERSION}_${1}"
-	LSB_VERSION="${LSB_VERSION}　(${1})"
-	BUILD_ID="${1}"
+    DISPLAY_VERSION="${VERSION} (${1})"
+    VERSION="${VERSION}_${1}"
+    LSB_VERSION="${LSB_VERSION}　(${1})"
+    BUILD_ID="${1}"
 fi
 
-MOUNT_PATH=/home/fedora/kazeta_build/${SYSTEM_NAME}-build
+# Use home directory for build (more space than /tmp)
+BUILD_ROOT=${BUILD_ROOT:-$HOME/kazeta-build}
+MOUNT_PATH=${BUILD_ROOT}/${SYSTEM_NAME}-build
 BUILD_PATH=${MOUNT_PATH}/subvolume
 SNAP_PATH=${MOUNT_PATH}/${SYSTEM_NAME}-${VERSION}
-BUILD_IMG=/home/fedora/kazeta_build/${SYSTEM_NAME}-build.img
+BUILD_IMG=${BUILD_ROOT}/${SYSTEM_NAME}-build.img
+EFI_IMG=${BUILD_ROOT}/${SYSTEM_NAME}-efi.img
+TEMP_ROOT_IMG=${BUILD_ROOT}/temp-root.img
+STREAM_IMG=${SYSTEM_NAME}-${VERSION}.img
+FINAL_IMG=${SYSTEM_NAME}-${VERSION}-final.img
 
+mkdir -p ${BUILD_ROOT}
 mkdir -p ${MOUNT_PATH}
 
-fallocate -l ${SIZE} ${BUILD_IMG}
-mkfs.btrfs -f ${BUILD_IMG}
-mount -t btrfs -o loop,compress-force=zstd:15 ${BUILD_IMG} ${MOUNT_PATH}
-btrfs subvolume create ${BUILD_PATH}
-
-# copy the makepkg.conf into chroot
-cp /etc/makepkg.conf rootfs/etc/makepkg.conf
-
-# bootstrap using our configuration
-pacstrap -K -C rootfs/etc/pacman.conf ${BUILD_PATH}
-
-# copy the builder mirror list into chroot
-mkdir -p rootfs/etc/pacman.d
-cp /etc/pacman.d/mirrorlist rootfs/etc/pacman.d/mirrorlist
-
-# copy files into chroot
-cp -R manifest rootfs/. ${BUILD_PATH}/
-
-# Include custom edition config if present (gitignored, for personalized builds)
-if [ -f custom-edition.toml ]; then
-	echo "Including custom edition config..."
-	mkdir -p ${BUILD_PATH}/var/kazeta
-	cp custom-edition.toml ${BUILD_PATH}/var/kazeta/
+# Check if we can reuse the btrfs stream
+REUSE_STREAM=false
+if [ "$FORCE_FULL_BUILD" = false ] && [ -f "${STREAM_IMG}" ]; then
+    # Check if stream is newer than key source files
+    STREAM_TIME=$(stat -c %Y "${STREAM_IMG}" 2>/dev/null || echo 0)
+    
+    # Check if any source files are newer than the stream
+    NEWER_FILES=$(find bios overlay ra input-daemon rootfs manifest -type f -newer "${STREAM_IMG}" 2>/dev/null | head -1)
+    
+    if [ -z "$NEWER_FILES" ]; then
+        echo "Found cached btrfs stream, no source changes detected"
+        REUSE_STREAM=true
+    else
+        echo "Source files changed, will rebuild"
+    fi
 fi
 
-mkdir ${BUILD_PATH}/own_pkgs
-mkdir ${BUILD_PATH}/extra_pkgs
+if [ "$REUSE_STREAM" = false ]; then
+    echo "Building fresh btrfs stream..."
+    
+    # Create main btrfs image
+    fallocate -l ${SIZE} ${BUILD_IMG}
+    mkfs.btrfs -f ${BUILD_IMG}
+    mount -t btrfs -o loop,compress-force=zstd:15 ${BUILD_IMG} ${MOUNT_PATH}
+    btrfs subvolume create ${BUILD_PATH}
 
-cp -rv aur-pkgs/*.pkg.tar* ${BUILD_PATH}/extra_pkgs
+    # copy the makepkg.conf into chroot
+    cp /etc/makepkg.conf rootfs/etc/makepkg.conf
 
-# Only copy if there are actual package files (not just .gitkeep)
-if compgen -G "pkgs/*.pkg.tar*" > /dev/null; then
-	cp -rv pkgs/*.pkg.tar* ${BUILD_PATH}/own_pkgs
-fi
+    # bootstrap using our configuration
+    pacstrap -K -C rootfs/etc/pacman.conf ${BUILD_PATH}
 
-if [ -n "${PACKAGE_OVERRIDES}" ]; then
-	wget --directory-prefix=/tmp/extra_pkgs ${PACKAGE_OVERRIDES}
-	cp -rv /tmp/extra_pkgs/*.pkg.tar* ${BUILD_PATH}/own_pkgs
-fi
+    # copy the builder mirror list into chroot
+    mkdir -p rootfs/etc/pacman.d
+    cp /etc/pacman.d/mirrorlist rootfs/etc/pacman.d/mirrorlist
 
-# Build Rust projects (BIOS, overlay, and RA) before entering chroot
-# This ensures the binaries are available to be copied into the image
-echo "Building Rust projects..."
+    # copy files into chroot
+    cp -R manifest rootfs/. ${BUILD_PATH}/
 
-# Build BIOS
-echo "Building kazeta-bios..."
-cd bios
-cargo build --release
-if [ ! -f "target/release/kazeta-bios" ]; then
-    echo "ERROR: Failed to build kazeta-bios"
-    exit 1
-fi
-cd ..
+    # Include custom edition config if present (gitignored, for personalized builds)
+    if [ -f custom-edition.toml ]; then
+        echo "Including custom edition config..."
+        mkdir -p ${BUILD_PATH}/var/kazeta
+        cp custom-edition.toml ${BUILD_PATH}/var/kazeta/
+    fi
 
-# Build overlay
-echo "Building kazeta-overlay..."
-cd overlay
-cargo build --release --bin kazeta-overlay --features daemon
-if [ ! -f "target/release/kazeta-overlay" ]; then
-    echo "ERROR: Failed to build kazeta-overlay"
-    exit 1
-fi
-cd ..
+    mkdir ${BUILD_PATH}/own_pkgs
+    mkdir ${BUILD_PATH}/extra_pkgs
 
-# Build RetroAchievements CLI
-echo "Building kazeta-ra..."
-cd ra
-cargo build --release
-if [ ! -f "target/release/kazeta-ra" ]; then
-    echo "ERROR: Failed to build kazeta-ra"
-    exit 1
-fi
-cd ..
+    cp -rv aur-pkgs/*.pkg.tar* ${BUILD_PATH}/extra_pkgs
 
-# Build input daemon
-echo "Building kazeta-input..."
-cd input-daemon
-cargo build --release
-if [ ! -f "target/release/kazeta-input" ]; then
-    echo "ERROR: Failed to build kazeta-input"
-    exit 1
-fi
-cd ..
+    # Only copy if there are actual package files (not just .gitkeep)
+    if compgen -G "pkgs/*.pkg.tar*" > /dev/null; then
+        cp -rv pkgs/*.pkg.tar* ${BUILD_PATH}/own_pkgs
+    fi
 
-# chroot into target
-mount --bind ${BUILD_PATH} ${BUILD_PATH}
-arch-chroot ${BUILD_PATH} /bin/bash <<EOF
+    if [ -n "${PACKAGE_OVERRIDES}" ]; then
+        wget --directory-prefix=/tmp/extra_pkgs ${PACKAGE_OVERRIDES}
+        cp -rv /tmp/extra_pkgs/*.pkg.tar* ${BUILD_PATH}/own_pkgs
+    fi
+
+    # Build Rust projects (BIOS, overlay, and RA) before entering chroot
+    echo "Building Rust projects..."
+
+    # Set Rust toolchain explicitly (sudo doesn't preserve user rustup config)
+    export RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}
+    export CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}
+    rustup default stable 2>/dev/null || true
+
+    # Build BIOS
+    echo "Building kazeta-bios..."
+    cd bios
+    cargo build --release
+    if [ ! -f "target/release/kazeta-bios" ]; then
+        echo "ERROR: Failed to build kazeta-bios"
+        exit 1
+    fi
+    cd ..
+
+    # Build overlay
+    echo "Building kazeta-overlay..."
+    cd overlay
+    cargo build --release --bin kazeta-overlay --features daemon
+    if [ ! -f "target/release/kazeta-overlay" ]; then
+        echo "ERROR: Failed to build kazeta-overlay"
+        exit 1
+    fi
+    cd ..
+
+    # Build RetroAchievements CLI
+    echo "Building kazeta-ra..."
+    cd ra
+    cargo build --release
+    if [ ! -f "target/release/kazeta-ra" ]; then
+        echo "ERROR: Failed to build kazeta-ra"
+        exit 1
+    fi
+    cd ..
+
+    # Build input daemon
+    echo "Building kazeta-input..."
+    cd input-daemon
+    cargo build --release
+    if [ ! -f "target/release/kazeta-input" ]; then
+        echo "ERROR: Failed to build kazeta-input"
+        exit 1
+    fi
+    cd ..
+
+    # chroot into target
+    mount --bind ${BUILD_PATH} ${BUILD_PATH}
+    arch-chroot ${BUILD_PATH} /bin/bash <<EOF
 set -e
 set -x
 
@@ -172,16 +236,16 @@ sed -i '/OPTIONS/s/ debug/ !debug/g' /etc/makepkg.conf
 
 # install kernel package
 if [ "$KERNEL_PACKAGE_ORIGIN" == "local" ] ; then
-	pacman --noconfirm -U --overwrite '*' \
-	/own_pkgs/${KERNEL_PACKAGE}-*.pkg.tar.zst
+    pacman --noconfirm -U --overwrite '*' \
+    /own_pkgs/${KERNEL_PACKAGE}-*.pkg.tar.zst
 else
-	pacman --noconfirm -S "${KERNEL_PACKAGE}" "${KERNEL_PACKAGE}-headers"
+    pacman --noconfirm -S "${KERNEL_PACKAGE}" "${KERNEL_PACKAGE}-headers"
 fi
 
 # install own override packages
 if [ -n "$(ls -A '/own_pkgs')" ]; then
-	pacman --noconfirm -U --overwrite '*' /own_pkgs/*
-	rm -rf /var/cache/pacman/pkg
+    pacman --noconfirm -U --overwrite '*' /own_pkgs/*
+    rm -rf /var/cache/pacman/pkg
 fi
 
 # install packages
@@ -193,21 +257,16 @@ pacman --noconfirm -U --overwrite '*' /extra_pkgs/*
 rm -rf /var/cache/pacman/pkg
 
 # Install the new iptables
-# See https://gitlab.archlinux.org/archlinux/packaging/packages/iptables/-/issues/1
-# Since base package group adds iptables by default
-# pacman will ask for confirmation to replace that package
-# but the default answer is no.
-# doing yes | pacman omitting --noconfirm is a necessity
 yes | pacman -S iptables-nft
 
 # enable services
 if [ -n "${SERVICES}" ]; then
-	systemctl enable ${SERVICES}
+    systemctl enable ${SERVICES}
 fi
 
 # enable user services
 if [ -n "${USER_SERVICES}" ]; then
-	systemctl --global enable ${USER_SERVICES}
+    systemctl --global enable ${USER_SERVICES}
 fi
 
 # disable root login
@@ -262,7 +321,7 @@ BUG_REPORT_URL="${BUG_REPORT_URL}"' > /usr/lib/os-release
 
 # install extra certificates
 if [ -n "$(ls -A '/extra_certs')" ]; then
-	trust anchor --store /extra_certs/*.crt
+    trust anchor --store /extra_certs/*.crt
 fi
 
 # run post install hook
@@ -277,9 +336,9 @@ cp -r /var/lib/pacman/local /usr/var/lib/pacman/
 
 # move kernel image and initrd to a default location if "linux" is not used
 if [ ${KERNEL_PACKAGE} != 'linux' ] ; then
-	mv /boot/vmlinuz-${KERNEL_PACKAGE} /boot/vmlinuz-linux
-	mv /boot/initramfs-${KERNEL_PACKAGE}.img /boot/initramfs-linux.img
-	mv /boot/initramfs-${KERNEL_PACKAGE}-fallback.img /boot/initramfs-linux-fallback.img
+    mv /boot/vmlinuz-${KERNEL_PACKAGE} /boot/vmlinuz-linux
+    mv /boot/initramfs-${KERNEL_PACKAGE}.img /boot/initramfs-linux.img
+    mv /boot/initramfs-${KERNEL_PACKAGE}-fallback.img /boot/initramfs-linux-fallback.img
 fi
 
 # clean up/remove unnecessary files
@@ -300,124 +359,197 @@ mkdir -p /efi
 chown ${USERNAME}:${USERNAME} /var/kazeta
 EOF
 
-#defrag the image
-btrfs filesystem defragment -r ${BUILD_PATH}
-log_time "btrfs defragment"
+    #defrag the image
+    btrfs filesystem defragment -r ${BUILD_PATH}
+    log_time "btrfs defragment"
 
-# copy files into chroot again
-cp -R rootfs/. ${BUILD_PATH}/
-rm -rf ${BUILD_PATH}/extra_certs
+    # copy files into chroot again
+    cp -R rootfs/. ${BUILD_PATH}/
+    rm -rf ${BUILD_PATH}/extra_certs
 
-# Copy built Rust binaries to the image
-echo "Installing Rust binaries..."
-cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/
-cp overlay/target/release/kazeta-overlay ${BUILD_PATH}/usr/bin/
-cp ra/target/release/kazeta-ra ${BUILD_PATH}/usr/bin/
-cp input-daemon/target/release/kazeta-input ${BUILD_PATH}/usr/bin/
-chmod +x ${BUILD_PATH}/usr/bin/kazeta-bios
-chmod +x ${BUILD_PATH}/usr/bin/kazeta-overlay
-chmod +x ${BUILD_PATH}/usr/bin/kazeta-ra
-chmod +x ${BUILD_PATH}/usr/bin/kazeta-input
+    # Copy built Rust binaries to the image
+    echo "Installing Rust binaries..."
+    cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/
+    cp overlay/target/release/kazeta-overlay ${BUILD_PATH}/usr/bin/
+    cp ra/target/release/kazeta-ra ${BUILD_PATH}/usr/bin/
+    cp input-daemon/target/release/kazeta-input ${BUILD_PATH}/usr/bin/
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-bios
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-overlay
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-ra
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-input
 
-# Copy bundled runtimes (.kzr) into the image if present
-echo "Installing bundled runtimes..."
-RUNTIME_SRC="$(pwd)/runtimes"
-RUNTIME_DST="${BUILD_PATH}/usr/share/kazeta/runtimes"
-if [ -d "${RUNTIME_SRC}" ]; then
-    mapfile -t runtime_files < <(find "${RUNTIME_SRC}" -maxdepth 2 -type f -name "*.kzr")
-    if [ "${#runtime_files[@]}" -gt 0 ]; then
-        mkdir -p "${RUNTIME_DST}"
-        for rf in "${runtime_files[@]}"; do
-            cp "${rf}" "${RUNTIME_DST}/$(basename "${rf}")"
-        done
-        echo "Copied ${#runtime_files[@]} runtime(s) to ${RUNTIME_DST}"
+    # Copy bundled runtimes (.kzr) into the image if present
+    echo "Installing bundled runtimes..."
+    RUNTIME_SRC="$(pwd)/runtimes"
+    RUNTIME_DST="${BUILD_PATH}/usr/share/kazeta/runtimes"
+    if [ -d "${RUNTIME_SRC}" ]; then
+        mapfile -t runtime_files < <(find "${RUNTIME_SRC}" -maxdepth 2 -type f -name "*.kzr")
+        if [ "${#runtime_files[@]}" -gt 0 ]; then
+            mkdir -p "${RUNTIME_DST}"
+            for runtime in "${runtime_files[@]}"; do
+                echo "  Copying $(basename "${runtime}")..."
+                cp "${runtime}" "${RUNTIME_DST}/"
+            done
+        else
+            echo "No .kzr runtime files found in ${RUNTIME_SRC}"
+        fi
     else
-        echo "No .kzr runtimes found in ${RUNTIME_SRC}, skipping copy."
+        echo "Runtime source directory not found: ${RUNTIME_SRC}"
+    fi
+
+    echo "${SYSTEM_NAME}-${VERSION}" > ${BUILD_PATH}/build_info
+    echo "" >> ${BUILD_PATH}/build_info
+    cat ${BUILD_PATH}/manifest >> ${BUILD_PATH}/build_info
+    rm ${BUILD_PATH}/manifest
+
+    # freeze archive date of build to avoid package drift on unlock
+    if [ -z "${ARCHIVE_DATE}" ]; then
+        export TODAY_DATE=$(date +%Y/%m/%d)
+        echo "Server=https://archive.archlinux.org/repos/${TODAY_DATE}/\$repo/os/\$arch" > \
+        ${BUILD_PATH}/etc/pacman.d/mirrorlist
+    fi
+
+    btrfs subvolume snapshot -r ${BUILD_PATH} ${SNAP_PATH}
+    log_time "btrfs snapshot"
+
+    btrfs send -f ${STREAM_IMG} ${SNAP_PATH}
+    log_time "btrfs send"
+
+    cp ${BUILD_PATH}/build_info build_info.txt
+
+    # clean up
+    if mountpoint -q "${BUILD_PATH}"; then
+        echo "Unmounting subvolume..."
+        umount "${BUILD_PATH}" || sleep 2 && umount -l "${BUILD_PATH}" 2>/dev/null || true
+    fi
+
+    if mountpoint -q "${MOUNT_PATH}"; then
+        echo "Unmounting image..."
+        umount "${MOUNT_PATH}" || sleep 2 && umount -l "${MOUNT_PATH}" 2>/dev/null || true
+    fi
+
+    losetup -j "${BUILD_IMG}" | cut -d : -f 1 | xargs -r losetup -d
+
+    sync
+
+    echo "Removing temporary files..."
+    rm -rf "${MOUNT_PATH}"
+    rm -f "${BUILD_IMG}"
+else
+    echo "Reusing cached btrfs stream: ${STREAM_IMG}"
+fi
+
+# UEFI Assembly (always run this part)
+echo "Creating UEFI boot partition..."
+fallocate -l 512M ${EFI_IMG}
+mkfs.vfat -F32 ${EFI_IMG}
+
+# Create directory structure for EFI files
+mkdir -p ${MOUNT_PATH}-efi-staging/EFI/BOOT
+mkdir -p ${MOUNT_PATH}-efi-staging/loader/entries
+
+# Copy systemd-boot EFI binary
+cp ${BUILD_PATH}/usr/lib/systemd/boot/efi/systemd-bootx64.efi ${MOUNT_PATH}-efi-staging/EFI/BOOT/BOOTX64.EFI 2>/dev/null || \
+    cp /usr/lib/systemd/boot/efi/systemd-bootx64.efi ${MOUNT_PATH}-efi-staging/EFI/BOOT/BOOTX64.EFI
+
+# Create loader configuration
+cat > ${MOUNT_PATH}-efi-staging/loader/loader.conf <<LOADERCONF
+default kazeta-zero
+timeout 0
+editor no
+LOADERCONF
+
+# Create boot entry
+cat > ${MOUNT_PATH}-efi-staging/loader/entries/kazeta-zero.conf <<ENTRYCONF
+title Kazeta Zero
+linux /vmlinuz-linux
+initrd /initramfs-linux.img
+options root=LABEL=frzr_root rootflags=subvol=/@ quiet splash
+ENTRYCONF
+
+# Copy kernel and initramfs to staging
+cp ${BUILD_PATH}/boot/vmlinuz-linux ${MOUNT_PATH}-efi-staging/ 2>/dev/null || true
+cp ${BUILD_PATH}/boot/initramfs-linux.img ${MOUNT_PATH}-efi-staging/ 2>/dev/null || true
+
+# Copy files to FAT image using mtools
+mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
+
+# Clean up staging
+rm -rf ${MOUNT_PATH}-efi-staging
+
+# Create final disk image
+echo "Creating final disk image with GPT partition table..."
+fallocate -l $((${SIZE/MB/} + 512))M ${FINAL_IMG}
+
+# Create GPT partition table
+parted -s ${FINAL_IMG} mklabel gpt
+parted -s ${FINAL_IMG} mkpart primary fat32 1MiB 513MiB
+parted -s ${FINAL_IMG} set 1 esp on
+parted -s ${FINAL_IMG} mkpart primary btrfs 513MiB 100%
+
+# Write EFI partition
+dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
+
+# Create temp root image with 20% extra space for filesystem overhead
+TEMP_SIZE=$((${SIZE/MB/} * 120 / 100))
+fallocate -l ${TEMP_SIZE}M ${TEMP_ROOT_IMG}
+mkfs.btrfs -f ${TEMP_ROOT_IMG}
+
+# Mount temp image and receive stream
+mkdir -p ${MOUNT_PATH}-temp-root
+mount -o loop ${TEMP_ROOT_IMG} ${MOUNT_PATH}-temp-root
+btrfs receive ${MOUNT_PATH}-temp-root < ${STREAM_IMG}
+btrfs filesystem label ${MOUNT_PATH}-temp-root frzr_root
+umount ${MOUNT_PATH}-temp-root
+rm -rf ${MOUNT_PATH}-temp-root
+
+# Write root partition to final image
+dd if=${TEMP_ROOT_IMG} of=${FINAL_IMG} bs=1M seek=513 conv=notrunc
+
+# Clean up
+rm -f ${TEMP_ROOT_IMG} ${EFI_IMG}
+
+# Rename final image
+mv ${FINAL_IMG} ${SYSTEM_NAME}-${VERSION}.img
+
+log_time "UEFI image creation"
+
+# Compress if not skipped
+IMG_FILENAME="${SYSTEM_NAME}-${VERSION}.img.tar.xz"
+if [ "$SKIP_COMPRESS" = false ] && [ -z "${NO_COMPRESS}" ]; then
+    XZ_THREADS=${XZ_THREADS:-$(nproc)}
+    echo "Compressing with xz level 6 using ${XZ_THREADS} threads..."
+    tar -c -I"xz -6 -T${XZ_THREADS}" -f ${IMG_FILENAME} ${SYSTEM_NAME}-${VERSION}.img
+    log_time "xz compression"
+    rm ${SYSTEM_NAME}-${VERSION}.img
+
+    sha256sum ${IMG_FILENAME} > sha256sum.txt
+    cat sha256sum.txt
+
+    # Move the image to the output directory, if one was specified.
+    if [ -n "${OUTPUT_DIR}" ]; then
+        mkdir -p "${OUTPUT_DIR}"
+        mv ${IMG_FILENAME} ${OUTPUT_DIR}
+        mv build_info.txt ${OUTPUT_DIR} 2>/dev/null || true
+        mv sha256sum.txt ${OUTPUT_DIR}
     fi
 else
-    echo "Runtime source directory not found: ${RUNTIME_SRC}"
+    echo "Skipping compression (use --no-compress to skip this step)"
+    sha256sum ${SYSTEM_NAME}-${VERSION}.img > sha256sum.txt
+    cat sha256sum.txt
 fi
 
-echo "${SYSTEM_NAME}-${VERSION}" > ${BUILD_PATH}/build_info
-echo "" >> ${BUILD_PATH}/build_info
-cat ${BUILD_PATH}/manifest >> ${BUILD_PATH}/build_info
-rm ${BUILD_PATH}/manifest
-
-# freeze archive date of build to avoid package drift on unlock
-# if no archive date is set
-if [ -z "${ARCHIVE_DATE}" ]; then
-	export TODAY_DATE=$(date +%Y/%m/%d)
-	echo "Server=https://archive.archlinux.org/repos/${TODAY_DATE}/\$repo/os/\$arch" > \
-	${BUILD_PATH}/etc/pacman.d/mirrorlist
-fi
-
-btrfs subvolume snapshot -r ${BUILD_PATH} ${SNAP_PATH}
-log_time "btrfs snapshot"
-
-btrfs send -f ${SYSTEM_NAME}-${VERSION}.img ${SNAP_PATH}
-log_time "btrfs send"
-
-cp ${BUILD_PATH}/build_info build_info.txt
-
-# clean up
-# 1. Unmount the bind-mounted subvolume (Wait for it to finish!)
-if mountpoint -q "${BUILD_PATH}"; then
-    echo "Unmounting subvolume..."
-    umount "${BUILD_PATH}" || sleep 2 && umount -l "${BUILD_PATH}" 2>/dev/null || true
-fi
-
-# 2. Unmount the main image mount
-if mountpoint -q "${MOUNT_PATH}"; then
-    echo "Unmounting image..."
-    umount "${MOUNT_PATH}" || sleep 2 && umount -l "${MOUNT_PATH}" 2>/dev/null || true
-fi
-
-# 3. Force-detach the loop device used by this specific image file
-# This prevents the kernel from holding onto the file lock
-losetup -j "${BUILD_IMG}" | cut -d : -f 1 | xargs -r losetup -d
-
-# 4. Sync to ensure all writes are flushed to disk
-sync
-
-# 5. Now it is safe to delete
-echo "Removing temporary files..."
-rm -rf "${MOUNT_PATH}"
-rm -f "${BUILD_IMG}"
-
-IMG_FILENAME="${SYSTEM_NAME}-${VERSION}.img.tar.xz"
-if [ -z "${NO_COMPRESS}" ]; then
-	# Use all available CPU cores for compression, level 6 is good balance of size/speed
-	# Level 9e is ~2x slower for only ~2% smaller size
-	XZ_THREADS=${XZ_THREADS:-$(nproc)}
-	echo "Compressing with xz level 6 using ${XZ_THREADS} threads..."
-	tar -c -I"xz -6 -T${XZ_THREADS}" -f ${IMG_FILENAME} ${SYSTEM_NAME}-${VERSION}.img
-	log_time "xz compression"
-	rm ${SYSTEM_NAME}-${VERSION}.img
-
-	sha256sum ${SYSTEM_NAME}-${VERSION}.img.tar.xz > sha256sum.txt
-	cat sha256sum.txt
-
-	# Move the image to the output directory, if one was specified.
-	if [ -n "${OUTPUT_DIR}" ]; then
-		mkdir -p "${OUTPUT_DIR}"
-		mv ${IMG_FILENAME} ${OUTPUT_DIR}
-		mv build_info.txt ${OUTPUT_DIR}
-		mv sha256sum.txt ${OUTPUT_DIR}
-	fi
-
-	# set outputs for github actions
-	if [ -f "${GITHUB_OUTPUT}" ]; then
-		echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-		echo "display_version=${DISPLAY_VERSION}" >> "${GITHUB_OUTPUT}"
-		echo "display_name=${SYSTEM_DESC}" >> "${GITHUB_OUTPUT}"
-		echo "image_filename=${IMG_FILENAME}" >> "${GITHUB_OUTPUT}"
-	else
-		echo "No github output file set"
-	fi
+echo ""
+echo "=========================================="
+echo "BUILD COMPLETE!"
+echo "=========================================="
+if [ "$SKIP_COMPRESS" = false ] && [ -z "${NO_COMPRESS}" ]; then
+    echo "Image: ${IMG_FILENAME}"
 else
-	echo "Local build, output IMG directly"
-	if [ -n "${OUTPUT_DIR}" ]; then
-		mkdir -p "${OUTPUT_DIR}"
-		mv ${SYSTEM_NAME}-${VERSION}.img ${OUTPUT_DIR}
-	fi
+    echo "Image: ${SYSTEM_NAME}-${VERSION}.img (uncompressed)"
 fi
+echo "Size: $(ls -lh ${SYSTEM_NAME}-${VERSION}.img* 2>/dev/null | awk '{print $5}')"
+echo ""
+echo "To flash to USB:"
+echo "  sudo dd if=${SYSTEM_NAME}-${VERSION}.img of=/dev/sdX bs=4M status=progress oflag=sync"
+echo "=========================================="
