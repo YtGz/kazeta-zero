@@ -1188,8 +1188,8 @@ async fn main() {
             // Draw custom edition text overlay if configured
             if let Some(custom) = &config.custom_edition {
                 let splash_scale = screen_height() / BASE_SCREEN_HEIGHT;
-                let title_size = (48.0 * splash_scale) as u16;
-                let subtitle_size = (24.0 * splash_scale) as u16;
+                let title_size = (32.0 * splash_scale) as u16;
+                let subtitle_size = (16.0 * splash_scale) as u16;
 
                 // Calculate fade alpha (same timing as logo/video)
                 let text_alpha = if elapsed < 0.5 {
@@ -1202,14 +1202,31 @@ async fn main() {
 
                 let center_x = screen_width() / 2.0;
                 let center_y = screen_height() / 2.0;
+                let shadow_offset = 1.0 * splash_scale;
 
                 // Draw title if set
                 if let Some(title) = &custom.title {
                     let title_dims = measure_text(title, Some(&startup_font), title_size, 1.0);
+                    let x = center_x - title_dims.width / 2.0;
+                    let y = center_y - title_dims.height - 20.0 * splash_scale;
+
+                    // Shadow
                     draw_text_ex(
                         title,
-                        center_x - title_dims.width / 2.0,
-                        center_y - title_dims.height,
+                        x + shadow_offset,
+                        y + shadow_offset,
+                        TextParams {
+                            font: Some(&startup_font),
+                            font_size: title_size,
+                            color: Color::new(0.0, 0.0, 0.0, 0.9 * text_alpha),
+                            ..Default::default()
+                        },
+                    );
+                    // Main text
+                    draw_text_ex(
+                        title,
+                        x,
+                        y,
                         TextParams {
                             font: Some(&startup_font),
                             font_size: title_size,
@@ -1223,14 +1240,30 @@ async fn main() {
                 if let Some(subtitle) = &custom.subtitle {
                     let subtitle_dims =
                         measure_text(subtitle, Some(&startup_font), subtitle_size, 1.0);
+                    let x = center_x - subtitle_dims.width / 2.0;
+                    let y = center_y + 30.0 * splash_scale;
+
+                    // Shadow
                     draw_text_ex(
                         subtitle,
-                        center_x - subtitle_dims.width / 2.0,
-                        center_y + 10.0 * splash_scale,
+                        x + shadow_offset,
+                        y + shadow_offset,
                         TextParams {
                             font: Some(&startup_font),
                             font_size: subtitle_size,
-                            color: Color::new(0.9, 0.9, 0.9, text_alpha * 0.9),
+                            color: Color::new(0.0, 0.0, 0.0, 0.9 * text_alpha * 0.8),
+                            ..Default::default()
+                        },
+                    );
+                    // Main text
+                    draw_text_ex(
+                        subtitle,
+                        x,
+                        y,
+                        TextParams {
+                            font: Some(&startup_font),
+                            font_size: subtitle_size,
+                            color: Color::new(0.9, 0.9, 0.9, text_alpha * 0.8),
                             ..Default::default()
                         },
                     );
