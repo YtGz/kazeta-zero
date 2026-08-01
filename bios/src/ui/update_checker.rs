@@ -1,6 +1,6 @@
 use crate::{
     audio::SoundEffects, config::Config, get_current_font, render_background,
-    text_with_config_color, wrap_text, BackgroundState, InputState, Screen, VideoPlayer, FONT_SIZE,
+    text_with_config_color, BackgroundState, InputState, Screen, VideoPlayer, FONT_SIZE,
     VERSION_NUMBER,
 };
 use macroquad::prelude::*;
@@ -327,7 +327,7 @@ pub fn draw(
             let clean_body = md_link_regex.replace_all(&no_images, "$1");
 
             let wrap_width = container_w - 60.0 * scale_factor;
-            let wrapped_lines = wrap_text(clean_body.trim(), font.clone(), font_size, wrap_width);
+            let wrapped_lines = crate::utils::wrap_text(clean_body.trim(), font.clone(), font_size, wrap_width);
 
             let description_area_top = separator_y + 30.0 * scale_factor;
             let description_area_bottom = container_y + container_h - 30.0 * scale_factor;

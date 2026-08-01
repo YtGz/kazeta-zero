@@ -32,7 +32,7 @@ cd-da-reader = "0.1.0"
 rodio = "0.21.1"
 
 # video support
-ffmpeg-next = "8.0.0"
+ffmpeg-next = "8.1"
 image = "0.25.9"
 
 [target.'cfg(target_os = "linux")'.dependencies]

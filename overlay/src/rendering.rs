@@ -552,7 +552,7 @@ fn render_controllers_menu(state: &OverlayState) {
                     .count();
                 if paired > 0 {
                     draw_text(
-                        &format!("{} paired", paired),
+                        format!("{} paired", paired),
                         menu_x + menu_width - 120.0,
                         y + 25.0,
                         18.0,
@@ -569,7 +569,7 @@ fn render_controllers_menu(state: &OverlayState) {
                     .filter(|a| a.is_some())
                     .count();
                 draw_text(
-                    &format!("{}/4 assigned", assigned),
+                    format!("{}/4 assigned", assigned),
                     menu_x + menu_width - 120.0,
                     y + 25.0,
                     18.0,
@@ -805,7 +805,7 @@ fn render_assign_screen(state: &OverlayState) {
         ];
         let player_color = player_colors[player];
         draw_text(
-            &format!("P{}", player + 1),
+            format!("P{}", player + 1),
             menu_x + 30.0,
             y + 35.0,
             28.0,
@@ -842,7 +842,7 @@ fn render_assign_screen(state: &OverlayState) {
         .count();
     if unassigned_count > 0 {
         draw_text(
-            &format!("{} unassigned controller(s) available", unassigned_count),
+            format!("{} unassigned controller(s) available", unassigned_count),
             menu_x + 20.0,
             menu_y + menu_height - 50.0,
             16.0,
@@ -1549,21 +1549,21 @@ fn render_performance(state: &OverlayState) {
     let fps = state.performance.get_average_fps();
 
     draw_text(
-        &format!("CPU: {:.1}%", cpu),
+        format!("CPU: {:.1}%", cpu),
         panel_x + 40.0,
         stats_y,
         24.0,
         t.text,
     );
     draw_text(
-        &format!("RAM: {:.1}%", ram),
+        format!("RAM: {:.1}%", ram),
         panel_x + 40.0,
         stats_y + 40.0,
         24.0,
         t.text,
     );
     draw_text(
-        &format!("FPS: {:.0}", fps),
+        format!("FPS: {:.0}", fps),
         panel_x + 40.0,
         stats_y + 80.0,
         24.0,
@@ -1614,7 +1614,7 @@ fn render_playtime(state: &OverlayState) {
         let seconds = session_time.as_secs() % 60;
 
         draw_text(
-            &format!(
+            format!(
                 "Current Session: {:02}:{:02}:{:02}",
                 hours, minutes, seconds
             ),
@@ -1896,13 +1896,13 @@ fn render_performance_hud(state: &OverlayState) {
     } else {
         RED
     };
-    draw_text(&format!("FPS: {:.1}", fps), text_x, text_y, 16.0, fps_color);
+    draw_text(format!("FPS: {:.1}", fps), text_x, text_y, 16.0, fps_color);
     text_y += line_height;
 
     // Frame time
     let frame_time = state.performance.avg_frame_time_ms();
     draw_text(
-        &format!("Frame: {:.2}ms", frame_time),
+        format!("Frame: {:.2}ms", frame_time),
         text_x,
         text_y,
         16.0,
@@ -1920,7 +1920,7 @@ fn render_performance_hud(state: &OverlayState) {
         RED
     };
     draw_text(
-        &format!("CPU: {:.1}%", cpu_usage),
+        format!("CPU: {:.1}%", cpu_usage),
         text_x,
         text_y,
         16.0,
@@ -1940,7 +1940,7 @@ fn render_performance_hud(state: &OverlayState) {
         RED
     };
     draw_text(
-        &format!("MEM: {:.0}/{:.0}MB", mem_used, mem_total),
+        format!("MEM: {:.0}/{:.0}MB", mem_used, mem_total),
         text_x,
         text_y,
         16.0,

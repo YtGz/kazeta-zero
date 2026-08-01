@@ -1,7 +1,7 @@
 use crate::{
     audio::SoundEffects,
     config::{get_user_data_dir, Config},
-    get_current_font, render_background, text_with_config_color, wrap_text, BackgroundState,
+    get_current_font, render_background, text_with_config_color, BackgroundState,
     InputState, Screen, VideoPlayer, FONT_SIZE,
 };
 use macroquad::prelude::*;
@@ -574,7 +574,7 @@ pub fn draw(
 
             let wrap_width = container_w - 60.0 * scale_factor;
             // -- CHANGED -- Use the new, smaller font size for text wrapping
-            let wrapped_lines = wrap_text(
+            let wrapped_lines = crate::utils::wrap_text(
                 description_text.trim(),
                 font.clone(),
                 description_font_size,
