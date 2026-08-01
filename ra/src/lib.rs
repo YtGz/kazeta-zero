@@ -17,5 +17,5 @@ pub use evaluation::EvaluationEngine;
 pub use game_names::{GameNameEntry, GameNameMapping};
 pub use hash::{detect_console, hash_rom};
 pub use local_definitions::LocalDefinitions;
-pub use rcheevos_ffi::{hash_rom_rcheevos, Runtime as RcRuntime};
+pub use rcheevos_ffi::{build_fetch_game_data_url, hash_rom_rcheevos, parse_fetch_game_data_response, ParsedAchievement, Runtime as RcRuntime};
 pub use types::*;

@@ -82,14 +82,224 @@ extern "C" {
     pub fn rc_hash_destroy_iterator(iterator: *mut RcHashIterator);
     pub fn rc_hash_iterate(hash: *mut c_char, iterator: *mut RcHashIterator) -> c_int;
 
-    // --- File reader (Rust-provided, called by rcheevos during hashing) ---
-    // These are set on the iterator's callbacks before calling rc_hash_iterate.
-    // We expose them here so we can set the function pointers.
+    // --- API client: fetch game data (achievement definitions with condition strings) ---
+    pub fn rc_api_init_fetch_game_data_request(
+        request: *mut RcApiRequest,
+        params: *const RcApiFetchGameDataRequest,
+    ) -> c_int;
+    pub fn rc_api_process_fetch_game_data_server_response(
+        response: *mut RcApiFetchGameDataResponse,
+        server_response: *const c_char,
+    ) -> c_int;
+    pub fn rc_api_destroy_fetch_game_data_response(response: *mut RcApiFetchGameDataResponse);
+    pub fn rc_api_destroy_request(request: *mut RcApiRequest);
+}
+
+// ===================================================================
+// API client types (opaque — layout is internal to rcheevos)
+// ===================================================================
+
+#[repr(C)]
+pub struct RcApiRequest {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct RcApiFetchGameDataRequest {
+    pub username: *const c_char,
+    pub api_token: *const c_char,
+    pub game_id: u32,
+    pub game_hash: *const c_char,
+}
+
+#[repr(C)]
+pub struct RcApiFetchGameDataResponse {
+    _private: [u8; 0],
+}
+
+/// A single achievement definition from the rcheevos API response.
+/// The `definition` field contains the actual rcheevos condition string.
+#[repr(C)]
+pub struct RcApiAchievementDefinition {
+    pub id: u32,
+    pub points: u32,
+    pub category: u32,
+    pub title: *const c_char,
+    pub description: *const c_char,
+    pub definition: *const c_char,
+    pub author: *const c_char,
+    pub badge_name: *const c_char,
+    pub created: i64,
+    pub updated: i64,
+    pub achievement_type: u32,
+    pub rarity: f32,
+    pub rarity_hardcore: f32,
+    pub badge_url: *const c_char,
+    pub badge_locked_url: *const c_char,
 }
 
 // ===================================================================
 // Safe wrappers
 // ===================================================================
+
+/// Build the URL for fetching game data (achievement definitions).
+/// Returns the URL string that should be fetched via HTTP GET.
+pub fn build_fetch_game_data_url(username: &str, api_token: &str, game_id: u32) -> Option<String> {
+    let c_username = CString::new(username).ok()?;
+    let c_api_token = CString::new(api_token).ok()?;
+
+    let mut request = RcApiFetchGameDataRequest {
+        username: c_username.as_ptr(),
+        api_token: c_api_token.as_ptr(),
+        game_id,
+        game_hash: std::ptr::null(),
+    };
+
+    // We need the request struct to be large enough for the C library to write into.
+    // rc_api_request_t contains url, post_data, content_type pointers + a buffer.
+    // We allocate a large buffer and treat it as opaque bytes.
+    let mut request_buf = vec![0u8; 2048];
+    let request_ptr = request_buf.as_mut_ptr() as *mut RcApiRequest;
+
+    unsafe {
+        let result = rc_api_init_fetch_game_data_request(request_ptr, &mut request);
+        if result != 0 {
+            // Get the URL from the request struct
+            // rc_api_request_t layout: url (ptr), post_data (ptr), content_type (ptr), buffer
+            // url is at offset 0
+            let url_ptr = *(request_ptr as *const *const c_char);
+            if url_ptr.is_null() {
+                rc_api_destroy_request(request_ptr);
+                return None;
+            }
+            let url_cstr = std::ffi::CStr::from_ptr(url_ptr);
+            let url = url_cstr.to_string_lossy().into_owned();
+            rc_api_destroy_request(request_ptr);
+            Some(url)
+        } else {
+            rc_api_destroy_request(request_ptr);
+            None
+        }
+    }
+}
+
+/// Parse a server response into achievement definitions.
+/// Returns (game_id, console_id, title, Vec<AchievementDefinition>)
+pub fn parse_fetch_game_data_response(
+    json: &str,
+) -> Option<(u32, u32, String, Vec<ParsedAchievement>)> {
+    let c_json = CString::new(json).ok()?;
+
+    // Allocate a large buffer for the response struct.
+    let mut response_buf = vec![0u8; 65536];
+    let response_ptr = response_buf.as_mut_ptr() as *mut RcApiFetchGameDataResponse;
+
+    unsafe {
+        let result =
+            rc_api_process_fetch_game_data_server_response(response_ptr, c_json.as_ptr());
+        if result == 0 {
+            rc_api_destroy_fetch_game_data_response(response_ptr);
+            return None;
+        }
+
+        // Read fields from the response struct at known offsets
+        // rc_api_fetch_game_data_response_t layout:
+        //   id: u32 (offset 0)
+        //   console_id: u32 (offset 4)
+        //   title: *const char (offset 8)
+        //   image_name: *const char (offset 16)
+        //   image_url: *const char (offset 24)
+        //   rich_presence_script: *const char (offset 32)
+        //   achievements: *RcApiAchievementDefinition (offset 40)
+        //   num_achievements: u32 (offset 48)
+        //   leaderboards: ptr (offset 56)
+        //   num_leaderboards: u32 (offset 64)
+        let base = response_ptr as *const u8;
+
+        let game_id = std::ptr::read_unaligned(base as *const u32);
+        let console_id = std::ptr::read_unaligned(base.add(4) as *const u32);
+
+        let title_ptr = std::ptr::read_unaligned(base.add(8) as *const *const c_char);
+        let title = if !title_ptr.is_null() {
+            std::ffi::CStr::from_ptr(title_ptr)
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            String::new()
+        };
+
+        let achievements_ptr = std::ptr::read_unaligned(base.add(40) as *const *const RcApiAchievementDefinition);
+        let num_achievements = std::ptr::read_unaligned(base.add(48) as *const u32) as usize;
+
+        let mut achievements = Vec::new();
+        if !achievements_ptr.is_null() {
+            for i in 0..num_achievements {
+                let ach = &*achievements_ptr.add(i);
+                let definition = if !ach.definition.is_null() {
+                    std::ffi::CStr::from_ptr(ach.definition)
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    String::new()
+                };
+                let title = if !ach.title.is_null() {
+                    std::ffi::CStr::from_ptr(ach.title)
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    String::new()
+                };
+                let description = if !ach.description.is_null() {
+                    std::ffi::CStr::from_ptr(ach.description)
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    String::new()
+                };
+                let badge_name = if !ach.badge_name.is_null() {
+                    std::ffi::CStr::from_ptr(ach.badge_name)
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    String::new()
+                };
+
+                achievements.push(ParsedAchievement {
+                    id: ach.id,
+                    title,
+                    description,
+                    points: ach.points,
+                    badge_name,
+                    definition,
+                    display_order: 0, // API doesn't return display_order in this response
+                    achievement_type: match ach.achievement_type {
+                        1 => "progression".to_string(),
+                        2 => "missable".to_string(),
+                        3 => "win".to_string(),
+                        _ => "standard".to_string(),
+                    },
+                });
+            }
+        }
+
+        rc_api_destroy_fetch_game_data_response(response_ptr);
+        Some((game_id, console_id, title, achievements))
+    }
+}
+
+/// A parsed achievement definition with the rcheevos condition string.
+#[derive(Debug, Clone)]
+pub struct ParsedAchievement {
+    pub id: u32,
+    pub title: String,
+    pub description: String,
+    pub points: u32,
+    pub badge_name: String,
+    pub definition: String,
+    pub display_order: u32,
+    pub achievement_type: String,
+}
+
 
 // We use rc_runtime_alloc() to let rcheevos allocate the runtime struct.
 extern "C" {

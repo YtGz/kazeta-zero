@@ -23,6 +23,9 @@ fn main() {
 
     let runtime_sources = [
         "src/rc_util.c",
+        "src/rc_client.c",
+        "src/rapi/rc_api_common.c",
+        "src/rapi/rc_api_runtime.c",
         "src/rcheevos/alloc.c",
         "src/rcheevos/condition.c",
         "src/rcheevos/condset.c",
