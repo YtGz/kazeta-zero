@@ -85,6 +85,134 @@ sudo ./upgrade-to-zero.sh    # For initial installation
 sudo ./update-kazeta-zero.sh  # For updates to existing installation
 ```
 
+## Building the OS Image (Docker)
+
+The `build-image.sh` script creates a full bootable Arch Linux btrfs image
+with all Kazeta Zero packages and binaries pre-installed. It must run inside
+the Docker builder image because it needs `pacstrap`, `arch-chroot`,
+`mkfs.btrfs`, and loop device access.
+
+### Prerequisites
+
+- Docker must support `--privileged` containers with loop mount access.
+  **Rootless Docker does not work** — it restricts `mount` and `losetup`.
+  Use the system Docker daemon (`/var/run/docker.sock`) instead:
+
+  ```bash
+  # Check which Docker you're using
+  docker context ls
+
+  # If it says unix:///run/user/1000/docker.sock, you're on rootless.
+  # Switch to the system daemon for the build:
+  export DOCKER_HOST=unix:///var/run/docker.sock
+  ```
+
+- The `vendor/rcheevos/` git submodule must be checked out:
+
+  ```bash
+  git submodule update --init
+  ```
+
+- Pre-built AUR packages must be present in `aur-pkgs/` (they are committed
+  to the repo, so a normal clone is sufficient).
+
+### Step 1: Build the Docker builder image
+
+```bash
+docker build -t kazeta-zero-builder .
+```
+
+This creates an Arch Linux container with `base-devel`, `rust`, `pikaur`,
+and all build tools needed by `build-image.sh`.
+
+If you are on rootless Docker, transfer the image to the system daemon:
+
+```bash
+docker save kazeta-zero-builder | DOCKER_HOST=unix:///var/run/docker.sock docker load
+```
+
+### Step 2: Run the image build
+
+```bash
+mkdir -p output
+
+DOCKER_HOST=unix:///var/run/docker.sock docker run \
+  -u root --rm --privileged=true \
+  --entrypoint=/workdir/build-image.sh \
+  -v "$(pwd):/workdir" \
+  -v "$(pwd)/output:/output" \
+  kazeta-zero-builder
+```
+
+**What it does:**
+1. Builds all four Rust binaries (BIOS, overlay, RA, input daemon) in release mode
+2. Creates a 5 GB btrfs image, bootstraps Arch Linux into it via `pacstrap`
+3. Installs all packages from `manifest`, AUR packages, and Rust binaries
+4. Runs the postinstall hook (sudoers, inputplumber config, automount, etc.)
+5. Snapshots the subvolume and sends it to a `.img` file
+6. Compresses with `xz -9e` and writes `sha256sum.txt`
+
+**Output:**
+```
+output/kazeta-zero-<version>.img.tar.xz
+output/build_info.txt
+output/sha256sum.txt
+```
+
+### Known issues
+
+- **`umount: target is busy`**: The `btrfs send` command can leave the mount
+  busy, preventing the final `umount` from succeeding. The image file is
+  already fully written by that point — if the script exits with an error
+  after `btrfs send`, the `.img` file in the working directory is still
+  valid. Compress it manually:
+
+  ```bash
+  # Fix ownership (the container runs as root)
+  DOCKER_HOST=unix:///var/run/docker.sock docker run --rm -u root \
+    -v "$(pwd):/workdir" --entrypoint=/bin/bash kazeta-zero-builder \
+    -c "chown 1000:1000 /workdir/kazeta-zero-*.img /workdir/build_info.txt"
+
+  # Compress
+  tar -c -I'xz -9e -T4' -f output/kazeta-zero-<version>.img.tar.xz kazeta-zero-<version>.img
+  sha256sum output/kazeta-zero-<version>.img.tar.xz > output/sha256sum.txt
+  cp build_info.txt output/
+  rm kazeta-zero-<version>.img
+  ```
+
+- **Root-owned `target/release/` directories**: If the build fails partway
+  through, the container leaves root-owned files in `*/target/release/`.
+  Clean them with:
+
+  ```bash
+  DOCKER_HOST=unix:///var/run/docker.sock docker run --rm -u root \
+    -v "$(pwd):/workdir" --entrypoint=/bin/bash kazeta-zero-builder \
+    -c "rm -rf /workdir/*/target/release"
+  ```
+
+- **`rootfs/etc/pacman.d/mirrorlist` modified**: The build overwrites the
+  mirrorlist with current Arch mirrors. Restore the committed version after
+  the build:
+
+  ```bash
+  git checkout rootfs/etc/pacman.d/mirrorlist
+  ```
+
+### Building on the device (without Docker)
+
+If Docker is not available, `build-image.sh` can run directly on an Arch
+Linux host with the following packages installed:
+
+```bash
+sudo pacman -S arch-install-scripts btrfs-progs base-devel rust cargo
+```
+
+Then run as root:
+
+```bash
+sudo ./build-image.sh
+```
+
 ## Deployment Scripts
 
 ### upgrade-to-zero.sh (Initial Installation)
