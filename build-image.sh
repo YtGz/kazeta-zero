@@ -533,18 +533,17 @@ rm -rf ${MOUNT_PATH}-efi-staging
 # Measure the actual uncompressed size of the stream
 echo "Measuring stream size..."
 STREAM_SIZE_BYTES=$(stat -c %s "${STREAM_IMG}")
-# Uncompressed size is roughly 1.5-2x compressed for zstd
-# We'll create a test receive to measure exactly
-TEST_IMG=/tmp/test-measure.img
+# Create test image in BUILD_ROOT (not /tmp which may be small)
+TEST_IMG=${BUILD_ROOT}/test-measure.img
 fallocate -l $((${SIZE/MB/} * 3))M ${TEST_IMG}
 mkfs.btrfs -f ${TEST_IMG}
-mkdir -p /tmp/test-measure-mount
-mount -o loop ${TEST_IMG} /tmp/test-measure-mount
-btrfs receive /tmp/test-measure-mount < ${STREAM_IMG} 2>/dev/null || true
-ACTUAL_ROOT_SIZE=$(df -m /tmp/test-measure-mount | tail -1 | awk '{print $2}')
-umount /tmp/test-measure-mount
+mkdir -p ${BUILD_ROOT}/test-measure-mount
+mount -o loop ${TEST_IMG} ${BUILD_ROOT}/test-measure-mount
+btrfs receive ${BUILD_ROOT}/test-measure-mount < ${STREAM_IMG} 2>/dev/null || true
+ACTUAL_ROOT_SIZE=$(df -m ${BUILD_ROOT}/test-measure-mount | tail -1 | awk '{print $2}')
+umount ${BUILD_ROOT}/test-measure-mount
 losetup -j ${TEST_IMG} | cut -d : -f 1 | xargs -r losetup -d
-rm -rf /tmp/test-measure-mount ${TEST_IMG}
+rm -rf ${BUILD_ROOT}/test-measure-mount ${TEST_IMG}
 
 # Use exact measured size (no margin - partition must match filesystem metadata)
 ROOT_SIZE=${ACTUAL_ROOT_SIZE}
