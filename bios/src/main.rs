@@ -1,3 +1,13 @@
+// UI rendering and game launch functions legitimately require many parameters
+// (textures, fonts, state, config, etc.) and splitting them would harm readability.
+#![allow(clippy::too_many_arguments)]
+// macroquad's async loop holds a std MutexGuard across .await points; this is
+// safe because the loop is single-threaded and the guard is never sent across threads.
+#![allow(clippy::await_holding_lock)]
+// BIOS exposes utility functions (toast notifications, overlay IPC, etc.) that are
+// part of the public API surface but not yet called from every code path.
+#![allow(dead_code)]
+
 use crate::{
     audio::{load_sound_from_bytes, play_new_bgm, SoundEffects, AUDIO},
     cd_player_backend::CdPlayerBackend,
@@ -645,13 +655,13 @@ async fn load_all_assets(
     // separate image backgrounds from video backgrounds
     let image_backgrounds: Vec<PathBuf> = background_files
         .iter()
-        .filter(|p| p.extension().map_or(false, |e| e == "png"))
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
         .cloned()
         .collect();
 
     let video_backgrounds: Vec<PathBuf> = background_files
         .iter()
-        .filter(|p| p.extension().map_or(false, |e| e == "mp4"))
+        .filter(|p| p.extension().is_some_and(|e| e == "mp4"))
         .cloned()
         .collect();
 
@@ -922,7 +932,7 @@ async fn main() {
 
     // load custom sound pack
     if config.sfx_pack != "Default" {
-        println!("[Info] Loading configured SFX pack: {}", &config.sfx_pack);
+        println!("[Info] Loading configured SFX pack: {}", config.sfx_pack);
         //sound_effects = SoundEffects::load(&config.sfx_pack).await;
         sound_effects = SoundEffects::load(&config.sfx_pack);
     }
@@ -951,9 +961,9 @@ async fn main() {
     // background state
     let mut background_state = BackgroundState {
         bgx: 0.0,
-        bg_color: COLOR_TARGETS[0].clone(),
+        bg_color: COLOR_TARGETS[0],
         target: 1,
-        tg_color: COLOR_TARGETS[1].clone(),
+        tg_color: COLOR_TARGETS[1],
     };
 
     // backgrounds
@@ -1021,7 +1031,7 @@ async fn main() {
             sink.set_volume(0.0);
         }
 
-        let sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let sink = Sink::connect_new(AUDIO.stream.mixer());
 
         // 1. Setup Audio
         // Try to load custom splash audio from music cache, otherwise use default
@@ -1249,7 +1259,7 @@ async fn main() {
         let _active_theme = loaded_themes.get(&config.theme).unwrap_or_else(|| {
             println!(
                 "[WARN] Active theme '{}' not found. Falling back to 'Default'.",
-                &config.theme
+                config.theme
             );
             loaded_themes
                 .get("Default")
@@ -1384,7 +1394,8 @@ async fn main() {
 
                 match action {
                     ui::blades::BladeAction::None => {}
-                    ui::blades::BladeAction::LaunchGame((cart_info, kzi_path)) => {
+                    ui::blades::BladeAction::LaunchGame(boxed) => {
+                        let (cart_info, kzi_path) = (*boxed).clone();
                         // Mark that this game flow started from Blades so Back can return here.
                         return_to_blades_after_game = true;
 
@@ -1413,7 +1424,7 @@ async fn main() {
                                     dialog::find_existing_save_slots(&save_dir, &rom_name);
                                 let can_import = cart_info
                                     .player_saves
-                                    .get(0)
+                                    .first()
                                     .and_then(|s| s.as_ref())
                                     .is_some();
                                 mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
@@ -1676,29 +1687,21 @@ async fn main() {
                     }
                 }
                 let grid_width = 5; // The number of icons per row
-                if input_state.left {
-                    if game_selection > 0 {
-                        game_selection -= 1;
-                        sound_effects.play_cursor_move(&config);
-                    }
+                if input_state.left && game_selection > 0 {
+                    game_selection -= 1;
+                    sound_effects.play_cursor_move(&config);
                 }
-                if input_state.right {
-                    if game_selection < available_games.len() - 1 {
-                        game_selection += 1;
-                        sound_effects.play_cursor_move(&config);
-                    }
+                if input_state.right && game_selection < available_games.len() - 1 {
+                    game_selection += 1;
+                    sound_effects.play_cursor_move(&config);
                 }
-                if input_state.up {
-                    if game_selection >= grid_width {
-                        game_selection -= grid_width;
-                        sound_effects.play_cursor_move(&config);
-                    }
+                if input_state.up && game_selection >= grid_width {
+                    game_selection -= grid_width;
+                    sound_effects.play_cursor_move(&config);
                 }
-                if input_state.down {
-                    if game_selection + grid_width < available_games.len() {
-                        game_selection += grid_width;
-                        sound_effects.play_cursor_move(&config);
-                    }
+                if input_state.down && game_selection + grid_width < available_games.len() {
+                    game_selection += grid_width;
+                    sound_effects.play_cursor_move(&config);
                 }
                 if input_state.back {
                     if return_to_blades_after_game {
@@ -1759,7 +1762,7 @@ async fn main() {
                                     dialog::find_existing_save_slots(&save_dir, &rom_name);
                                 let can_import = cart_info
                                     .player_saves
-                                    .get(0)
+                                    .first()
                                     .and_then(|s| s.as_ref())
                                     .is_some();
 
@@ -1812,7 +1815,7 @@ async fn main() {
                                 ));
                             }
 
-                            match save::launch_game(&cart_info, &kzi_path) {
+                            match save::launch_game(cart_info, kzi_path) {
                                 Ok(mut child) => {
                                     log_messages
                                         .lock()
@@ -1889,17 +1892,13 @@ async fn main() {
 
                 // --- Input Handling (collect action) ---
                 if let Some(ref mut dialog) = mgba_launch_dialog {
-                    if input_state.up {
-                        if dialog.selection > 0 {
-                            dialog.selection -= 1;
-                            sound_effects.play_cursor_move(&config);
-                        }
+                    if input_state.up && dialog.selection > 0 {
+                        dialog.selection -= 1;
+                        sound_effects.play_cursor_move(&config);
                     }
-                    if input_state.down {
-                        if dialog.selection < dialog.options.len() - 1 {
-                            dialog.selection += 1;
-                            sound_effects.play_cursor_move(&config);
-                        }
+                    if input_state.down && dialog.selection < dialog.options.len() - 1 {
+                        dialog.selection += 1;
+                        sound_effects.play_cursor_move(&config);
                     }
                     if input_state.back {
                         sound_effects.play_back(&config);
@@ -2036,7 +2035,7 @@ async fn main() {
                                 dialog::find_existing_save_slots(&save_dir, &rom_name);
                             let can_import = cart_info
                                 .player_saves
-                                .get(0)
+                                .first()
                                 .and_then(|s| s.as_ref())
                                 .is_some();
                             mgba_launch_dialog = Some(dialog::create_save_slot_dialog(
@@ -2302,7 +2301,7 @@ async fn main() {
                 // First, render the settings page in the background
                 render_settings_page(
                     1,
-                    &GENERAL_SETTINGS,
+                    GENERAL_SETTINGS,
                     &logo_cache,
                     &background_cache,
                     &mut video_cache,
@@ -2340,7 +2339,7 @@ async fn main() {
                 // --- Render ---
                 render_settings_page(
                     1,
-                    &GENERAL_SETTINGS,
+                    GENERAL_SETTINGS,
                     &logo_cache,
                     &background_cache,
                     &mut video_cache,

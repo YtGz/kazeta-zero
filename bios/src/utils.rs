@@ -1,6 +1,6 @@
 use crate::audio::play_new_bgm;
 use crate::types::Screen;
-use crate::{config, save, thread, Arc, BufReader, Child, Mutex};
+use crate::{save, thread, Arc, BufReader, Child, Mutex};
 use chrono::Local;
 use kazeta_overlay::{OverlayClient, OverlayScreen, ToastStyle};
 use macroquad::prelude::*;
@@ -61,7 +61,7 @@ pub fn find_asset_files(dir_path: &str, extensions: &[&str]) -> Vec<PathBuf> {
                     && path
                         .extension()
                         .and_then(|s| s.to_str())
-                        .map_or(false, |ext| extensions.contains(&ext))
+                        .is_some_and(|ext| extensions.contains(&ext))
             })
             .collect();
         files.sort();
@@ -175,7 +175,7 @@ pub fn start_log_reader(process: &mut Child, logs: Arc<Mutex<Vec<String>>>) {
         let logs_clone_stdout = logs.clone();
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
-            for line in reader.lines().filter_map(|l| l.ok()) {
+            for line in reader.lines().map_while(Result::ok) {
                 logs_clone_stdout.lock().unwrap().push(line);
             }
         });
@@ -183,7 +183,7 @@ pub fn start_log_reader(process: &mut Child, logs: Arc<Mutex<Vec<String>>>) {
         let logs_clone_stderr = logs.clone();
         thread::spawn(move || {
             let reader = BufReader::new(stderr);
-            for line in reader.lines().filter_map(|l| l.ok()) {
+            for line in reader.lines().map_while(Result::ok) {
                 logs_clone_stderr.lock().unwrap().push(line);
             }
         });

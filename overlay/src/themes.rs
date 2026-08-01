@@ -22,6 +22,8 @@ pub struct Theme {
 
 impl Theme {
     /// Create a theme from individual color components
+    // Each parameter maps to a distinct, named theme color; grouping them into a
+    // struct would obscure the one-to-one relationship with the color components.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,

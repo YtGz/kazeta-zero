@@ -157,11 +157,9 @@ pub fn update(
                     sound_effects.play_cursor_move(config);
                 }
             }
-            if input_state.up {
-                if state.description_scroll_offset > 0 {
-                    state.description_scroll_offset -= 1;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.up && state.description_scroll_offset > 0 {
+                state.description_scroll_offset -= 1;
+                sound_effects.play_cursor_move(config);
             }
         }
         UpdateCheckerScreenState::UpdateComplete => {
@@ -182,12 +180,12 @@ pub fn update(
                 exit(0); // Fallback in case reboot command fails
             }
         }
-        UpdateCheckerScreenState::UpToDate | UpdateCheckerScreenState::Error(_) => {
-            if input_state.select {
-                *current_screen = Screen::MainMenu;
-                state.screen_state = UpdateCheckerScreenState::Idle; // <-- RESET STATE
-                sound_effects.play_select(config);
-            }
+        UpdateCheckerScreenState::UpToDate | UpdateCheckerScreenState::Error(_)
+            if input_state.select =>
+        {
+            *current_screen = Screen::MainMenu;
+            state.screen_state = UpdateCheckerScreenState::Idle; // <-- RESET STATE
+            sound_effects.play_select(config);
         }
         _ => {}
     }
@@ -222,7 +220,7 @@ pub fn draw(
     background_state: &mut BackgroundState,
     scale_factor: f32,
 ) {
-    render_background(&background_cache, video_cache, &config, background_state);
+    render_background(background_cache, video_cache, config, background_state);
     let font = get_current_font(font_cache, config);
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
     let line_height = font_size as f32 * 1.5;
@@ -327,7 +325,8 @@ pub fn draw(
             let clean_body = md_link_regex.replace_all(&no_images, "$1");
 
             let wrap_width = container_w - 60.0 * scale_factor;
-            let wrapped_lines = crate::utils::wrap_text(clean_body.trim(), font.clone(), font_size, wrap_width);
+            let wrapped_lines =
+                crate::utils::wrap_text(clean_body.trim(), font.clone(), font_size, wrap_width);
 
             let description_area_top = separator_y + 30.0 * scale_factor;
             let description_area_bottom = container_y + container_h - 30.0 * scale_factor;
@@ -492,7 +491,7 @@ fn check_for_updates(tx: Sender<CheckerMessage>) {
                 if resp.status().is_success() {
                     match resp.json::<Vec<GithubRelease>>() {
                         Ok(releases) => {
-                            if let Some(latest_release) = releases.get(0) {
+                            if let Some(latest_release) = releases.first() {
                                 // No need for mut here
                                 if latest_release.tag_name != VERSION_NUMBER {
                                     Ok(UpdateCheckResult::UpdateAvailable(latest_release.clone()))
@@ -543,8 +542,8 @@ fn perform_update_logic(
         .bytes()
         .map_err(|e| format!("Failed to read bytes: {}", e))?;
 
-    let mut tmp_file = fs::File::create(&tmp_zip_path)
-        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    let mut tmp_file =
+        fs::File::create(tmp_zip_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
     tmp_file
         .write_all(&response_bytes)
         .map_err(|e| format!("Failed to save update file: {}", e))?;
@@ -571,7 +570,7 @@ fn perform_update_logic(
     }
 
     // Extract the archive (which creates the kit_path directory)
-    extract_archive(&tmp_zip_path, &tmp_extract_dir)?;
+    extract_archive(tmp_zip_path, tmp_extract_dir)?;
 
     // Build the script path INSIDE the kit directory
     let script_path = kit_path.join("upgrade-to-zero.sh"); // e.g., /tmp/kazeta-upgrade-kit-1.34/upgrade-to-zero.sh
@@ -644,7 +643,7 @@ fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), String
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    fs::create_dir_all(&p)
+                    fs::create_dir_all(p)
                         .map_err(|e| format!("Failed to create parent dir: {}", e))?;
                 }
             }

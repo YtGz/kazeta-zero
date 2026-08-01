@@ -1257,7 +1257,7 @@ mod tests {
 
         assert_eq!(tracker.progress.total, 3);
         assert_eq!(tracker.progress.earned, 2);
-        assert_eq!(tracker.get_progress_percent(), 66.666664); // 2/3 * 100
+        assert!((tracker.get_progress_percent() - 66.66667).abs() < 0.01); // 2/3 * 100
     }
 
     #[test]
@@ -1379,7 +1379,7 @@ mod tests {
 
     #[test]
     fn test_quit_confirm_selection() {
-        let mut state_builder = || OverlayState {
+        let state_builder = || OverlayState {
             visible: true,
             current_screen: OverlayScreen::QuitConfirm,
             selected_option: 0,
@@ -1391,6 +1391,8 @@ mod tests {
             theme_selected: 0,
             theme_selection_scroll_offset: 0,
             quit_confirm_selected: 0,
+            ra_poller: None,
+            achievements_scroll_offset: 0,
             toasts: ToastManager::new(),
             achievements: AchievementTracker::new(),
             controllers: ControllerState::new(),
@@ -1435,6 +1437,8 @@ mod tests {
             theme_selected: 0,
             theme_selection_scroll_offset: 0,
             quit_confirm_selected: 0, // Cancel selected
+            ra_poller: None,
+            achievements_scroll_offset: 0,
             toasts: ToastManager::new(),
             achievements: AchievementTracker::new(),
             controllers: ControllerState::new(),
@@ -1465,6 +1469,8 @@ mod tests {
             theme_selected: 0,
             theme_selection_scroll_offset: 0,
             quit_confirm_selected: 1, // Quit selected
+            ra_poller: None,
+            achievements_scroll_offset: 0,
             toasts: ToastManager::new(),
             achievements: AchievementTracker::new(),
             controllers: ControllerState::new(),
@@ -1495,6 +1501,8 @@ mod tests {
             theme_selected: 0,
             theme_selection_scroll_offset: 0,
             quit_confirm_selected: 0,
+            ra_poller: None,
+            achievements_scroll_offset: 0,
             toasts: ToastManager::new(),
             achievements: AchievementTracker::new(),
             controllers: ControllerState::new(),

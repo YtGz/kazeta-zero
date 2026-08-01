@@ -117,7 +117,11 @@ impl VideoPlayer {
             }
 
             // 3. Render (Timestamp is <= elapsed, so show it)
-            if let Ok(_) = self.scaler.run(&self.video_frame, &mut self.frame_rgb) {
+            if self
+                .scaler
+                .run(&self.video_frame, &mut self.frame_rgb)
+                .is_ok()
+            {
                 let data = self.frame_rgb.data(0);
                 let stride = self.frame_rgb.stride(0);
 

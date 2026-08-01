@@ -246,7 +246,7 @@ pub fn get_ip_address() -> String {
             // Look for a line with "inet", then parse it.
             for line in stdout.lines() {
                 if line.trim().starts_with("inet") {
-                    let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                    let parts: Vec<&str> = line.split_whitespace().collect();
                     if let Some(ip_with_cidr) = parts.get(1) {
                         // The IP is usually followed by a CIDR mask, like "192.168.1.5/24".
                         // We split by "/" and take the first part.

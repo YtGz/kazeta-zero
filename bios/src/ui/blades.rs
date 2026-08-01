@@ -28,7 +28,7 @@ const BLADE_TRANSITION_DURATION: f32 = 0.3;
 
 pub enum BladeAction {
     None,
-    LaunchGame((save::CartInfo, PathBuf)),
+    LaunchGame(Box<(save::CartInfo, PathBuf)>),
     GoToScreen(Screen),
 }
 
@@ -108,78 +108,79 @@ impl BladesAnimationState {
 
 impl BladesState {
     pub fn new() -> Self {
-        let mut blades = Vec::new();
-        blades.push(Blade {
-            blade_type: BladeType::GamesAndApps,
-            name: "GAMES & APPS".to_string(),
-            tabs: vec![
-                BladeTab {
-                    name: "LIBRARY".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "RECENTLY PLAYED".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "INSTALLED APPS".to_string(),
-                    icon: None,
-                },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: WHITE,
-        });
-        blades.push(Blade {
-            blade_type: BladeType::SystemSettings,
-            name: "SYSTEM SETTINGS".to_string(),
-            tabs: vec![
-                BladeTab {
-                    name: "GENERAL".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "AUDIO".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "GUI".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "NETWORK".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "ASSETS".to_string(),
-                    icon: None,
-                },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: WHITE,
-        });
-        blades.push(Blade {
-            blade_type: BladeType::SaveDataAndMemory,
-            name: "SAVE DATA & MEMORY".to_string(),
-            tabs: vec![
-                BladeTab {
-                    name: "INTERNAL STORAGE".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "EXTERNAL STORAGE".to_string(),
-                    icon: None,
-                },
-                BladeTab {
-                    name: "MANAGE SAVES".to_string(),
-                    icon: None,
-                },
-            ],
-            selected_tab: 0,
-            scroll_offset: 0,
-            gradient_color: WHITE,
-        });
+        let blades = vec![
+            Blade {
+                blade_type: BladeType::GamesAndApps,
+                name: "GAMES & APPS".to_string(),
+                tabs: vec![
+                    BladeTab {
+                        name: "LIBRARY".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "RECENTLY PLAYED".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "INSTALLED APPS".to_string(),
+                        icon: None,
+                    },
+                ],
+                selected_tab: 0,
+                scroll_offset: 0,
+                gradient_color: WHITE,
+            },
+            Blade {
+                blade_type: BladeType::SystemSettings,
+                name: "SYSTEM SETTINGS".to_string(),
+                tabs: vec![
+                    BladeTab {
+                        name: "GENERAL".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "AUDIO".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "GUI".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "NETWORK".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "ASSETS".to_string(),
+                        icon: None,
+                    },
+                ],
+                selected_tab: 0,
+                scroll_offset: 0,
+                gradient_color: WHITE,
+            },
+            Blade {
+                blade_type: BladeType::SaveDataAndMemory,
+                name: "SAVE DATA & MEMORY".to_string(),
+                tabs: vec![
+                    BladeTab {
+                        name: "INTERNAL STORAGE".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "EXTERNAL STORAGE".to_string(),
+                        icon: None,
+                    },
+                    BladeTab {
+                        name: "MANAGE SAVES".to_string(),
+                        icon: None,
+                    },
+                ],
+                selected_tab: 0,
+                scroll_offset: 0,
+                gradient_color: WHITE,
+            },
+        ];
 
         BladesState {
             blades,
@@ -291,7 +292,7 @@ pub fn update(
                         .games_list
                         .get(blades_state.game_list_selection)
                     {
-                        return BladeAction::LaunchGame(game.clone());
+                        return BladeAction::LaunchGame(Box::new(game.clone()));
                     }
                 }
             }
@@ -456,18 +457,16 @@ fn render_blade(
         accent_color,
     );
 
-    if is_active {
-        if blade.blade_type == BladeType::GamesAndApps && blade.selected_tab == 0 {
-            // Only show the game library on the Games & Apps blade, Library tab
-            render_games_blade_content(
-                blades_state,
-                render_info,
-                font_cache,
-                config,
-                scale_factor,
-                accent_color,
-            );
-        }
+    if is_active && blade.blade_type == BladeType::GamesAndApps && blade.selected_tab == 0 {
+        // Only show the game library on the Games & Apps blade, Library tab
+        render_games_blade_content(
+            blades_state,
+            render_info,
+            font_cache,
+            config,
+            scale_factor,
+            accent_color,
+        );
     }
 }
 

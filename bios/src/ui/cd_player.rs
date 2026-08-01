@@ -60,7 +60,7 @@ pub fn update(
         let mut backend = ui_state.backend.lock().unwrap();
         if backend.status == PlayerStatus::Playing {
             // Check if the sink is empty
-            let song_finished = backend.sink.as_ref().map_or(false, |s| s.empty());
+            let song_finished = backend.sink.as_ref().is_some_and(|s| s.empty());
 
             if song_finished {
                 println!("[CD Player] Song finished. Advancing to next track.");
@@ -129,7 +129,7 @@ pub fn update(
     if let Some(toc) = &backend.toc {
         let num_tracks = toc.tracks.len();
         if !toc.tracks.is_empty() {
-            let col_split_point = (num_tracks + 1) / 2;
+            let col_split_point = num_tracks.div_ceil(2);
             let current_track = ui_state.selected_track;
             let mut new_track = current_track;
 
@@ -155,20 +155,16 @@ pub fn update(
                     new_track += 1;
                 }
             }
-            if input_state.left {
-                if current_track >= col_split_point {
-                    // Go from right column to left
-                    new_track -= col_split_point;
-                }
+            if input_state.left && current_track >= col_split_point {
+                // Go from right column to left
+                new_track -= col_split_point;
             }
-            if input_state.right {
-                if current_track < col_split_point {
-                    // Go from left column to right
-                    new_track += col_split_point;
-                    // Clamp to end of list if right column is shorter
-                    if new_track >= num_tracks {
-                        new_track = num_tracks - 1;
-                    }
+            if input_state.right && current_track < col_split_point {
+                // Go from left column to right
+                new_track += col_split_point;
+                // Clamp to end of list if right column is shorter
+                if new_track >= num_tracks {
+                    new_track = num_tracks - 1;
                 }
             }
 
@@ -314,7 +310,7 @@ pub fn draw(
                 if num_tracks > 0 {
                     // Calculate split point
                     // (num_tracks + 1) / 2 ensures the left column gets the extra track if odd
-                    let col_split_point = (num_tracks + 1) / 2;
+                    let col_split_point = num_tracks.div_ceil(2);
 
                     let list_start_y = y_pos;
                     let start_x_left = 40.0 * scale_factor;

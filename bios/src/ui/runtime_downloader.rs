@@ -1,8 +1,8 @@
 use crate::{
     audio::SoundEffects,
     config::{get_user_data_dir, Config},
-    get_current_font, render_background, text_with_config_color, BackgroundState,
-    InputState, Screen, VideoPlayer, DEV_MODE, FONT_SIZE,
+    get_current_font, render_background, text_with_config_color, BackgroundState, InputState,
+    Screen, VideoPlayer, DEV_MODE, FONT_SIZE,
 };
 use macroquad::prelude::*;
 use serde::Deserialize;
@@ -236,33 +236,25 @@ pub fn update(
                 return;
             }
 
-            let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+            let total_pages = total_options.div_ceil(ITEMS_PER_PAGE);
 
-            if input_state.down {
-                if state.selected_index < total_options - 1 {
-                    state.selected_index += 1;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.down && state.selected_index < total_options - 1 {
+                state.selected_index += 1;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.up {
-                if state.selected_index > 0 {
-                    state.selected_index -= 1;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.up && state.selected_index > 0 {
+                state.selected_index -= 1;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.right {
-                if state.current_page < total_pages - 1 {
-                    state.current_page += 1;
-                    state.selected_index = state.current_page * ITEMS_PER_PAGE;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.right && state.current_page < total_pages - 1 {
+                state.current_page += 1;
+                state.selected_index = state.current_page * ITEMS_PER_PAGE;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.left {
-                if state.current_page > 0 {
-                    state.current_page -= 1;
-                    state.selected_index = state.current_page * ITEMS_PER_PAGE;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.left && state.current_page > 0 {
+                state.current_page -= 1;
+                state.selected_index = state.current_page * ITEMS_PER_PAGE;
+                sound_effects.play_cursor_move(config);
             }
 
             // Auto-update current page based on selection
@@ -442,7 +434,7 @@ pub fn draw(
                 );
                 return;
             }
-            let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+            let total_pages = total_options.div_ceil(ITEMS_PER_PAGE);
             let start_index = state.current_page * ITEMS_PER_PAGE;
             let end_index = (start_index + ITEMS_PER_PAGE).min(total_options);
 
@@ -480,7 +472,7 @@ pub fn draw(
                 let size_str = runtime
                     .size_mb
                     .map(|mb| format!(" ({:.1} MB)", mb)) // e.g., " (4.2 MB)"
-                    .unwrap_or_else(|| "".to_string()); // Show nothing if size is unknown
+                    .unwrap_or_default(); // Show nothing if size is unknown
 
                 let display_text = format!(
                     "{} {}{}{}",
@@ -893,7 +885,7 @@ fn fetch_runtime_list(tx: Sender<DownloaderMessage>) {
                 let extracted_files = get_zip_extracted_files(&runtime.file_name);
 
                 // We'll say it's "installed" if the *first* file (the .kzr) exists.
-                if let Some(main_file) = extracted_files.get(0) {
+                if let Some(main_file) = extracted_files.first() {
                     runtime.is_installed = installed_files.contains(*main_file);
                 }
             } else {

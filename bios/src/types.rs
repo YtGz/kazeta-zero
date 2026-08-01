@@ -19,8 +19,9 @@ pub type SizeCache = HashMap<SizeCacheKey, f32>;
 // ENUMS
 // ===================================
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub enum MenuPosition {
+    #[default]
     Center,
     TopLeft,
     TopRight,
@@ -211,11 +212,6 @@ pub struct Blade {
 // ===================================
 
 // 1. Teach MenuPosition what its "default" value is.
-impl Default for MenuPosition {
-    fn default() -> Self {
-        MenuPosition::Center // You can choose any default you like
-    }
-}
 
 // 2. Teach MenuPosition how to be created from a string.
 impl FromStr for MenuPosition {
@@ -252,6 +248,12 @@ impl MenuPosition {
             Self::BottomLeft => Self::TopRight,
             Self::BottomRight => Self::BottomLeft,
         }
+    }
+}
+
+impl Default for AnimationState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

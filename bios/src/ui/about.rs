@@ -31,7 +31,7 @@ pub fn draw(
     gcc_adapter_poll_rate: &Option<u32>,
     scale_factor: f32,
 ) {
-    render_background(&background_cache, video_cache, &config, background_state);
+    render_background(background_cache, video_cache, config, background_state);
 
     // Dim the background to improve text readability
     draw_rectangle(
@@ -43,11 +43,11 @@ pub fn draw(
     );
 
     render_ui_overlay(
-        &logo_cache,
-        &font_cache,
-        &config,
-        &battery_info,
-        &current_time_str,
+        logo_cache,
+        font_cache,
+        config,
+        battery_info,
+        current_time_str,
         gcc_adapter_poll_rate,
         scale_factor,
     );

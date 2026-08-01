@@ -88,7 +88,7 @@ impl WifiState {
 
         // [!] MODIFIED: Added SECURITY to the fields list
         let output = Command::new("nmcli")
-            .args(&[
+            .args([
                 "--terse",
                 "--fields",
                 "SSID,SIGNAL,SECURITY",
@@ -124,7 +124,7 @@ impl WifiState {
                     }
                 }
                 // Sort by signal strength, strongest first
-                aps.sort_by(|a, b| b.signal_level.cmp(&a.signal_level));
+                aps.sort_by_key(|b| std::cmp::Reverse(b.signal_level));
                 self.networks = Ok(aps);
             }
             Err(e) => {
@@ -147,7 +147,7 @@ impl WifiState {
                 // This prevents the "key-mgmt property is missing" error by ensuring
                 // we create a fresh profile with the correct security settings.
                 let _ = Command::new("nmcli")
-                    .args(&["connection", "delete", ssid])
+                    .args(["connection", "delete", ssid])
                     .output();
 
                 // [!] MODIFIED: Logic to handle Open vs Secured networks
@@ -234,11 +234,11 @@ pub fn update(
 
             if input_state.down && *row < num_rows - 1 {
                 *row += 1;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
             if input_state.up && *row > 0 {
                 *row -= 1;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
 
             let current_physical_row_len = if *row < current_layout.len() {
@@ -252,11 +252,11 @@ pub fn update(
 
             if input_state.right && *col < current_physical_row_len - 1 {
                 *col += 1;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
             if input_state.left && *col > 0 {
                 *col -= 1;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
 
             if input_state.select {
@@ -289,11 +289,11 @@ pub fn update(
                 }
                 if input_state.down && wifi_state.selected_index < networks.len() - 1 {
                     wifi_state.selected_index += 1;
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
                 if input_state.up && wifi_state.selected_index > 0 {
                     wifi_state.selected_index -= 1;
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
 
                 if input_state.select {
@@ -318,11 +318,9 @@ pub fn update(
                 }
             }
         }
-        WifiScreenState::Connected | WifiScreenState::Error(_) => {
-            if input_state.select {
-                sound_effects.play_select(config);
-                wifi_state.screen_state = WifiScreenState::List;
-            }
+        WifiScreenState::Connected | WifiScreenState::Error(_) if input_state.select => {
+            sound_effects.play_select(config);
+            wifi_state.screen_state = WifiScreenState::List;
         }
         _ => {}
     }
@@ -338,7 +336,7 @@ pub fn draw(
     background_state: &mut BackgroundState,
     scale_factor: f32,
 ) {
-    render_background(&background_cache, video_cache, &config, background_state);
+    render_background(background_cache, video_cache, config, background_state);
 
     let font = get_current_font(font_cache, config);
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
@@ -740,16 +738,14 @@ pub fn draw(
 
 fn prepare_wifi_system(tx: Sender<WifiMessage>) {
     thread::spawn(move || {
-        let output;
-
         if DEV_MODE {
             tx.send(WifiMessage::PreparationComplete(Ok(()))).unwrap();
             return;
-        } else {
-            output = Command::new("sudo")
-                .arg("/usr/bin/kazeta-wifi-setup")
-                .output();
         }
+
+        let output = Command::new("sudo")
+            .arg("/usr/bin/kazeta-wifi-setup")
+            .output();
 
         let result = match output {
             Ok(out) => {

@@ -48,7 +48,7 @@ pub async fn update(
                 } else {
                     *current_screen = Screen::MainMenu;
                 }
-                sound_effects.play_back(&config);
+                sound_effects.play_back(config);
             }
 
             // Handle storage media switching with tab/bumpers regardless of focus
@@ -62,7 +62,7 @@ pub async fn update(
                                 load_memories(&state.media[state.selected], icon_cache, icon_queue)
                                     .await;
                             *scroll_offset = 0;
-                            sound_effects.play_select(&config);
+                            sound_effects.play_select(config);
                         }
                     } else if input_state.next {
                         // Next stops at end
@@ -72,10 +72,10 @@ pub async fn update(
                                 load_memories(&state.media[state.selected], icon_cache, icon_queue)
                                     .await;
                             *scroll_offset = 0;
-                            sound_effects.play_select(&config);
+                            sound_effects.play_select(config);
                         } else {
                             animation_state.trigger_shake(false); // Shake right arrow when can't go next
-                            sound_effects.play_reject(&config);
+                            sound_effects.play_reject(config);
                         }
                     } else if input_state.prev {
                         // Prev stops at beginning
@@ -85,10 +85,10 @@ pub async fn update(
                                 load_memories(&state.media[state.selected], icon_cache, icon_queue)
                                     .await;
                             *scroll_offset = 0;
-                            sound_effects.play_select(&config);
+                            sound_effects.play_select(config);
                         } else {
                             animation_state.trigger_shake(true); // Shake left arrow when can't go prev
-                            sound_effects.play_reject(&config);
+                            sound_effects.play_reject(config);
                         }
                     }
                 }
@@ -98,30 +98,30 @@ pub async fn update(
                 UIFocus::Grid => {
                     if input_state.select {
                         let memory_index = get_memory_index(*selected_memory, *scroll_offset);
-                        if let Some(_) = memories.get(memory_index) {
+                        if memories.get(memory_index).is_some() {
                             let (grid_pos, dialog_pos) =
                                 calculate_icon_transition_positions(*selected_memory, scale_factor);
                             animation_state.trigger_dialog_transition(grid_pos, dialog_pos);
-                            dialogs.push(create_main_dialog(&storage_state));
+                            dialogs.push(create_main_dialog(storage_state));
                             *dialog_state = DialogState::Opening;
-                            sound_effects.play_select(&config);
+                            sound_effects.play_select(config);
                         }
                     }
                     if input_state.right && *selected_memory < GRID_WIDTH * GRID_HEIGHT - 1 {
                         *selected_memory += 1;
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.left && *selected_memory >= 1 {
                         *selected_memory -= 1;
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.down {
                         if *selected_memory < GRID_WIDTH * GRID_HEIGHT - GRID_WIDTH {
                             *selected_memory += GRID_WIDTH;
                             animation_state.trigger_transition(&config.cursor_transition_speed);
-                            sound_effects.play_cursor_move(&config);
+                            sound_effects.play_cursor_move(config);
                         } else {
                             // Check if there are any saves in the next row
                             let next_row_start =
@@ -129,7 +129,7 @@ pub async fn update(
                             if next_row_start < memories.len() {
                                 *scroll_offset += 1;
                                 animation_state.trigger_transition(&config.cursor_transition_speed);
-                                sound_effects.play_cursor_move(&config);
+                                sound_effects.play_cursor_move(config);
                             }
                         }
                     }
@@ -137,21 +137,21 @@ pub async fn update(
                         if *selected_memory >= GRID_WIDTH {
                             *selected_memory -= GRID_WIDTH;
                             animation_state.trigger_transition(&config.cursor_transition_speed);
-                            sound_effects.play_cursor_move(&config);
+                            sound_effects.play_cursor_move(config);
                         } else if *scroll_offset > 0 {
                             *scroll_offset -= 1;
                             animation_state.trigger_transition(&config.cursor_transition_speed);
-                            sound_effects.play_cursor_move(&config);
+                            sound_effects.play_cursor_move(config);
                         } else {
                             // Allow moving to storage navigation from leftmost or rightmost column
-                            if *selected_memory % GRID_WIDTH == 0 {
+                            if (*selected_memory).is_multiple_of(GRID_WIDTH) {
                                 input_state.ui_focus = UIFocus::StorageLeft;
                                 animation_state.trigger_transition(&config.cursor_transition_speed);
-                                sound_effects.play_cursor_move(&config);
+                                sound_effects.play_cursor_move(config);
                             } else if *selected_memory % GRID_WIDTH == GRID_WIDTH - 1 {
                                 input_state.ui_focus = UIFocus::StorageRight;
                                 animation_state.trigger_transition(&config.cursor_transition_speed);
-                                sound_effects.play_cursor_move(&config);
+                                sound_effects.play_cursor_move(config);
                             }
                         }
                     }
@@ -160,13 +160,13 @@ pub async fn update(
                     if input_state.right {
                         input_state.ui_focus = UIFocus::StorageRight;
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.down {
                         input_state.ui_focus = UIFocus::Grid;
                         *selected_memory = 0; // Move to leftmost grid position
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.select {
                         if let Ok(mut state) = storage_state.lock() {
@@ -179,10 +179,10 @@ pub async fn update(
                                 )
                                 .await;
                                 *scroll_offset = 0;
-                                sound_effects.play_select(&config);
+                                sound_effects.play_select(config);
                             } else {
                                 animation_state.trigger_shake(true);
-                                sound_effects.play_reject(&config);
+                                sound_effects.play_reject(config);
                             }
                         }
                     }
@@ -191,13 +191,13 @@ pub async fn update(
                     if input_state.left {
                         input_state.ui_focus = UIFocus::StorageLeft;
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.down {
                         input_state.ui_focus = UIFocus::Grid;
                         *selected_memory = GRID_WIDTH - 1; // Move to rightmost grid position
                         animation_state.trigger_transition(&config.cursor_transition_speed);
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                     if input_state.select {
                         if let Ok(mut state) = storage_state.lock() {
@@ -210,10 +210,10 @@ pub async fn update(
                                 )
                                 .await;
                                 *scroll_offset = 0;
-                                sound_effects.play_select(&config);
+                                sound_effects.play_select(config);
                             } else {
                                 animation_state.trigger_shake(false);
-                                sound_effects.play_reject(&config);
+                                sound_effects.play_reject(config);
                             }
                         }
                     }
@@ -229,13 +229,13 @@ pub async fn update(
                 if input_state.up {
                     selection -= 1;
                     animation_state.trigger_transition(&config.cursor_transition_speed);
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
 
                 if input_state.down {
                     selection += 1;
                     animation_state.trigger_transition(&config.cursor_transition_speed);
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
 
                 let mut cancel = false;
@@ -259,11 +259,11 @@ pub async fn update(
                             if selected_option.value == "CANCEL" || selected_option.value == "OK" {
                                 cancel = true;
                             } else {
-                                sound_effects.play_select(&config);
+                                sound_effects.play_select(config);
                             }
                         } else {
                             animation_state.trigger_dialog_shake();
-                            sound_effects.play_reject(&config);
+                            sound_effects.play_reject(config);
                         }
                     }
                 }
@@ -273,13 +273,13 @@ pub async fn update(
                         calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
-                    sound_effects.play_back(&config);
+                    sound_effects.play_back(config);
                 }
             }
             // Handle dialog actions
             match (action_dialog_id.as_str(), action_option_value.as_str()) {
                 ("main", "COPY") => {
-                    dialogs.push(create_copy_storage_dialog(&storage_state));
+                    dialogs.push(create_copy_storage_dialog(storage_state));
                 }
                 ("main", "DELETE") => {
                     dialogs.push(create_confirm_delete_dialog());
@@ -302,7 +302,7 @@ pub async fn update(
                             } else {
                                 state.needs_memory_refresh = true;
                                 *dialog_state = DialogState::None;
-                                sound_effects.play_back(&config);
+                                sound_effects.play_back(config);
                             }
                         }
                     }
@@ -341,21 +341,21 @@ pub async fn update(
                         calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
-                    sound_effects.play_back(&config);
+                    sound_effects.play_back(config);
                 }
                 ("save_exists", "OK") => {
                     let (grid_pos, dialog_pos) =
                         calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
-                    sound_effects.play_back(&config);
+                    sound_effects.play_back(config);
                 }
                 ("error", "OK") => {
                     let (grid_pos, dialog_pos) =
                         calculate_icon_transition_positions(*selected_memory, scale_factor);
                     animation_state.trigger_dialog_transition(dialog_pos, grid_pos);
                     *dialog_state = DialogState::Closing;
-                    sound_effects.play_back(&config);
+                    sound_effects.play_back(config);
                 }
                 _ => {} // handles opening and closing states
             }
@@ -390,7 +390,7 @@ pub async fn update(
 // This function will handle all drawing for the data screen
 pub fn draw(
     selected_memory: usize,
-    memories: &Vec<Memory>,
+    memories: &[Memory],
     icon_cache: &HashMap<String, Texture2D>,
     font_cache: &HashMap<String, Font>,
     config: &Config,
@@ -445,7 +445,7 @@ pub fn draw(
             if let Some(mem) = memories.get(memory_index) {
                 let icon = match icon_cache.get(&mem.id) {
                     Some(icon) => icon,
-                    None => &placeholder,
+                    None => placeholder,
                 };
 
                 let params = DrawTextureParams {
@@ -466,7 +466,7 @@ pub fn draw(
                 };
 
                 let icon_pos = animation_state.get_dialog_transition_pos();
-                draw_texture_ex(&icon, icon_pos.x, icon_pos.y, WHITE, params);
+                draw_texture_ex(icon, icon_pos.x, icon_pos.y, WHITE, params);
             }
         }
 
@@ -582,17 +582,17 @@ pub fn draw(
                 if xp as usize == x && yp as usize == y {
                     if let UIFocus::Grid = input_state.ui_focus {
                         draw_texture_ex(
-                            &icon,
+                            icon,
                             pos_x - selected_offset,
                             pos_y - selected_offset,
                             WHITE,
                             params,
                         );
                     } else {
-                        draw_texture_ex(&icon, pos_x, pos_y, WHITE, params);
+                        draw_texture_ex(icon, pos_x, pos_y, WHITE, params);
                     }
                 } else {
-                    draw_texture_ex(&icon, pos_x, pos_y, WHITE, params);
+                    draw_texture_ex(icon, pos_x, pos_y, WHITE, params);
                 }
             }
         }

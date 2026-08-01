@@ -1,8 +1,8 @@
 use crate::{
     audio::SoundEffects,
     config::{get_user_data_dir, Config},
-    get_current_font, render_background, text_with_config_color, BackgroundState,
-    InputState, Screen, VideoPlayer, FONT_SIZE,
+    get_current_font, render_background, text_with_config_color, BackgroundState, InputState,
+    Screen, VideoPlayer, FONT_SIZE,
 };
 use macroquad::prelude::*;
 use regex::Regex;
@@ -205,33 +205,25 @@ pub fn update(
                 return;
             }
 
-            let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+            let total_pages = total_options.div_ceil(ITEMS_PER_PAGE);
 
-            if input_state.down {
-                if state.selected_index < total_options - 1 {
-                    state.selected_index += 1;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.down && state.selected_index < total_options - 1 {
+                state.selected_index += 1;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.up {
-                if state.selected_index > 0 {
-                    state.selected_index -= 1;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.up && state.selected_index > 0 {
+                state.selected_index -= 1;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.right {
-                if state.current_page < total_pages - 1 {
-                    state.current_page += 1;
-                    state.selected_index = state.current_page * ITEMS_PER_PAGE;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.right && state.current_page < total_pages - 1 {
+                state.current_page += 1;
+                state.selected_index = state.current_page * ITEMS_PER_PAGE;
+                sound_effects.play_cursor_move(config);
             }
-            if input_state.left {
-                if state.current_page > 0 {
-                    state.current_page -= 1;
-                    state.selected_index = state.current_page * ITEMS_PER_PAGE;
-                    sound_effects.play_cursor_move(config);
-                }
+            if input_state.left && state.current_page > 0 {
+                state.current_page -= 1;
+                state.selected_index = state.current_page * ITEMS_PER_PAGE;
+                sound_effects.play_cursor_move(config);
             }
 
             // Auto-update current page based on selection
@@ -246,7 +238,7 @@ pub fn update(
                     if theme.is_installed {
                         // Theme is already installed, show confirmation
                         state.screen_state = DownloaderState::ConfirmRedownload {
-                            theme: theme,
+                            theme,
                             selection: 1, // Default to "NO"
                         };
                     } else {
@@ -292,7 +284,7 @@ pub fn update(
         } => {
             if input_state.left || input_state.right {
                 *selection = 1 - *selection;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
             if input_state.select {
                 sound_effects.play_select(config);
@@ -353,7 +345,7 @@ pub fn update(
         DownloaderState::ConfirmConvertToWav { selection } => {
             if input_state.left || input_state.right {
                 *selection = 1 - *selection;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
             if input_state.select {
                 sound_effects.play_select(config);
@@ -371,7 +363,7 @@ pub fn update(
         DownloaderState::ConfirmConvertToOgg { selection } => {
             if input_state.left || input_state.right {
                 *selection = 1 - *selection;
-                sound_effects.play_cursor_move(&config);
+                sound_effects.play_cursor_move(config);
             }
             if input_state.select {
                 sound_effects.play_select(config);
@@ -408,13 +400,13 @@ pub fn update(
                 state.screen_state = DownloaderState::DisplayingList;
             }
         }
-        DownloaderState::Success(_) | DownloaderState::Error(_) => {
-            if input_state.select || input_state.back {
-                // After success/error, go back to the list.
-                // Setting to Idle will trigger a re-fetch of the remote list.
-                state.screen_state = DownloaderState::Idle;
-                sound_effects.play_select(config);
-            }
+        DownloaderState::Success(_) | DownloaderState::Error(_)
+            if (input_state.select || input_state.back) =>
+        {
+            // After success/error, go back to the list.
+            // Setting to Idle will trigger a re-fetch of the remote list.
+            state.screen_state = DownloaderState::Idle;
+            sound_effects.play_select(config);
         }
         _ => {}
     }
@@ -430,7 +422,7 @@ pub fn draw(
     background_state: &mut BackgroundState,
     scale_factor: f32,
 ) {
-    render_background(&background_cache, video_cache, &config, background_state);
+    render_background(background_cache, video_cache, config, background_state);
 
     let font = get_current_font(font_cache, config);
     let font_size = (FONT_SIZE as f32 * scale_factor) as u16;
@@ -491,7 +483,7 @@ pub fn draw(
                 );
                 return;
             }
-            let total_pages = (total_options + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
+            let total_pages = total_options.div_ceil(ITEMS_PER_PAGE);
             let start_index = state.current_page * ITEMS_PER_PAGE;
             let end_index = (start_index + ITEMS_PER_PAGE).min(total_options);
 

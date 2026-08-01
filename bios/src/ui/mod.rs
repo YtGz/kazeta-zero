@@ -709,7 +709,7 @@ pub fn render_dialog_box(
 // DIALOG
 pub fn render_dialog(
     dialog: &Dialog,
-    memories: &Vec<Memory>,
+    memories: &[Memory],
     selected_memory: usize,
     icon_cache: &HashMap<String, Texture2D>,
     font_cache: &HashMap<String, Font>,
@@ -819,7 +819,7 @@ pub fn render_dialog(
 
         // Centering and drawing dialog options
         let longest_width = measure_text(
-            &dialog
+            dialog
                 .options
                 .iter()
                 .find(|opt| {

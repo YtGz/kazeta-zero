@@ -16,8 +16,7 @@ pub fn start_gcc_adapter_polling(tx: Sender<GccMessage>) {
                 Ok(rate_str) => {
                     // The file contains the interval in milliseconds (e.g., "1")
                     if let Ok(rate_ms) = rate_str.trim().parse::<u32>() {
-                        if rate_ms > 0 {
-                            let poll_rate_hz = 1000 / rate_ms;
+                        if let Some(poll_rate_hz) = 1000u32.checked_div(rate_ms) {
                             tx.send(GccMessage::RateUpdate(poll_rate_hz))
                                 .unwrap_or_default();
                             was_connected = true;

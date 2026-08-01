@@ -76,12 +76,12 @@ pub fn update(
             *main_menu_selection = (*main_menu_selection - 1) % menu_options.len();
         }
         animation_state.trigger_transition(&config.cursor_transition_speed);
-        sound_effects.play_cursor_move(&config);
+        sound_effects.play_cursor_move(config);
     }
     if input_state.down {
         *main_menu_selection = (*main_menu_selection + 1) % menu_options.len();
         animation_state.trigger_transition(&config.cursor_transition_speed);
-        sound_effects.play_cursor_move(&config);
+        sound_effects.play_cursor_move(config);
     }
     if input_state.select {
         let selected_option = menu_options[*main_menu_selection];
@@ -94,11 +94,11 @@ pub fn update(
 
                 *current_screen = Screen::SaveData;
                 input_state.ui_focus = UIFocus::Grid;
-                sound_effects.play_select(&config);
+                sound_effects.play_select(config);
             }
             "PLAY" => {
                 if *play_option_enabled {
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                     log_messages.lock().unwrap().clear();
 
                     match save::find_all_game_files() {
@@ -154,7 +154,7 @@ pub fn update(
                                     game_icon_queue.clear();
                                     for (cart_info, game_path) in &games {
                                         let is_package =
-                                            game_path.extension().map_or(false, |e| e == "kzp");
+                                            game_path.extension().is_some_and(|e| e == "kzp");
                                         let icon_path = if is_package {
                                             let sidecar_png = game_path.with_extension("png");
                                             let sidecar_jpg = game_path.with_extension("jpg");
@@ -179,13 +179,13 @@ pub fn update(
                         }
                         Err(e) => {
                             let error_msg = format!("[Error] Error scanning for cartridges: {}", e);
-                            println!("[Error] {}", &error_msg);
+                            println!("[Error] {}", error_msg);
                             log_messages.lock().unwrap().push(error_msg);
                             *current_screen = Screen::Debug;
                         }
                     }
                 } else {
-                    sound_effects.play_reject(&config);
+                    sound_effects.play_reject(config);
                     animation_state.trigger_play_option_shake();
                 }
             }
@@ -195,7 +195,7 @@ pub fn update(
             }
             "COPY SESSION LOGS" => {
                 if *copy_logs_option_enabled {
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                     match copy_session_logs_to_sd() {
                         Ok(path) => {
                             *flash_message =
@@ -207,21 +207,21 @@ pub fn update(
                         }
                     }
                 } else {
-                    sound_effects.play_reject(&config);
+                    sound_effects.play_reject(config);
                     animation_state.trigger_copy_log_option_shake();
                 }
             }
             "SETTINGS" => {
                 *current_screen = Screen::GeneralSettings;
-                sound_effects.play_select(&config);
+                sound_effects.play_select(config);
             }
             "EXTRAS" => {
                 *current_screen = Screen::Extras;
-                sound_effects.play_select(&config);
+                sound_effects.play_select(config);
             }
             "ABOUT" => {
                 *current_screen = Screen::About;
-                sound_effects.play_select(&config);
+                sound_effects.play_select(config);
             }
             _ => {}
         }

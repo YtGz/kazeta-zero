@@ -1,3 +1,5 @@
+// Overlay exposes IPC client methods and state fields that are part of the public API
+// surface but not all called from every code path.
 #![allow(dead_code)]
 
 mod controllers;

@@ -134,28 +134,28 @@ impl SoundEffects {
 
     pub fn play_cursor_move(&self, config: &Config) {
         let source = self.cursor_move.clone().amplify(config.sfx_volume);
-        let sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let sink = Sink::connect_new(AUDIO.stream.mixer());
         sink.append(source);
         sink.detach(); // Fire and forget
     }
 
     pub fn play_select(&self, config: &Config) {
         let source = self.select.clone().amplify(config.sfx_volume);
-        let sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let sink = Sink::connect_new(AUDIO.stream.mixer());
         sink.append(source);
         sink.detach();
     }
 
     pub fn play_reject(&self, config: &Config) {
         let source = self.reject.clone().amplify(config.sfx_volume);
-        let sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let sink = Sink::connect_new(AUDIO.stream.mixer());
         sink.append(source);
         sink.detach();
     }
 
     pub fn play_back(&self, config: &Config) {
         let source = self.back.clone().amplify(config.sfx_volume);
-        let sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let sink = Sink::connect_new(AUDIO.stream.mixer());
         sink.append(source);
         sink.detach();
     }
@@ -241,7 +241,7 @@ pub fn play_new_bgm(
     if track_name != "OFF" {
         if let Some(sound_to_play) = music_cache.get(track_name) {
             // [!] FIX: Use Sink::connect_new with the mixer
-            let sink = Sink::connect_new(&AUDIO.stream.mixer());
+            let sink = Sink::connect_new(AUDIO.stream.mixer());
 
             let source = sound_to_play.clone().repeat_infinite().amplify(volume);
 

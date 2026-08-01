@@ -180,9 +180,27 @@ mod tests {
     use super::*;
     use std::thread::sleep;
 
+    fn make_test_tracker() -> PlaytimeTracker {
+        let db_path = std::env::temp_dir().join(format!(
+            "kazeta-test-playtime-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        PlaytimeTracker {
+            current_session: None,
+            database: PlaytimeDatabase {
+                entries: std::collections::HashMap::new(),
+            },
+            db_path,
+        }
+    }
+
     #[test]
     fn test_session_tracking() {
-        let mut tracker = PlaytimeTracker::new().unwrap();
+        let mut tracker = make_test_tracker();
 
         tracker.start_session("test-game".to_string());
         sleep(Duration::from_secs(2));
@@ -196,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_multiple_sessions() {
-        let mut tracker = PlaytimeTracker::new().unwrap();
+        let mut tracker = make_test_tracker();
 
         for _ in 0..3 {
             tracker.start_session("test-game".to_string());
@@ -211,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_multiple_games() {
-        let mut tracker = PlaytimeTracker::new().unwrap();
+        let mut tracker = make_test_tracker();
 
         tracker.start_session("game1".to_string());
         sleep(Duration::from_secs(1));

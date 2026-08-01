@@ -185,12 +185,12 @@ impl HotkeyConfig {
             )],
         );
 
-        // Screenshot: F12
+        // Screenshot: F11
         bindings.insert(
             HotkeyAction::Screenshot,
             vec![HotkeyBinding::new(
-                vec![InputComponent::Key("F12".to_string())],
-                "F12 key".to_string(),
+                vec![InputComponent::Key("F11".to_string())],
+                "F11 key".to_string(),
             )],
         );
 
@@ -407,7 +407,12 @@ mod tests {
 
     #[test]
     fn test_conflict_detection() {
-        let manager = HotkeyManager::new().unwrap();
+        let default_config = HotkeyConfig::default_config();
+        let manager = HotkeyManager {
+            config: default_config,
+            config_path: PathBuf::from("/dev/null"),
+            binding_last_states: HashMap::new(),
+        };
 
         let test_components = vec![InputComponent::Key("F12".to_string())];
 
@@ -418,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_add_remove_binding() {
-        let manager = HotkeyManager::new().unwrap();
+        let mut manager = HotkeyManager::new().unwrap();
 
         let new_binding = HotkeyBinding::new(
             vec![InputComponent::Key("F1".to_string())],

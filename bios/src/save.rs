@@ -10,7 +10,6 @@ use std::{
 };
 use sysinfo::Disks;
 use tar::{Archive, Builder};
-use walkdir;
 
 use crate::{config::get_user_data_dir, types::StorageMedia, DEV_MODE};
 
@@ -331,12 +330,12 @@ fn calculate_playtime_from_dir(dir_path: &Path, _cart_id: &str) -> f32 {
         Err(_) => "".to_string(),
     };
 
-    return parse_playtime_content(&format!(
+    parse_playtime_content(&format!(
         "{}\n{} {}",
         content.trim(),
         start_content.trim(),
         end_content.trim()
-    ));
+    ))
 }
 
 /// Parse playtime content from a string (common logic for both tar and directory)
@@ -608,7 +607,7 @@ pub fn launch_game_with_options(
     // Check if this is a compressed package (.kzp)
     if kzi_path
         .extension()
-        .map_or(false, |ext| ext.eq_ignore_ascii_case("kzp"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("kzp"))
     {
         println!(
             "[Debug] Launching compressed package directly via kazeta wrapper: {}",
@@ -673,7 +672,7 @@ pub fn launch_game_with_options(
         .unwrap_or_else(|| PathBuf::from("."));
 
     println!("[Debug] Game Root: {}", game_root.display());
-    println!("[Debug] Exec Command: {}", &cart_info.exec);
+    println!("[Debug] Exec Command: {}", cart_info.exec);
 
     // Handle vba-m runtime specially - it needs the wrapper script
     if cart_info.runtime.as_deref() == Some("vba-m") {
@@ -1101,7 +1100,7 @@ pub fn list_devices() -> io::Result<Vec<(String, u32)>> {
     for disk in disks.iter() {
         let mount_point = disk.mount_point().to_str().unwrap();
         if mount_point.starts_with(&base_ext) {
-            let name = mount_point.split('/').last().unwrap().to_string();
+            let name = mount_point.split('/').next_back().unwrap().to_string();
             if name == "frzr_efi" {
                 // ignore internal frzr partition
                 continue;
@@ -1139,7 +1138,7 @@ pub fn is_cart(drive_name: &str) -> bool {
         .to_string();
 
     if let Ok(files) = find_files_by_extension(mount_point, &["kzi", "kzp"], 1, true) {
-        if files.len() > 0 {
+        if !files.is_empty() {
             return true;
         }
     }
@@ -1156,7 +1155,7 @@ pub fn is_cart_connected() -> bool {
             .filter(|p| p.exists())
         {
             if let Ok(files) = find_files_by_extension(&dev_games_dir, &["kzi", "kzp"], 2, true) {
-                if files.len() > 0 {
+                if !files.is_empty() {
                     return true;
                 }
             }
@@ -1165,7 +1164,7 @@ pub fn is_cart_connected() -> bool {
 
     // Check production location
     if let Ok(files) = find_files_by_extension("/run/media", &["kzi", "kzp"], 2, true) {
-        if files.len() > 0 {
+        if !files.is_empty() {
             return true;
         }
     }
@@ -1188,11 +1187,7 @@ pub fn get_save_details(drive_name: &str) -> io::Result<Vec<(String, String, Str
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid filename"))?;
 
         // Remove .tar extension if present
-        let cart_id = if file_name.ends_with(".tar") {
-            &file_name[..file_name.len() - 4]
-        } else {
-            file_name
-        };
+        let cart_id = file_name.strip_suffix(".tar").unwrap_or(file_name);
 
         let metadata_path = Path::new(&cache_dir).join(cart_id).join("metadata.kzi");
         let name = get_attribute(&metadata_path, "Name").unwrap_or_else(|e| {

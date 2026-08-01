@@ -125,16 +125,11 @@ impl CdPlayerBackend {
 
                 // --- Calculate TRUE Duration ---
                 let start_lba = track.start_lba;
-                let end_lba: u32;
-
-                if track_index == toc.tracks.len() - 1 {
-                    // This is the LAST track. Use the disc's leadout.
-                    end_lba = toc.leadout_lba;
+                let end_lba = if track_index == toc.tracks.len() - 1 {
+                    toc.leadout_lba
                 } else {
-                    // Any other track. Use the next track's start.
-                    let next_track = &toc.tracks[track_index + 1];
-                    end_lba = next_track.start_lba;
-                }
+                    toc.tracks[track_index + 1].start_lba
+                };
 
                 let total_lbas_for_track = end_lba - start_lba;
                 // 75 frames (LBAs) per second for an audio CD
@@ -207,7 +202,7 @@ impl CdPlayerBackend {
                     return;
                 }
 
-                let sink = Sink::connect_new(&AUDIO.stream.mixer());
+                let sink = Sink::connect_new(AUDIO.stream.mixer());
 
                 // [!] Use the buffer we created earlier
                 sink.append(source_buffer.clone()); // Append a clone
@@ -253,13 +248,11 @@ impl CdPlayerBackend {
         }
 
         // 4. Calculate new time
-        let new_time;
-        if forward {
-            new_time = (current_elapsed + delta).min(self.track_duration);
+        let new_time = if forward {
+            (current_elapsed + delta).min(self.track_duration)
         } else {
-            // `checked_sub` prevents underflow panic
-            new_time = current_elapsed.checked_sub(delta).unwrap_or(Duration::ZERO);
-        }
+            current_elapsed.checked_sub(delta).unwrap_or(Duration::ZERO)
+        };
 
         // 5. Re-create the sink and source
         // Stop and drop the old stream/sink
@@ -268,7 +261,7 @@ impl CdPlayerBackend {
         }
 
         // Create new sink using global audio stream
-        let new_sink = Sink::connect_new(&AUDIO.stream.mixer());
+        let new_sink = Sink::connect_new(AUDIO.stream.mixer());
 
         // 6. Create new source, skip to the new time, and append
         let new_source = source_data.clone().skip_duration(new_time);

@@ -183,7 +183,7 @@ pub fn render_settings_page(
 
         let value_text = get_settings_value(page_number, i, config, system_volume, brightness);
         let value_dims = measure_text(
-            &value_text.to_uppercase(),
+            value_text.to_uppercase(),
             Some(current_font),
             font_size,
             1.0,
@@ -388,30 +388,30 @@ pub fn update(
     current_screen: &mut Screen,
     input_state: &InputState,
     config: &mut Config,
-    sound_pack_choices: &Vec<String>,
+    sound_pack_choices: &[String],
     loaded_themes: &HashMap<String, theme::Theme>,
     settings_menu_selection: &mut usize,
     sound_effects: &mut SoundEffects,
     confirm_selection: &mut usize,
     brightness: &mut f32,
     system_volume: &mut f32,
-    available_sinks: &Vec<AudioSink>,
+    available_sinks: &[AudioSink],
     current_bgm: &mut Option<Sink>,
-    bgm_choices: &Vec<String>,
+    bgm_choices: &[String],
     music_cache: &HashMap<String, SamplesBuffer>,
     sfx_pack_to_reload: &mut Option<String>,
-    logo_choices: &Vec<String>,
-    background_choices: &Vec<String>,
-    font_choices: &Vec<String>,
+    logo_choices: &[String],
+    background_choices: &[String],
+    font_choices: &[String],
     animation_state: &mut AnimationState,
     back_to_blades: &mut bool,
 ) {
     // --- Determine current page info ---
     let (page_number, options): (usize, &[&str]) = match *current_screen {
-        Screen::GeneralSettings => (1, &GENERAL_SETTINGS),
-        Screen::AudioSettings => (2, &AUDIO_SETTINGS),
-        Screen::GuiSettings => (3, &GUI_CUSTOMIZATION_SETTINGS),
-        Screen::AssetSettings => (4, &CUSTOM_ASSET_SETTINGS),
+        Screen::GeneralSettings => (1, GENERAL_SETTINGS),
+        Screen::AudioSettings => (2, AUDIO_SETTINGS),
+        Screen::GuiSettings => (3, GUI_CUSTOMIZATION_SETTINGS),
+        Screen::AssetSettings => (4, CUSTOM_ASSET_SETTINGS),
         _ => unreachable!(),
     };
 
@@ -422,11 +422,11 @@ pub fn update(
         } else {
             *settings_menu_selection - 1
         };
-        sound_effects.play_cursor_move(&config);
+        sound_effects.play_cursor_move(config);
     }
     if input_state.down {
         *settings_menu_selection = (*settings_menu_selection + 1) % options.len();
-        sound_effects.play_cursor_move(&config);
+        sound_effects.play_cursor_move(config);
     }
     if input_state.back {
         if *back_to_blades {
@@ -435,10 +435,10 @@ pub fn update(
         } else {
             *current_screen = Screen::MainMenu;
         }
-        sound_effects.play_back(&config);
+        sound_effects.play_back(config);
     }
     if input_state.next {
-        sound_effects.play_select(&config);
+        sound_effects.play_select(config);
         *settings_menu_selection = 0; // Reset selection for the new page
         match current_screen {
             Screen::GeneralSettings => *current_screen = Screen::AudioSettings,
@@ -449,7 +449,7 @@ pub fn update(
         }
     }
     if input_state.prev {
-        sound_effects.play_select(&config);
+        sound_effects.play_select(config);
         *settings_menu_selection = 0; // Reset selection for the new page
         match current_screen {
             Screen::GeneralSettings => *current_screen = Screen::AssetSettings,
@@ -466,7 +466,7 @@ pub fn update(
             0 => {
                 // RESET SETTINGS
                 if input_state.select {
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                     *confirm_selection = 1; // Default to "NO"
                     *current_screen = Screen::ConfirmReset;
                 }
@@ -503,7 +503,7 @@ pub fn update(
                     config.resolution = filtered_resolutions[new_index].to_string();
                     config.save();
                     apply_resolution(&config.resolution);
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             2 => {
@@ -533,7 +533,7 @@ pub fn update(
                     }
 
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             3 => {
@@ -541,7 +541,7 @@ pub fn update(
                 if input_state.left || input_state.right {
                     config.show_splash_screen = !config.show_splash_screen;
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             4 => {
@@ -566,7 +566,7 @@ pub fn update(
                 }
 
                 if change_occurred {
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                     config.save();
                 }
             }
@@ -575,12 +575,12 @@ pub fn update(
                 if input_state.left {
                     set_brightness(*brightness - 0.1); // Decrease by 10%
                     *brightness = get_current_brightness().unwrap_or(*brightness); // Refresh the value
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
                 if input_state.right {
                     set_brightness(*brightness + 0.1); // Increase by 10%
                     *brightness = get_current_brightness().unwrap_or(*brightness); // Refresh the value
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             6 => {
@@ -589,7 +589,7 @@ pub fn update(
                     // Toggle the state optimistically and save immediately.
                     config.wifi = !config.wifi;
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
 
                     let action = if config.wifi { "on" } else { "off" };
 
@@ -632,7 +632,7 @@ pub fn update(
                 if input_state.left || input_state.right {
                     config.bluetooth = !config.bluetooth;
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
 
                     let action = if config.bluetooth { "unblock" } else { "block" };
 
@@ -680,7 +680,7 @@ pub fn update(
                 if input_state.left || input_state.right {
                     config.autoboot = !config.autoboot;
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             #[cfg(target_os = "linux")]
@@ -689,18 +689,17 @@ pub fn update(
                 if input_state.select {
                     *current_screen = Screen::RetroAchievements;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
             }
             #[cfg(target_os = "linux")]
-            10 => {
+            10
                 // GO TO AUDIO SETTINGS
-                if input_state.select {
+                if input_state.select => {
                     *current_screen = Screen::AudioSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
-            }
             #[cfg(not(target_os = "linux"))]
             8 => {
                 // RETROACHIEVEMENTS
@@ -729,12 +728,12 @@ pub fn update(
                 if input_state.left {
                     adjust_system_volume("10%-"); // Decrease by 10%
                     *system_volume = get_system_volume().unwrap_or(*system_volume); // Refresh the value
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
                 if input_state.right {
                     adjust_system_volume("10%+"); // Increase by 10%
                     *system_volume = get_system_volume().unwrap_or(*system_volume); // Refresh the value
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             1 => {
@@ -753,7 +752,7 @@ pub fn update(
                     }
 
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             2 => {
@@ -766,7 +765,7 @@ pub fn update(
                         config.sfx_volume = (config.sfx_volume + 0.1).min(1.0);
                     }
                     config.save();
-                    sound_effects.play_cursor_move(&config); // Test the new volume
+                    sound_effects.play_cursor_move(config); // Test the new volume
                 }
             }
             3 => {
@@ -804,7 +803,7 @@ pub fn update(
                             let _ = std::fs::File::create(state_dir.join(".AUDIO_PREFERENCE_SET"));
                         }
 
-                        sound_effects.play_cursor_move(&config);
+                        sound_effects.play_cursor_move(config);
                     }
                 }
             }
@@ -813,17 +812,16 @@ pub fn update(
                 if input_state.select {
                     *current_screen = Screen::GeneralSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
             }
-            5 => {
+            5
                 // GO TO GUI CUSTOMIZATION
-                if input_state.select {
+                if input_state.select => {
                     *current_screen = Screen::GuiSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
-            }
             _ => {}
         },
 
@@ -1020,7 +1018,7 @@ pub fn update(
                     };
                     config.font_color = COLORS[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             3 => {
@@ -1039,7 +1037,7 @@ pub fn update(
 
                     config.cursor_color = COLORS[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             4 => {
@@ -1056,7 +1054,7 @@ pub fn update(
                     };
                     config.cursor_style = CURSOR_STYLES[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             5 => {
@@ -1074,7 +1072,7 @@ pub fn update(
 
                     config.cursor_blink_speed = SPEEDS[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             6 => {
@@ -1094,7 +1092,7 @@ pub fn update(
                     config.save();
                     // Trigger a transition so the user sees the effect immediately!
                     animation_state.trigger_transition(&config.cursor_transition_speed);
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             7 => {
@@ -1112,7 +1110,7 @@ pub fn update(
 
                     config.background_scroll_speed = SPEEDS[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             8 => {
@@ -1130,7 +1128,7 @@ pub fn update(
 
                     config.color_shift_speed = SPEEDS[new_index].to_string();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             9 => {
@@ -1138,17 +1136,16 @@ pub fn update(
                 if input_state.select {
                     *current_screen = Screen::AudioSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
             }
-            10 => {
+            10
                 // GO TO CUSTOM ASSETS
-                if input_state.select {
+                if input_state.select => {
                     *current_screen = Screen::AssetSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
-            }
             _ => {}
         },
         // CUSTOM ASSETS
@@ -1175,7 +1172,7 @@ pub fn update(
                     }
 
                     let new_track = &bgm_choices[new_index];
-                    play_new_bgm(new_track, config.bgm_volume, &music_cache, current_bgm);
+                    play_new_bgm(new_track, config.bgm_volume, music_cache, current_bgm);
 
                     // Update the config with the new choice
                     if new_track == "OFF" {
@@ -1185,7 +1182,7 @@ pub fn update(
                     }
 
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             1 => {
@@ -1242,7 +1239,7 @@ pub fn update(
                     config.logo_selection = logo_choices[new_index].clone();
 
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             3 => {
@@ -1270,7 +1267,7 @@ pub fn update(
                     config.background_selection = background_choices[new_index].clone();
 
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
             4 => {
@@ -1288,17 +1285,16 @@ pub fn update(
 
                     config.font_selection = font_choices[new_index].clone();
                     config.save();
-                    sound_effects.play_cursor_move(&config);
+                    sound_effects.play_cursor_move(config);
                 }
             }
-            5 => {
+            5
                 // GO TO GUI CUSTOMIZATION SETTINGS
-                if input_state.select {
+                if input_state.select => {
                     *current_screen = Screen::GuiSettings;
                     *settings_menu_selection = 0;
-                    sound_effects.play_select(&config);
+                    sound_effects.play_select(config);
                 }
-            }
             _ => {}
         },
         _ => {}

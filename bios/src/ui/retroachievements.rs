@@ -292,13 +292,12 @@ pub fn update(
                     ra_state.status_message = Some("All achievement unlocks cleared".to_string());
                 }
             }
-            7 => {
+            7
                 // LOGOUT
-                if input_state.select {
+                if input_state.select => {
                     sound_effects.play_select(config);
                     ra_state.logout(config);
                 }
-            }
             _ => {}
         }
     }
