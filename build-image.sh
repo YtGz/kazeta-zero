@@ -537,26 +537,22 @@ parted -s ${FINAL_IMG} mkpart primary btrfs 513MiB 100%
 # Write EFI partition
 dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
 
-# Create temp root image with size matching the final root partition
-# Final image: SIZE + 512MB EFI = total. Root partition starts at 513MiB.
-# So root partition size = SIZE (approx, minus small partition overhead)
-# We use SIZE directly to ensure temp image fits in the partition
-fallocate -l ${SIZE} ${TEMP_ROOT_IMG}
-mkfs.btrfs -f ${TEMP_ROOT_IMG}
+# Mount the root partition directly and receive the btrfs stream
+# This avoids the temp image size mismatch entirely
+mkdir -p ${MOUNT_PATH}-final-root
 
-# Mount temp image and receive stream
-mkdir -p ${MOUNT_PATH}-temp-root
-mount -o loop ${TEMP_ROOT_IMG} ${MOUNT_PATH}-temp-root
-btrfs receive ${MOUNT_PATH}-temp-root < ${STREAM_IMG}
-btrfs filesystem label ${MOUNT_PATH}-temp-root frzr_root
-umount ${MOUNT_PATH}-temp-root
-rm -rf ${MOUNT_PATH}-temp-root
-
-# Write root partition to final image
-dd if=${TEMP_ROOT_IMG} of=${FINAL_IMG} bs=1M seek=513 conv=notrunc
+# Use losetup with partition offset to mount the root partition
+LOOP_DEV=$(losetup -f --show -o $((513*1024*1024)) ${FINAL_IMG})
+mkfs.btrfs -f ${LOOP_DEV}
+mount ${LOOP_DEV} ${MOUNT_PATH}-final-root
+btrfs receive ${MOUNT_PATH}-final-root < ${STREAM_IMG}
+btrfs filesystem label ${MOUNT_PATH}-final-root frzr_root
+umount ${MOUNT_PATH}-final-root
+losetup -d ${LOOP_DEV}
+rm -rf ${MOUNT_PATH}-final-root
 
 # Clean up
-rm -f ${TEMP_ROOT_IMG} ${EFI_IMG}
+rm -f ${EFI_IMG}
 
 # Rename final image
 mv ${FINAL_IMG} ${SYSTEM_NAME}-${VERSION}.img
