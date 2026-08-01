@@ -28,7 +28,7 @@ use crate::{
     ui::*,
     utils::*, // Wildcard to get all utility functions
 };
-use ::rand::Rng; // for selecting a random message on startup
+use ::rand::RngExt; // for selecting a random message on startup
 use chrono::Local; // for getting clock
 use gilrs::Gilrs;
 use macroquad::prelude::*;
