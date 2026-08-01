@@ -1,8 +1,9 @@
 [patch.crates-io]
-# Patch miniquad with macOS-specific null checks for Objective-C strings
-# This prevents crashes when Cocoa returns nil (e.g., in non-bundle runs on macOS)
-#
-# NOTE: This patch is ONLY for macOS development. Production Linux builds temporarily
-# disable this patch (see build-image.sh) to use upstream miniquad from crates.io.
-# Our application code explicitly sets linux_backend: X11WithWaylandFallback for production.
+# Vendored miniquad with custom patches from the kazeta fork lineage:
+#   - X11: text/uri-list drag-and-drop, unaligned XI2 raw value reads,
+#     mouse enter/leave events, cursor icon/visibility tracking
+#   - Wayland: keymap API updates, keymods tracking, libdecor resize caps
+#   - macOS: nil checks for Cocoa APIs, swallowed Command-key-up events
+#   - Windows: IME support for CJK input
+# The vendored version is kept in sync with upstream (currently 0.4.11).
 miniquad = { path = "vendor/miniquad" }
