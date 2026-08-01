@@ -14,6 +14,13 @@ trap cleanup_on_error ERR
 
 set -x
 
+# Timing helper
+start_time=$(date +%s)
+log_time() {
+    local elapsed=$(( $(date +%s) - start_time ))
+    echo "[TIMER] $1 took ${elapsed}s"
+}
+
 if [ $EUID -ne 0 ]; then
 	echo "$(basename $0) must be run as root"
 	exit 1
@@ -295,6 +302,7 @@ EOF
 
 #defrag the image
 btrfs filesystem defragment -r ${BUILD_PATH}
+log_time "btrfs defragment"
 
 # copy files into chroot again
 cp -R rootfs/. ${BUILD_PATH}/
@@ -344,7 +352,10 @@ if [ -z "${ARCHIVE_DATE}" ]; then
 fi
 
 btrfs subvolume snapshot -r ${BUILD_PATH} ${SNAP_PATH}
+log_time "btrfs snapshot"
+
 btrfs send -f ${SYSTEM_NAME}-${VERSION}.img ${SNAP_PATH}
+log_time "btrfs send"
 
 cp ${BUILD_PATH}/build_info build_info.txt
 
@@ -352,13 +363,13 @@ cp ${BUILD_PATH}/build_info build_info.txt
 # 1. Unmount the bind-mounted subvolume (Wait for it to finish!)
 if mountpoint -q "${BUILD_PATH}"; then
     echo "Unmounting subvolume..."
-    umount "${BUILD_PATH}"
+    umount "${BUILD_PATH}" || sleep 2 && umount -l "${BUILD_PATH}" 2>/dev/null || true
 fi
 
 # 2. Unmount the main image mount
 if mountpoint -q "${MOUNT_PATH}"; then
     echo "Unmounting image..."
-    umount "${MOUNT_PATH}"
+    umount "${MOUNT_PATH}" || sleep 2 && umount -l "${MOUNT_PATH}" 2>/dev/null || true
 fi
 
 # 3. Force-detach the loop device used by this specific image file
@@ -375,7 +386,12 @@ rm -f "${BUILD_IMG}"
 
 IMG_FILENAME="${SYSTEM_NAME}-${VERSION}.img.tar.xz"
 if [ -z "${NO_COMPRESS}" ]; then
-	tar -c -I'xz -9e -T4' -f ${IMG_FILENAME} ${SYSTEM_NAME}-${VERSION}.img
+	# Use all available CPU cores for compression, level 6 is good balance of size/speed
+	# Level 9e is ~2x slower for only ~2% smaller size
+	XZ_THREADS=${XZ_THREADS:-$(nproc)}
+	echo "Compressing with xz level 6 using ${XZ_THREADS} threads..."
+	tar -c -I"xz -6 -T${XZ_THREADS}" -f ${IMG_FILENAME} ${SYSTEM_NAME}-${VERSION}.img
+	log_time "xz compression"
 	rm ${SYSTEM_NAME}-${VERSION}.img
 
 	sha256sum ${SYSTEM_NAME}-${VERSION}.img.tar.xz > sha256sum.txt
