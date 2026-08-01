@@ -130,10 +130,14 @@ if [ -n "$1" ]; then
 fi
 
 # Calculate sizes for final image
-# EFI partition: 512MB, Root partition: needs to fit decompressed stream
-# Original SIZE is compressed stream size, root needs ~SIZE + 20% for decompression
+# EFI partition: 512MB fixed
+# Root partition: needs to fit the decompressed btrfs stream
+# The stream expands beyond SIZE when uncompressed, so we make the original
+# image larger from the start to ensure consistency
 EFI_SIZE=512
-ROOT_SIZE=$((${SIZE/MB/} * 120 / 100))
+# Create original image with extra space for decompression (SIZE + 20%)
+BUILD_SIZE=$((${SIZE/MB/} * 120 / 100))
+ROOT_SIZE=${BUILD_SIZE}
 FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
 
 # Use home directory for build (more space than /tmp)
@@ -170,8 +174,8 @@ fi
 if [ "$REUSE_STREAM" = false ]; then
     echo "Building fresh btrfs stream..."
     
-    # Create main btrfs image
-    fallocate -l ${SIZE} ${BUILD_IMG}
+    # Create main btrfs image with BUILD_SIZE (larger than SIZE for decompression)
+    fallocate -l ${BUILD_SIZE}M ${BUILD_IMG}
     mkfs.btrfs -f ${BUILD_IMG}
     mount -t btrfs -o loop,compress-force=zstd:15 ${BUILD_IMG} ${MOUNT_PATH}
     btrfs subvolume create ${BUILD_PATH}
