@@ -129,6 +129,13 @@ if [ -n "$1" ]; then
     BUILD_ID="${1}"
 fi
 
+# Calculate sizes for final image
+# EFI partition: 512MB, Root partition: needs to fit decompressed stream
+# Original SIZE is compressed stream size, root needs ~SIZE + 20% for decompression
+EFI_SIZE=512
+ROOT_SIZE=$((${SIZE/MB/} * 120 / 100))
+FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
+
 # Use home directory for build (more space than /tmp)
 BUILD_ROOT=${BUILD_ROOT:-$HOME/kazeta-build}
 MOUNT_PATH=${BUILD_ROOT}/${SYSTEM_NAME}-build
@@ -524,17 +531,16 @@ mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
 # Clean up staging
 rm -rf ${MOUNT_PATH}-efi-staging
 
-# Create final disk image with larger size to accommodate decompressed stream
-# Original SIZE is 5000MB, but stream needs ~5.5GB+ when uncompressed
-# Add 1GB extra for safety margin
-FINAL_SIZE=$((${SIZE/MB/} + 512 + 1024))
+# Create final disk image with calculated size
+echo "Creating final disk image with GPT partition table..."
+echo "EFI partition: ${EFI_SIZE}MB, Root partition: ${ROOT_SIZE}MB, Total: ${FINAL_SIZE}MB"
 fallocate -l ${FINAL_SIZE}M ${FINAL_IMG}
 
 # Create GPT partition table
 parted -s ${FINAL_IMG} mklabel gpt
-parted -s ${FINAL_IMG} mkpart primary fat32 1MiB 513MiB
+parted -s ${FINAL_IMG} mkpart primary fat32 1MiB ${EFI_SIZE}MiB
 parted -s ${FINAL_IMG} set 1 esp on
-parted -s ${FINAL_IMG} mkpart primary btrfs 513MiB 100%
+parted -s ${FINAL_IMG} mkpart primary btrfs ${EFI_SIZE}MiB 100%
 
 # Write EFI partition
 dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
@@ -544,7 +550,7 @@ dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
 mkdir -p ${MOUNT_PATH}-final-root
 
 # Use losetup with partition offset to mount the root partition
-LOOP_DEV=$(losetup -f --show -o $((513*1024*1024)) ${FINAL_IMG})
+LOOP_DEV=$(losetup -f --show -o $((${EFI_SIZE}*1024*1024)) ${FINAL_IMG})
 mkfs.btrfs -f ${LOOP_DEV}
 mount ${LOOP_DEV} ${MOUNT_PATH}-final-root
 btrfs receive ${MOUNT_PATH}-final-root < ${STREAM_IMG}
