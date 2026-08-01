@@ -504,11 +504,14 @@ editor no
 LOADERCONF
 
 # Create boot entry
+# Note: We don't specify rootflags=subvol= here because the btrfs stream
+# creates a subvolume with the snapshot name (e.g., kazeta-zero-1.43), not @
+# The kernel will auto-detect the default subvolume set by btrfs receive
 cat > ${MOUNT_PATH}-efi-staging/loader/entries/kazeta-zero.conf <<ENTRYCONF
 title Kazeta Zero
 linux /vmlinuz-linux
 initrd /initramfs-linux.img
-options root=LABEL=frzr_root rootflags=subvol=/@ quiet splash
+options root=LABEL=frzr_root quiet splash
 ENTRYCONF
 
 # Copy kernel and initramfs to staging
