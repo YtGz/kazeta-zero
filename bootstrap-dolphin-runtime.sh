@@ -19,9 +19,10 @@
 #   --skip-build       Skip building Rust binaries (use existing)
 #   --skip-kzr         Skip building the .kzr runtime
 #   --fetch GAME_ID    Fetch achievement definitions for a game ID
-#                      (requires RA credentials via --username/--api-key)
+#                      (requires RA credentials via --username/--password)
 #   --username USER    RetroAchievements username (for --fetch)
-#   --api-key KEY      RetroAchievements web API key (for --fetch)
+#   --password PASS    RetroAchievements password (for --fetch, needed to
+#                      obtain a Connect API session token)
 #   --output-dir DIR   Output directory for fetched definitions
 #                      (default: ./cartridge-data)
 #   --help             Show this help message
@@ -46,7 +47,7 @@ SKIP_BUILD=false
 SKIP_KZR=false
 FETCH_GAME_ID=""
 RA_USERNAME=""
-RA_API_KEY=""
+RA_PASSWORD=""
 OUTPUT_DIR="${SCRIPT_DIR}/cartridge-data"
 
 while [[ $# -gt 0 ]]; do
@@ -67,8 +68,8 @@ while [[ $# -gt 0 ]]; do
             RA_USERNAME="$2"
             shift 2
             ;;
-        --api-key)
-            RA_API_KEY="$2"
+        --password)
+            RA_PASSWORD="$2"
             shift 2
             ;;
         --output-dir)
@@ -83,7 +84,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --skip-kzr         Skip building the .kzr runtime"
             echo "  --fetch GAME_ID    Fetch achievement definitions for a game ID"
             echo "  --username USER    RetroAchievements username (for --fetch)"
-            echo "  --api-key KEY      RetroAchievements web API key (for --fetch)"
+            echo "  --password PASS    RetroAchievements password (for --fetch)"
             echo "  --output-dir DIR   Output directory for fetched definitions"
             echo "                      (default: ./cartridge-data)"
             echo "  --help             Show this help message"
@@ -275,9 +276,10 @@ if [ -n "$FETCH_GAME_ID" ]; then
     echo -e "${BLUE}═══ Step 3: Fetching Achievement Definitions ═══${NC}"
     echo ""
 
-    if [ -z "$RA_USERNAME" ] || [ -z "$RA_API_KEY" ]; then
-        echo -e "${RED}  ERROR: --fetch requires --username and --api-key${NC}"
-        echo -e "${YELLOW}  Get your API key from: https://retroachievements.org/controlpanel.php${NC}"
+    if [ -z "$RA_USERNAME" ] || [ -z "$RA_PASSWORD" ]; then
+        echo -e "${RED}  ERROR: --fetch requires --username and --password${NC}"
+        echo -e "${YELLOW}  Your password is needed to obtain a Connect API session token${NC}"
+        echo -e "${YELLOW}  which is required to fetch achievement condition strings.${NC}"
         exit 1
     fi
 
@@ -296,7 +298,7 @@ if [ -n "$FETCH_GAME_ID" ]; then
 
     if "$EXPORT_BIN" fetch \
         --username "$RA_USERNAME" \
-        --api-key "$RA_API_KEY" \
+        --password "$RA_PASSWORD" \
         --game-id "$FETCH_GAME_ID" \
         --output-dir "$OUTPUT_DIR"; then
         echo ""
@@ -351,7 +353,7 @@ echo -e "${YELLOW}Next Steps:${NC}"
 echo -e "  On this machine (prep):"
 echo -e "  1. (Optional) Fetch achievement definitions for each game:"
 echo -e "     ./bootstrap-dolphin-runtime.sh --skip-build --skip-kzr \\"
-echo -e "       --fetch GAME_ID --username USER --api-key KEY \\"
+echo -e "       --fetch GAME_ID --username USER --password PASS \\"
 echo -e "       --output-dir ./cartridge-data/GAME/"
 echo ""
 echo -e "  2. Copy achievements.json + badges/ to each cartridge's SD card"

@@ -154,7 +154,10 @@ fn main() -> Result<()> {
                 .enumerate()
                 .filter(|(_, a)| {
                     // Skip the "Warning: Unknown Emulator" placeholder achievement
-                    a["MemAddr"].as_str().map(|m| m != "1=1.300.").unwrap_or(true)
+                    a["MemAddr"]
+                        .as_str()
+                        .map(|m| m != "1=1.300.")
+                        .unwrap_or(true)
                 })
                 .map(|(i, a)| LocalAchievement {
                     id: a["ID"].as_u64().unwrap_or(0) as u32,
@@ -196,7 +199,8 @@ fn main() -> Result<()> {
 
             if download_badges {
                 let badges_dir = output_dir.join("badges");
-                std::fs::create_dir_all(&badges_dir).context("Failed to create badges directory")?;
+                std::fs::create_dir_all(&badges_dir)
+                    .context("Failed to create badges directory")?;
                 download_all_badges(&defs, &badges_dir)?;
             }
 
@@ -218,7 +222,10 @@ fn main() -> Result<()> {
             if games.is_empty() {
                 println!("No GameCube games found.");
             } else {
-                println!("{:<10} {:<60} {:>5} {:>6}", "Game ID", "Title", "Ach.", "Points");
+                println!(
+                    "{:<10} {:<60} {:>5} {:>6}",
+                    "Game ID", "Title", "Ach.", "Points"
+                );
                 println!("{}", "-".repeat(83));
                 for game in games {
                     println!(
