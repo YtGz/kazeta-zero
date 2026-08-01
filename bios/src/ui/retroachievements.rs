@@ -18,6 +18,7 @@ const RA_SETTINGS_OPTIONS: &[&str] = &[
     "HARDCORE MODE",
     "SHOW NOTIFICATIONS",
     "LOGIN / TEST",
+    "CLEAR UNLOCKS",
     "LOGOUT",
 ];
 
@@ -63,7 +64,8 @@ impl RASettingsState {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 // Check for local mode (offline achievements)
-                self.is_local_mode = stdout.contains("\"local_mode\":true") || stdout.contains("\"local_mode\": true");
+                self.is_local_mode = stdout.contains("\"local_mode\":true")
+                    || stdout.contains("\"local_mode\": true");
                 // Parse JSON response
                 if stdout.contains("\"enabled\":true") || stdout.contains("\"enabled\": true") {
                     self.is_logged_in = !self.is_local_mode;
@@ -283,6 +285,14 @@ pub fn update(
                 }
             }
             6 => {
+                // CLEAR UNLOCKS
+                if input_state.select {
+                    sound_effects.play_select(config);
+                    let _ = Command::new("kazeta-ra").arg("clear-cache").output();
+                    ra_state.status_message = Some("All achievement unlocks cleared".to_string());
+                }
+            }
+            7 => {
                 // LOGOUT
                 if input_state.select {
                     sound_effects.play_select(config);
@@ -555,7 +565,8 @@ fn get_option_value(index: usize, ra_state: &RASettingsState, config: &Config) -
             "LOGIN"
         }
         .to_string(),
-        6 => "CONFIRM".to_string(),
+        6 => "CLEAR".to_string(),
+        7 => "CONFIRM".to_string(),
         _ => "".to_string(),
     }
 }

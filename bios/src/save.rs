@@ -696,8 +696,7 @@ pub fn launch_game_with_options(
 
             // Try absolute path based on common dev setup
             if let Some(home) = dirs::home_dir() {
-                possible_paths
-                    .push(home.join("sandbox/kazeta/runtimes/gba/vba-run-wrapper.sh"));
+                possible_paths.push(home.join("sandbox/kazeta/runtimes/gba/vba-run-wrapper.sh"));
             }
 
             // Check environment variable for project root
@@ -1008,7 +1007,11 @@ pub fn get_save_dir_from_drive_name(drive_name: &str) -> String {
         }
         save_dir.to_string_lossy().into_owned()
     } else {
-        let base_ext = if Path::new("/media").read_dir().map(|mut d| d.next().is_none()).unwrap_or(true) {
+        let base_ext = if Path::new("/media")
+            .read_dir()
+            .map(|mut d| d.next().is_none())
+            .unwrap_or(true)
+        {
             if Path::new(&format!("/run/media/{}", whoami::username())).exists() {
                 format!("/run/media/{}", whoami::username())
             } else {
