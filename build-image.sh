@@ -131,14 +131,8 @@ fi
 
 # Calculate sizes for final image
 # EFI partition: 512MB fixed
-# Root partition: needs to fit the decompressed btrfs stream
-# The stream expands beyond SIZE when uncompressed, so we make the original
-# image larger from the start to ensure consistency
+# Root partition size will be determined after stream creation
 EFI_SIZE=512
-# Create original image with extra space for decompression (SIZE + 20%)
-BUILD_SIZE=$((${SIZE/MB/} * 120 / 100))
-ROOT_SIZE=${BUILD_SIZE}
-FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
 
 # Use home directory for build (more space than /tmp)
 BUILD_ROOT=${BUILD_ROOT:-$HOME/kazeta-build}
@@ -174,8 +168,9 @@ fi
 if [ "$REUSE_STREAM" = false ]; then
     echo "Building fresh btrfs stream..."
     
-    # Create main btrfs image with BUILD_SIZE (larger than SIZE for decompression)
-    fallocate -l ${BUILD_SIZE}M ${BUILD_IMG}
+    # Create main btrfs image with generous size (we'll shrink it later)
+    # Use SIZE * 2 to ensure we have enough space for packages
+    fallocate -l $((${SIZE/MB/} * 2))M ${BUILD_IMG}
     mkfs.btrfs -f ${BUILD_IMG}
     mount -t btrfs -o loop,compress-force=zstd:15 ${BUILD_IMG} ${MOUNT_PATH}
     btrfs subvolume create ${BUILD_PATH}
@@ -534,6 +529,28 @@ mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
 
 # Clean up staging
 rm -rf ${MOUNT_PATH}-efi-staging
+
+# Measure the actual uncompressed size of the stream
+echo "Measuring stream size..."
+STREAM_SIZE_BYTES=$(stat -c %s "${STREAM_IMG}")
+# Uncompressed size is roughly 1.5-2x compressed for zstd
+# We'll create a test receive to measure exactly
+TEST_IMG=/tmp/test-measure.img
+fallocate -l $((${SIZE/MB/} * 3))M ${TEST_IMG}
+mkfs.btrfs -f ${TEST_IMG}
+mkdir -p /tmp/test-measure-mount
+mount -o loop ${TEST_IMG} /tmp/test-measure-mount
+btrfs receive /tmp/test-measure-mount < ${STREAM_IMG} 2>/dev/null || true
+ACTUAL_ROOT_SIZE=$(df -m /tmp/test-measure-mount | tail -1 | awk '{print $2}')
+umount /tmp/test-measure-mount
+losetup -j ${TEST_IMG} | cut -d : -f 1 | xargs -r losetup -d
+rm -rf /tmp/test-measure-mount ${TEST_IMG}
+
+# Add 10% safety margin
+ROOT_SIZE=$((ACTUAL_ROOT_SIZE * 110 / 100))
+FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
+
+echo "Measured root size: ${ACTUAL_ROOT_SIZE}MB, Using: ${ROOT_SIZE}MB"
 
 # Create final disk image with calculated size
 echo "Creating final disk image with GPT partition table..."
