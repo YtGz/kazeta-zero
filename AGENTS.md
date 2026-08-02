@@ -82,6 +82,33 @@ Resolve conflicts keeping Kazeta Zero versions (rebrand changes take priority). 
 git push origin main
 ```
 
+### Audit `rootfs/usr/bin/` after every sync (learned the hard way)
+
+The kazeta-plus-plus maintainer builds on an Apple Silicon Mac and has
+committed **macOS arm64 Mach-O binaries** to `rootfs/usr/bin/` (commit
+`3600ff6`). These can never run on the x86-64 Linux target and caused
+`exec format error` on boot. Worse, that commit replaced
+`/usr/bin/kazeta` — a **shell script** that wraps the BIOS in gamescope
+(`gamescope --filter pixel -- kazeta-bios`) — with a binary, which broke
+the display entirely (`XOpenDisplay() failed`).
+
+After any merge that touches `rootfs/usr/bin/`:
+
+```bash
+file rootfs/usr/bin/* | grep -v "ELF 64-bit.*x86-64" | grep -v "shell script"
+```
+
+Anything that prints is wrong. Rules:
+
+- Compiled tools must be **ELF 64-bit x86-64** (never Mach-O / arm64).
+- These are **scripts and must stay scripts**: `kazeta`, `kazeta-session`,
+  `kazeta-mount`, `kazeta-copy-logs`, `kazeta-runtime-helper`,
+  `kazeta-show-error`, `kazeta-wifi-setup`.
+- The BIOS binary is installed as `kazeta-bios` (invoked by the `kazeta`
+  script); the input daemon as `kazeta-input-daemon` (matches
+  `kazeta-input.service`). `build-image.sh` installs freshly built
+  binaries under exactly these names.
+
 ### Package decisions (do not revert during sync)
 
 Kazeta Zero diverges from upstream on several architectural choices. These are

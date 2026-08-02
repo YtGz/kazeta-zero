@@ -424,15 +424,15 @@ EOF
 
     # Copy built Rust binaries to the image
     echo "Installing Rust binaries..."
-    # IMPORTANT: install under the names the system actually uses:
-    # kazeta-session runs /usr/bin/kazeta, kazeta-input.service runs
-    # /usr/bin/kazeta-input-daemon. This also overwrites any stale
-    # binaries committed in rootfs/usr/bin (which may be from another OS/arch).
-    cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/kazeta
+    # NOTE: /usr/bin/kazeta is a SHELL SCRIPT (cartridge launcher from rootfs)
+    # that wraps the BIOS in gamescope: `gamescope --filter pixel -- kazeta-bios`.
+    # The BIOS binary must be installed as kazeta-bios; never overwrite the script.
+    # kazeta-input.service executes /usr/bin/kazeta-input-daemon.
+    cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/kazeta-bios
     cp overlay/target/release/kazeta-overlay ${BUILD_PATH}/usr/bin/kazeta-overlay
     cp ra/target/release/kazeta-ra ${BUILD_PATH}/usr/bin/kazeta-ra
     cp input-daemon/target/release/kazeta-input ${BUILD_PATH}/usr/bin/kazeta-input-daemon
-    chmod +x ${BUILD_PATH}/usr/bin/kazeta
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-bios
     chmod +x ${BUILD_PATH}/usr/bin/kazeta-overlay
     chmod +x ${BUILD_PATH}/usr/bin/kazeta-ra
     chmod +x ${BUILD_PATH}/usr/bin/kazeta-input-daemon
