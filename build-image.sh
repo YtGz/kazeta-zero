@@ -551,6 +551,14 @@ btrfs subvolume set-default ${ROOT_MNT}/${SUBVOL_NAME}
 btrfs subvolume create ${ROOT_MNT}/var
 cp -a ${ROOT_MNT}/${SUBVOL_NAME}/var/. ${ROOT_MNT}/var/ 2>/dev/null || true
 mkdir -p ${ROOT_MNT}/var/kazeta/state/wireplumber
+
+# Install custom edition config into the var subvolume (the copy made
+# before the chroot is deleted by the chroot's `rm -rf /var` cleanup)
+if [ -f custom-edition.toml ]; then
+    echo "Including custom edition config..."
+    cp custom-edition.toml ${ROOT_MNT}/var/kazeta/
+fi
+
 chown -R 1000:1000 ${ROOT_MNT}/var/kazeta
 
 # --- EFI partition: bootloader, configs, kernel ---

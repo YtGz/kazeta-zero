@@ -1040,16 +1040,13 @@ async fn main() {
     let mut input_state = InputState::new();
     let mut animation_state = AnimationState::new();
 
-    // Start overlay daemon so it can be triggered from BIOS
-    println!("[BIOS] Starting overlay daemon...");
-    if let Err(e) = crate::utils::start_overlay_daemon() {
-        eprintln!("[BIOS] Warning: Failed to start overlay daemon: {}", e);
-        eprintln!("[BIOS] Overlay will still be available when games launch");
-    } else {
-        println!(
-            "[BIOS] Overlay daemon started - press F12, Ctrl+O, or Guide button to open overlay"
-        );
-    }
+    // NOTE: The overlay daemon is deliberately NOT started here. It is a
+    // second macroquad app with its own window; under gamescope (a
+    // single-surface compositor) its window takes over the display and
+    // input, leaving the BIOS invisible with a black screen. Per the
+    // architecture, BIOS and overlay never run together: the overlay is
+    // started by the game-launch paths (utils::launch_game and the
+    // /usr/bin/kazeta cartridge script) right before a game starts.
 
     // SPLASH SCREEN
     if config.show_splash_screen {
