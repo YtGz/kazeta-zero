@@ -530,27 +530,13 @@ mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
 # Clean up staging
 rm -rf ${MOUNT_PATH}-efi-staging
 
-# Measure the actual uncompressed size of the stream
-echo "Measuring stream size..."
-STREAM_SIZE_BYTES=$(stat -c %s "${STREAM_IMG}")
-# Create test image in BUILD_ROOT (not /tmp which may be small)
-TEST_IMG=${BUILD_ROOT}/test-measure.img
-fallocate -l $((${SIZE/MB/} * 3))M ${TEST_IMG}
-mkfs.btrfs -f ${TEST_IMG}
-mkdir -p ${BUILD_ROOT}/test-measure-mount
-mount -o loop ${TEST_IMG} ${BUILD_ROOT}/test-measure-mount
-btrfs receive ${BUILD_ROOT}/test-measure-mount < ${STREAM_IMG} 2>/dev/null || true
-# Use du to measure actual used space, not df filesystem size
-ACTUAL_ROOT_SIZE=$(du -m --max-depth=0 ${BUILD_ROOT}/test-measure-mount | awk '{print $1}')
-umount ${BUILD_ROOT}/test-measure-mount
-losetup -j ${TEST_IMG} | cut -d : -f 1 | xargs -r losetup -d
-rm -rf ${BUILD_ROOT}/test-measure-mount ${TEST_IMG}
-
-# Use exact measured size (no margin - partition must match filesystem metadata)
-ROOT_SIZE=${ACTUAL_ROOT_SIZE}
+# Use fixed size for root partition that we know works
+# The stream expands beyond SIZE when uncompressed, so we need extra space
+# SIZE=5000MB, stream needs ~6000MB when uncompressed
+ROOT_SIZE=$((${SIZE/MB/} + 1024))  # SIZE + 1GB for decompression
 FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
 
-echo "Measured root size: ${ACTUAL_ROOT_SIZE}MB, Using exact size: ${ROOT_SIZE}MB"
+echo "Root partition size: ${ROOT_SIZE}MB, Final image: ${FINAL_SIZE}MB"
 
 # Create final disk image with calculated size
 echo "Creating final disk image with GPT partition table..."
