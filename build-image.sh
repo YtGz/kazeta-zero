@@ -540,7 +540,8 @@ mkfs.btrfs -f ${TEST_IMG}
 mkdir -p ${BUILD_ROOT}/test-measure-mount
 mount -o loop ${TEST_IMG} ${BUILD_ROOT}/test-measure-mount
 btrfs receive ${BUILD_ROOT}/test-measure-mount < ${STREAM_IMG} 2>/dev/null || true
-ACTUAL_ROOT_SIZE=$(df -m ${BUILD_ROOT}/test-measure-mount | tail -1 | awk '{print $2}')
+# Use du to measure actual used space, not df filesystem size
+ACTUAL_ROOT_SIZE=$(du -m --max-depth=0 ${BUILD_ROOT}/test-measure-mount | awk '{print $1}')
 umount ${BUILD_ROOT}/test-measure-mount
 losetup -j ${TEST_IMG} | cut -d : -f 1 | xargs -r losetup -d
 rm -rf ${BUILD_ROOT}/test-measure-mount ${TEST_IMG}
