@@ -4,10 +4,12 @@ set -e
 
 cleanup_on_error() {
     echo "Script failed! Attempting to clean up mounts..."
+    umount "${MOUNT_PATH}-final-efi" 2>/dev/null || true
+    umount "${MOUNT_PATH}-final-root" 2>/dev/null || true
     umount "${BUILD_PATH}" 2>/dev/null || true
     umount "${MOUNT_PATH}" 2>/dev/null || true
     losetup -j "${BUILD_IMG}" 2>/dev/null | cut -d : -f 1 | xargs -r losetup -d 2>/dev/null || true
-    losetup -j "${TEMP_ROOT_IMG}" 2>/dev/null | cut -d : -f 1 | xargs -r losetup -d 2>/dev/null || true
+    losetup -j "${FINAL_IMG}" 2>/dev/null | cut -d : -f 1 | xargs -r losetup -d 2>/dev/null || true
 }
 trap cleanup_on_error ERR
 
@@ -142,7 +144,9 @@ SNAP_PATH=${MOUNT_PATH}/${SYSTEM_NAME}-${VERSION}
 BUILD_IMG=${BUILD_ROOT}/${SYSTEM_NAME}-build.img
 EFI_IMG=${BUILD_ROOT}/${SYSTEM_NAME}-efi.img
 TEMP_ROOT_IMG=${BUILD_ROOT}/temp-root.img
-STREAM_IMG=${SYSTEM_NAME}-${VERSION}.img
+# Stream file must NOT share a name with the final image, or the final
+# image overwrites the cache at the end of every build
+STREAM_IMG=${BUILD_ROOT}/${SYSTEM_NAME}-${VERSION}.stream
 FINAL_IMG=${SYSTEM_NAME}-${VERSION}-final.img
 
 mkdir -p ${BUILD_ROOT}
@@ -168,9 +172,10 @@ fi
 if [ "$REUSE_STREAM" = false ]; then
     echo "Building fresh btrfs stream..."
     
-    # Create main btrfs image with generous size (we'll shrink it later)
-    # Use SIZE * 2 to ensure we have enough space for packages
-    fallocate -l $((${SIZE/MB/} * 2))M ${BUILD_IMG}
+    # Create main btrfs image with size matching the final root partition
+    # The stream metadata will contain this size, so it must match the final partition
+    # SIZE=5000MB compressed, needs ~6000MB uncompressed, so we use 6000MB
+    fallocate -l $((${SIZE/MB/} + 1024))M ${BUILD_IMG}
     mkfs.btrfs -f ${BUILD_IMG}
     mount -t btrfs -o loop,compress-force=zstd:15 ${BUILD_IMG} ${MOUNT_PATH}
     btrfs subvolume create ${BUILD_PATH}
@@ -419,14 +424,18 @@ EOF
 
     # Copy built Rust binaries to the image
     echo "Installing Rust binaries..."
-    cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/
-    cp overlay/target/release/kazeta-overlay ${BUILD_PATH}/usr/bin/
-    cp ra/target/release/kazeta-ra ${BUILD_PATH}/usr/bin/
-    cp input-daemon/target/release/kazeta-input ${BUILD_PATH}/usr/bin/
-    chmod +x ${BUILD_PATH}/usr/bin/kazeta-bios
+    # IMPORTANT: install under the names the system actually uses:
+    # kazeta-session runs /usr/bin/kazeta, kazeta-input.service runs
+    # /usr/bin/kazeta-input-daemon. This also overwrites any stale
+    # binaries committed in rootfs/usr/bin (which may be from another OS/arch).
+    cp bios/target/release/kazeta-bios ${BUILD_PATH}/usr/bin/kazeta
+    cp overlay/target/release/kazeta-overlay ${BUILD_PATH}/usr/bin/kazeta-overlay
+    cp ra/target/release/kazeta-ra ${BUILD_PATH}/usr/bin/kazeta-ra
+    cp input-daemon/target/release/kazeta-input ${BUILD_PATH}/usr/bin/kazeta-input-daemon
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta
     chmod +x ${BUILD_PATH}/usr/bin/kazeta-overlay
     chmod +x ${BUILD_PATH}/usr/bin/kazeta-ra
-    chmod +x ${BUILD_PATH}/usr/bin/kazeta-input
+    chmod +x ${BUILD_PATH}/usr/bin/kazeta-input-daemon
 
     # Copy bundled runtimes (.kzr) into the image if present
     echo "Installing bundled runtimes..."
@@ -489,85 +498,93 @@ else
     echo "Reusing cached btrfs stream: ${STREAM_IMG}"
 fi
 
+# ===========================================================================
 # UEFI Assembly (always run this part)
-echo "Creating UEFI boot partition..."
-fallocate -l 512M ${EFI_IMG}
-mkfs.vfat -F32 ${EFI_IMG}
+# ===========================================================================
+# Root partition: SIZE + 1GB headroom. The exact size does NOT need to match
+# the stream: we mkfs directly on the real partition and receive into it,
+# so the filesystem size always equals the partition size.
+ROOT_SIZE=$((${SIZE/MB/} + 1024))
+FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE + 8))
+SUBVOL_NAME=${SYSTEM_NAME}-${VERSION}
 
-# Create directory structure for EFI files
-mkdir -p ${MOUNT_PATH}-efi-staging/EFI/BOOT
-mkdir -p ${MOUNT_PATH}-efi-staging/loader/entries
+echo "Creating final disk image with GPT partition table..."
+echo "EFI partition: ${EFI_SIZE}MB, Root partition: ~${ROOT_SIZE}MB, Total: ${FINAL_SIZE}MB"
+rm -f ${FINAL_IMG}
+fallocate -l ${FINAL_SIZE}M ${FINAL_IMG}
 
-# Copy systemd-boot EFI binary
-cp ${BUILD_PATH}/usr/lib/systemd/boot/efi/systemd-bootx64.efi ${MOUNT_PATH}-efi-staging/EFI/BOOT/BOOTX64.EFI 2>/dev/null || \
-    cp /usr/lib/systemd/boot/efi/systemd-bootx64.efi ${MOUNT_PATH}-efi-staging/EFI/BOOT/BOOTX64.EFI
+parted -s ${FINAL_IMG} mklabel gpt
+parted -s ${FINAL_IMG} mkpart primary fat32 1MiB $((EFI_SIZE + 1))MiB
+parted -s ${FINAL_IMG} set 1 esp on
+parted -s ${FINAL_IMG} mkpart primary btrfs $((EFI_SIZE + 1))MiB 100%
 
-# Create loader configuration
-cat > ${MOUNT_PATH}-efi-staging/loader/loader.conf <<LOADERCONF
+# Attach with partition scanning so we get exact-sized partition devices.
+# This is critical: an offset-only loop device runs to the end of the file,
+# which is ~1MiB past the partition end (GPT backup table), and mkfs on it
+# creates a filesystem larger than the partition -> unmountable image.
+LOOP_DEV=$(losetup -f --show -P ${FINAL_IMG})
+partprobe ${LOOP_DEV} 2>/dev/null || true
+for i in $(seq 1 10); do
+    [ -b ${LOOP_DEV}p2 ] && break
+    sleep 1
+done
+if [ ! -b ${LOOP_DEV}p2 ]; then
+    echo "ERROR: partition devices for ${LOOP_DEV} did not appear"
+    exit 1
+fi
+
+# --- Root partition: mkfs + receive stream ---
+mkfs.btrfs -f -L frzr_root ${LOOP_DEV}p2
+ROOT_MNT=${MOUNT_PATH}-final-root
+mkdir -p ${ROOT_MNT}
+mount ${LOOP_DEV}p2 ${ROOT_MNT}
+btrfs receive ${ROOT_MNT} < ${STREAM_IMG}
+
+# Received subvolumes are read-only; the system needs a writable root
+# (-f because received_uuid is set; we don't use incremental send)
+btrfs property set -f -ts ${ROOT_MNT}/${SUBVOL_NAME} ro false
+
+# Make it the default subvolume so root=LABEL=frzr_root mounts it
+btrfs subvolume set-default ${ROOT_MNT}/${SUBVOL_NAME}
+
+# /etc/fstab mounts LABEL=frzr_root with subvol=var - create and populate it
+btrfs subvolume create ${ROOT_MNT}/var
+cp -a ${ROOT_MNT}/${SUBVOL_NAME}/var/. ${ROOT_MNT}/var/ 2>/dev/null || true
+mkdir -p ${ROOT_MNT}/var/kazeta/state/wireplumber
+chown -R 1000:1000 ${ROOT_MNT}/var/kazeta
+
+# --- EFI partition: bootloader, configs, kernel ---
+mkfs.vfat -F32 ${LOOP_DEV}p1
+EFI_MNT=${MOUNT_PATH}-final-efi
+mkdir -p ${EFI_MNT}
+mount ${LOOP_DEV}p1 ${EFI_MNT}
+mkdir -p ${EFI_MNT}/EFI/BOOT
+mkdir -p ${EFI_MNT}/loader/entries
+
+# Take systemd-boot, kernel, and initramfs from the received subvolume -
+# it always exists at this point (BUILD_PATH may already be cleaned up)
+cp ${ROOT_MNT}/${SUBVOL_NAME}/usr/lib/systemd/boot/efi/systemd-bootx64.efi ${EFI_MNT}/EFI/BOOT/BOOTX64.EFI
+cp ${ROOT_MNT}/${SUBVOL_NAME}/boot/vmlinuz-linux ${EFI_MNT}/
+cp ${ROOT_MNT}/${SUBVOL_NAME}/boot/initramfs-linux.img ${EFI_MNT}/
+
+cat > ${EFI_MNT}/loader/loader.conf <<LOADERCONF
 default kazeta-zero
-timeout 0
+timeout 3
 editor no
 LOADERCONF
 
-# Create boot entry
-# Note: We don't specify rootflags=subvol= here because the btrfs stream
-# creates a subvolume with the snapshot name (e.g., kazeta-zero-1.43), not @
-# The kernel will auto-detect the default subvolume set by btrfs receive
-cat > ${MOUNT_PATH}-efi-staging/loader/entries/kazeta-zero.conf <<ENTRYCONF
+cat > ${EFI_MNT}/loader/entries/kazeta-zero.conf <<ENTRYCONF
 title Kazeta Zero
 linux /vmlinuz-linux
 initrd /initramfs-linux.img
-options root=LABEL=frzr_root quiet splash
+options root=LABEL=frzr_root rootflags=subvol=${SUBVOL_NAME} rw quiet splash
 ENTRYCONF
 
-# Copy kernel and initramfs to staging
-cp ${BUILD_PATH}/boot/vmlinuz-linux ${MOUNT_PATH}-efi-staging/ 2>/dev/null || true
-cp ${BUILD_PATH}/boot/initramfs-linux.img ${MOUNT_PATH}-efi-staging/ 2>/dev/null || true
-
-# Copy files to FAT image using mtools
-mcopy -i ${EFI_IMG} -s ${MOUNT_PATH}-efi-staging/* ::/
-
-# Clean up staging
-rm -rf ${MOUNT_PATH}-efi-staging
-
-# Use fixed size for root partition that we know works
-# The stream expands beyond SIZE when uncompressed, so we need extra space
-# SIZE=5000MB, stream needs ~6000MB when uncompressed
-ROOT_SIZE=$((${SIZE/MB/} + 1024))  # SIZE + 1GB for decompression
-FINAL_SIZE=$((EFI_SIZE + ROOT_SIZE))
-
-echo "Root partition size: ${ROOT_SIZE}MB, Final image: ${FINAL_SIZE}MB"
-
-# Create final disk image with calculated size
-echo "Creating final disk image with GPT partition table..."
-echo "EFI partition: ${EFI_SIZE}MB, Root partition: ${ROOT_SIZE}MB, Total: ${FINAL_SIZE}MB"
-fallocate -l ${FINAL_SIZE}M ${FINAL_IMG}
-
-# Create GPT partition table
-parted -s ${FINAL_IMG} mklabel gpt
-parted -s ${FINAL_IMG} mkpart primary fat32 1MiB ${EFI_SIZE}MiB
-parted -s ${FINAL_IMG} set 1 esp on
-parted -s ${FINAL_IMG} mkpart primary btrfs ${EFI_SIZE}MiB 100%
-
-# Write EFI partition
-dd if=${EFI_IMG} of=${FINAL_IMG} bs=1M seek=1 conv=notrunc
-
-# Mount the root partition directly and receive the btrfs stream
-# This avoids the temp image size mismatch entirely
-mkdir -p ${MOUNT_PATH}-final-root
-
-# Use losetup with partition offset to mount the root partition
-LOOP_DEV=$(losetup -f --show -o $((${EFI_SIZE}*1024*1024)) ${FINAL_IMG})
-mkfs.btrfs -f ${LOOP_DEV}
-mount ${LOOP_DEV} ${MOUNT_PATH}-final-root
-btrfs receive ${MOUNT_PATH}-final-root < ${STREAM_IMG}
-btrfs filesystem label ${MOUNT_PATH}-final-root frzr_root
-umount ${MOUNT_PATH}-final-root
+# --- Clean unmount ---
+umount ${EFI_MNT}
+umount ${ROOT_MNT}
 losetup -d ${LOOP_DEV}
-rm -rf ${MOUNT_PATH}-final-root
-
-# Clean up
-rm -f ${EFI_IMG}
+rm -rf ${EFI_MNT} ${ROOT_MNT}
 
 # Rename final image
 mv ${FINAL_IMG} ${SYSTEM_NAME}-${VERSION}.img
